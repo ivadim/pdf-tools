@@ -16,8 +16,9 @@ Get the latest build for your system from [Releases](https://github.com/ivadim/p
 
 | System | File | How to run |
 | --- | --- | --- |
-| Windows 10/11 (x64) | `pdftools-…-windows-x86_64.zip` | Unzip and run `pdftools.exe`. The binary isn't code-signed, so SmartScreen may ask you to confirm: choose *More info* → *Run anyway*. |
-| macOS 11+ (Apple silicon) | `pdftools-…-macos-arm64.zip` | Unzip and move *PDF Tools.app* to Applications. The first time, macOS blocks it: see below. |
+| Windows 10/11 (x64) | `pdftools-…-windows-x86_64-setup.exe` | Run the installer. It installs for your account without administrator rights (or for all users, if you choose), and adds PDF Tools to the Start menu and to *Settings → Apps* for uninstalling. It isn't code-signed, so SmartScreen may ask you to confirm: choose *More info* → *Run anyway*. |
+| Windows, portable | `pdftools-…-windows-x86_64.zip` | Unzip and run `pdftools.exe`; nothing is installed. |
+| macOS 11+ (Apple silicon) | `pdftools-…-macos-arm64.dmg` | Open the disk image and drag *PDF Tools* onto *Applications*. The first time, macOS blocks it: see below. |
 | Linux (x86_64, glibc 2.35+) | `pdftools-…-linux-x86_64.tar.gz` | Extract and run `./pdftools`. Works on X11 and Wayland. File dialogs use the XDG desktop portal, which most desktops provide. |
 
 **First launch on macOS.** The app isn't notarized by Apple yet, so macOS says *"PDF Tools.app" Not Opened*. To allow it once:
@@ -121,14 +122,14 @@ The UI reports every change to Rust as `Tools.option(tool, key, value)`. Rust va
 
 ## Releases
 
-[GitHub Actions](.github/workflows/ci.yml) runs the tests on Windows, Linux and macOS and checks coverage for every push and pull request. It then builds the three packages. To publish a release, push a version tag:
+[GitHub Actions](.github/workflows/ci.yml) runs the tests on Windows, Linux and macOS and checks coverage for every push and pull request. It then builds the packages: the Windows installer ([Inno Setup](https://jrsoftware.org/isinfo.php), `packaging/windows/pdftools.iss`) and portable zip, the macOS disk image and the Linux archive. It also tries them out: it installs and uninstalls the Windows setup silently, and mounts the disk image and checks the app inside. To publish a release, push a version tag:
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-The tag's run attaches the Windows, Linux and macOS packages to a new GitHub release.
+The tag's run attaches all four packages to a new GitHub release.
 
 ## Notes
 

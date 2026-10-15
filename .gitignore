@@ -1,5 +1,7 @@
 /target
 *.pdf.part
+# Installers built locally
+/packaging/windows/*.exe
 .DS_Store
 # Local editor and assistant settings
 /.claude

@@ -104,6 +104,35 @@ jobs:
           Compress-Archive -Path $env:PACKAGE -DestinationPath "$env:PACKAGE.zip"
           "ASSET=$env:PACKAGE.zip" | Out-File -Append $env:GITHUB_ENV
 
+      - name: Installer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y }
+          # File versions must be numeric: "0.2.0-abc1234" becomes "0.2.0".
+          $numeric = $env:VERSION -replace '-.*$', ''
+          & $iscc /Q "/DAppVersion=$env:VERSION" "/DNumericVersion=$numeric" "/DSourceDir=$PWD\target\release" packaging\windows\pdftools.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Move-Item "packaging\windows\$env:PACKAGE-setup.exe" .
+          "INSTALLER=$env:PACKAGE-setup.exe" | Out-File -Append $env:GITHUB_ENV
+
+      - name: Try the installer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'pdftools-install'
+          $quiet = '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+          Start-Process -Wait -FilePath ".\$env:INSTALLER" -ArgumentList ($quiet + '/CURRENTUSER', "/DIR=$dir")
+          if (-not (Test-Path "$dir\pdftools.exe")) { throw 'pdftools.exe was not installed' }
+          $shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'PDF Tools.lnk'
+          if (-not (Test-Path $shortcut)) { throw 'no Start menu shortcut' }
+          Start-Process -Wait -FilePath "$dir\unins000.exe" -ArgumentList $quiet
+          # The uninstaller finishes from a copy of itself; give it a moment.
+          for ($i = 0; $i -lt 30 -and (Test-Path "$dir\pdftools.exe"); $i++) { Start-Sleep 1 }
+          if (Test-Path "$dir\pdftools.exe") { throw 'uninstall left pdftools.exe behind' }
+          if (Test-Path $shortcut) { throw 'uninstall left the shortcut behind' }
+
       - name: Package (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -128,16 +157,33 @@ jobs:
           sed "s/@VERSION@/${VERSION%%-*}/" packaging/macos/Info.plist > "$app/Contents/Info.plist"
           # Ad-hoc signature: required to run on Apple silicon. Not notarized.
           codesign --force --deep --sign - "$app"
-          mkdir -p "$PACKAGE"
-          mv "$app" "$PACKAGE/"
-          cp README.md LICENSE "$PACKAGE/"
-          ditto -c -k --keepParent "$PACKAGE" "$PACKAGE.zip"
-          echo "ASSET=$PACKAGE.zip" >> "$GITHUB_ENV"
+          # A disk image with the app and a shortcut to drag it onto Applications.
+          mkdir dmg
+          mv "$app" dmg/
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname "PDF Tools" -srcfolder dmg -ov -format UDZO "$PACKAGE.dmg"
+          echo "ASSET=$PACKAGE.dmg" >> "$GITHUB_ENV"
+
+      - name: Try the disk image (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          volume=$(hdiutil attach -nobrowse -readonly "$ASSET" | grep -o '/Volumes/.*')
+          test -x "$volume/PDF Tools.app/Contents/MacOS/pdftools"
+          test -f "$volume/PDF Tools.app/Contents/Resources/AppIcon.icns"
+          test -L "$volume/Applications"
+          codesign --verify --deep "$volume/PDF Tools.app"
+          hdiutil detach "$volume"
 
       - uses: actions/upload-artifact@v7
         with:
           path: ${{ env.ASSET }}
-          # The package is already a .zip or .tar.gz: upload it as it is.
+          # The package is already a .zip, .tar.gz or .dmg: upload it as it is.
+          archive: false
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        if: runner.os == 'Windows'
+        with:
+          path: ${{ env.INSTALLER }}
           archive: false
           if-no-files-found: error
 
@@ -153,12 +199,13 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-          # The Windows and macOS packages are zips: keep them as they are.
+          # Keep the zipped packages as they are.
           skip-decompress: true
       - name: Check the packages
         run: |
           ls -la dist
-          test "$(find dist -maxdepth 1 -type f | wc -l)" -eq 3
+          # Windows setup and zip, macOS disk image, Linux archive.
+          test "$(find dist -maxdepth 1 -type f | wc -l)" -eq 4
       - uses: softprops/action-gh-release@v3
         with:
           files: dist/*
