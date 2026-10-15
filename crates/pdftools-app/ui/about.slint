@@ -1,0 +1,143 @@
+// About: version, project links, licence and the libraries the app is built on.
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { Icon, Button, ButtonKind, Muted, SectionTitle, Panel } from "widgets.slint";
+import { About } from "model.slint";
+
+// A link that opens in the browser.
+component Link inherits Rectangle {
+    in property <string> text;
+    in property <string> url;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-description: root.url;
+    accessible-action-default => { About.open(root.url); }
+    height: label.preferred-height;
+    width: label.preferred-width + 18px;
+    HorizontalLayout {
+        spacing: 4px;
+        label := Text {
+            text: root.text;
+            color: Theme.accent;
+            vertical-alignment: center;
+        }
+        Icon { y: (parent.height - self.height) / 2; icon: @image-url("icons/external.svg"); tint: Theme.accent; size: 13px; }
+    }
+    Rectangle {
+        y: label.preferred-height - 1px;
+        width: label.preferred-width;
+        height: 1px;
+        background: touch.has-hover ? Theme.accent : transparent;
+    }
+    touch := TouchArea { mouse-cursor: pointer; clicked => { About.open(root.url); } }
+}
+
+// One entry in "Built with".
+component Credit inherits HorizontalLayout {
+    in property <string> name;
+    in property <string> purpose;
+    in property <string> url;
+    spacing: 12px;
+    // A fixed column, with the link at its natural width inside.
+    Rectangle {
+        width: 140px;
+        Link { x: 0; text: root.name; url: root.url; }
+    }
+    Muted { text: root.purpose; vertical-alignment: center; horizontal-stretch: 1; wrap: word-wrap; }
+}
+
+component Section inherits Panel {
+    in property <string> title;
+    VerticalLayout {
+        padding: 18px;
+        spacing: 10px;
+        SectionTitle { text: root.title.to-uppercase(); }
+        @children
+    }
+}
+
+export component AboutPage inherits ScrollView {
+    VerticalLayout {
+        padding: 36px;
+        padding-left: 28px;
+        padding-right: 28px;
+        spacing: 18px;
+        alignment: start;
+
+        HorizontalLayout {
+            spacing: 20px;
+            alignment: start;
+            Image { source: @image-url("../../../packaging/icon-256.png"); width: 96px; height: 96px; }
+            VerticalLayout {
+                alignment: center;
+                spacing: 4px;
+                Text { text: "PDF Tools"; font-size: 28px; font-weight: 650; color: Theme.text; }
+                Text {
+                    accessible-role: text;
+                    accessible-label: "version";
+                    text: "Version " + About.version + " · " + About.platform;
+                    color: Theme.muted;
+                }
+                Text { text: "Merge, split, protect and edit PDFs — on your computer."; color: Theme.text; }
+            }
+        }
+
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: start;
+            Button {
+                text: "GitHub"; kind: ButtonKind.primary; has-icon: true; icon: @image-url("icons/github.svg");
+                tooltip: About.repository;
+                clicked => { About.open(About.repository); }
+            }
+            Button {
+                text: "Releases and updates"; has-icon: true; icon: @image-url("icons/external.svg");
+                clicked => { About.open(About.repository + "/releases"); }
+            }
+            Button {
+                text: "Report a problem"; has-icon: true; icon: @image-url("icons/external.svg");
+                clicked => { About.open(About.repository + "/issues/new"); }
+            }
+        }
+
+        Section {
+            title: "Privacy";
+            Text {
+                text: "Everything runs on your computer. PDF Tools never uploads your files, and it doesn't connect to the internet unless you open one of the links on this page.";
+                color: Theme.text;
+                wrap: word-wrap;
+            }
+        }
+
+        Section {
+            title: "Licence";
+            Text {
+                text: "PDF Tools is free and open-source software, released under the MIT licence. Copyright © 2026 Dmitry Ivanov.";
+                color: Theme.text;
+                wrap: word-wrap;
+            }
+            HorizontalLayout {
+                spacing: 18px;
+                alignment: start;
+                Link { text: "MIT licence"; url: About.repository + "/blob/main/LICENSE"; }
+                Link { text: "Source code"; url: About.repository; }
+            }
+        }
+
+        Section {
+            title: "Built with";
+            Muted {
+                text: "PDF Tools stands on these open-source projects, among others:";
+                wrap: word-wrap;
+            }
+            Credit { name: "Slint"; purpose: "User interface toolkit, used under the Slint Royalty-free Licence"; url: "https://slint.dev"; }
+            Credit { name: "lopdf"; purpose: "Reading, editing and writing PDF files"; url: "https://crates.io/crates/lopdf"; }
+            Credit { name: "hayro"; purpose: "Rendering page previews"; url: "https://crates.io/crates/hayro"; }
+            Credit { name: "image"; purpose: "Reading and writing JPEG and PNG images"; url: "https://crates.io/crates/image"; }
+            Credit { name: "Parley"; purpose: "Text layout for watermarks and signatures"; url: "https://crates.io/crates/parley"; }
+            Credit { name: "tiny-skia"; purpose: "Drawing signatures and watermarks"; url: "https://crates.io/crates/tiny-skia"; }
+            Credit { name: "rfd"; purpose: "Native file dialogs"; url: "https://crates.io/crates/rfd"; }
+            Text { text: "Made with Slint"; color: Theme.muted; font-weight: 600; }
+        }
+    }
+}

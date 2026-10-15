@@ -217,6 +217,7 @@ fn ui_flows() {
     signature();
     images_to_pdf();
     mouse_controls();
+    about_page();
     file_errors_and_drops();
 }
 
@@ -846,6 +847,25 @@ fn mouse_controls() {
     assert_eq!(h.pages(id::MERGE)[1].rotation, 180, "both clicks hit the button");
     viewer.invoke_close();
     settle();
+}
+
+fn about_page() {
+    let h = Harness::new("about");
+    h.open("About");
+    assert!(h.exists("version"));
+    let about = h.ui.global::<pdftools_app::About>();
+    assert_eq!(about.get_version(), env!("CARGO_PKG_VERSION"));
+    assert_eq!(about.get_platform(), pdftools_app::app::platform());
+
+    let repo = env!("CARGO_PKG_REPOSITORY");
+    assert_eq!(repo, "https://github.com/ivadim/pdf-tools");
+    h.click("GitHub");
+    h.click("Report a problem");
+    h.mouse_click(&h.find("MIT licence"));
+    assert_eq!(
+        *h.dialogs.opened_urls.borrow(),
+        [repo.to_owned(), format!("{repo}/issues/new"), format!("{repo}/blob/main/LICENSE")]
+    );
 }
 
 fn file_errors_and_drops() {

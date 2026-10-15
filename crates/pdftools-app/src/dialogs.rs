@@ -14,6 +14,8 @@ pub trait Dialogs {
     fn save_pdf(&self, title: &str, suggested: &Path) -> Option<PathBuf>;
     /// A yes/no question; true for yes.
     fn confirm(&self, title: &str, message: &str) -> bool;
+    /// Opens a web page in the default browser.
+    fn open_url(&self, url: &str);
 }
 
 pub struct NativeDialogs;
@@ -69,6 +71,10 @@ impl Dialogs for NativeDialogs {
             .show()
             == rfd::MessageDialogResult::Custom("Replace".into())
     }
+
+    fn open_url(&self, url: &str) {
+        open_url(url);
+    }
 }
 
 pub fn with_pdf_extension(path: PathBuf) -> PathBuf {
@@ -89,6 +95,8 @@ pub struct ScriptedDialogs {
     pub confirms: RefCell<VecDeque<bool>>,
     /// Titles of the save dialogs shown, for assertions.
     pub save_titles: RefCell<Vec<String>>,
+    /// Web pages the app asked to open.
+    pub opened_urls: RefCell<Vec<String>>,
 }
 
 impl ScriptedDialogs {
@@ -138,6 +146,24 @@ impl Dialogs for ScriptedDialogs {
     fn confirm(&self, _title: &str, _message: &str) -> bool {
         self.confirms.borrow_mut().pop_front().unwrap_or(false)
     }
+
+    fn open_url(&self, url: &str) {
+        self.opened_urls.borrow_mut().push(url.to_owned());
+    }
+}
+
+/// Opens an `https://` page in the default browser; anything else is ignored.
+pub fn open_url(url: &str) {
+    if !url.starts_with("https://") {
+        return;
+    }
+    #[cfg(target_os = "windows")]
+    let result = std::process::Command::new("rundll32").args(["url.dll,FileProtocolHandler", url]).spawn();
+    #[cfg(target_os = "macos")]
+    let result = std::process::Command::new("open").arg(url).spawn();
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    let result = std::process::Command::new("xdg-open").arg(url).spawn();
+    let _ = result;
 }
 
 /// Shows a file in the system file manager.

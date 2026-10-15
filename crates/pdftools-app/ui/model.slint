@@ -148,6 +148,15 @@ export global Tools {
     callback option(int, string, string);
 }
 
+// The About page. Rust fills these in from Cargo.toml.
+export global About {
+    in-out property <string> version;
+    in-out property <string> platform;
+    in-out property <string> repository;
+    // Opens a web page in the default browser.
+    callback open(string);
+}
+
 // The full-size page viewer.
 export global Viewer {
     in-out property <bool> open;

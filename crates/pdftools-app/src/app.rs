@@ -16,7 +16,7 @@ use crate::tools::images::ImagesTool;
 use crate::tools::merge::MergeTool;
 use crate::tools::signature::SignatureTool;
 use crate::tools::{self, id, preview_request, run_state, FileState, Loaded, Outcome, Shared, Tool};
-use crate::{AppWindow, Merge, PageTile, Sign, ToolView, Tools, Viewer};
+use crate::{About, AppWindow, Merge, PageTile, Sign, ToolView, Tools, Viewer};
 
 pub struct App {
     pub s: Shared,
@@ -55,6 +55,10 @@ impl App {
             in_flight: HashSet::new(),
             viewer: None,
         }));
+        let about = ui.global::<About>();
+        about.set_version(env!("CARGO_PKG_VERSION").into());
+        about.set_platform(platform().into());
+        about.set_repository(env!("CARGO_PKG_REPOSITORY").into());
         jobs::register(&app);
         {
             let mut a = app.borrow_mut();
@@ -516,6 +520,21 @@ impl App {
     }
 }
 
+/// The system and processor, as people know them: "macOS arm64".
+pub fn platform() -> String {
+    let os = match std::env::consts::OS {
+        "windows" => "Windows",
+        "macos" => "macOS",
+        "linux" => "Linux",
+        other => other,
+    };
+    let arch = match std::env::consts::ARCH {
+        "aarch64" => "arm64",
+        other => other,
+    };
+    format!("{os} {arch}")
+}
+
 /// Tools that work on one PDF (everything but Merge and Images).
 fn is_single(index: usize) -> bool {
     index != id::MERGE && index != id::IMAGES
@@ -701,6 +720,8 @@ fn connect(ui: &AppWindow, app: &Rc<RefCell<App>>) {
         });
         app.refresh(tool as usize);
     });
+
+    on!(ui.global::<About>(), on_open, |app, url: SharedString| { app.s.dialogs.open_url(&url) });
 
     let viewer = ui.global::<Viewer>();
     on!(viewer, on_step, |app, delta: i32| { app.viewer_step(delta) });

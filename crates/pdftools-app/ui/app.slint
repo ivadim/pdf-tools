@@ -2,14 +2,15 @@
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { Icon, IconButton, ToolChip, Muted } from "widgets.slint";
-import { Tools, Viewer, Merge, Sign, ToolInfo, ToolView, PageTile, MergeFile, SignBox, GridCaps, RunState, FileCard } from "model.slint";
+import { Tools, Viewer, Merge, Sign, About, ToolInfo, ToolView, PageTile, MergeFile, SignBox, GridCaps, RunState, FileCard } from "model.slint";
 import { PageCanvas } from "page-grid.slint";
 import { MergePage } from "merge.slint";
 import { SignaturePage } from "signature.slint";
 import { ToolPage } from "tool-page.slint";
 import { ImagesPage } from "images.slint";
+import { AboutPage } from "about.slint";
 
-export { Tools, Viewer, Merge, Sign, ToolInfo, ToolView, PageTile, MergeFile, SignBox, GridCaps, RunState, FileCard }
+export { Tools, Viewer, Merge, Sign, About, ToolInfo, ToolView, PageTile, MergeFile, SignBox, GridCaps, RunState, FileCard }
 
 component NavItem inherits Rectangle {
     in property <string> id;
@@ -225,6 +226,9 @@ export component AppWindow inherits Window {
                     Rectangle { height: 13px; Rectangle { height: 1px; background: Theme.border; x: 8px; width: parent.width - 16px; } }
                     for info in Tools.catalog: NavItem { id: info.id; name: info.name; icon: info.icon; tint: info.tint; }
                 }
+                // Pushes About to the bottom of the sidebar.
+                Rectangle { vertical-stretch: 1; }
+                NavItem { id: "about"; name: "About"; icon: @image-url("icons/info.svg"); tint: #8b93a7; }
             }
             Rectangle { x: parent.width - 1px; width: 1px; background: Theme.border; }
         }
@@ -233,6 +237,7 @@ export component AppWindow inherits Window {
             // Tool pages stay alive while hidden so their controls keep what
             // the user chose, matching the state kept on the Rust side.
             if Tools.active == "home": Home { }
+            if Tools.active == "about": AboutPage { }
             MergePage { visible: Tools.active == "merge"; }
             ToolPage { tool: 1; visible: Tools.active == "split"; }
             ToolPage { tool: 2; visible: Tools.active == "compress"; }
@@ -261,7 +266,7 @@ export component AppWindow inherits Window {
             border-radius: Theme.radius;
             background: Theme.accent;
             drop-label := Text {
-                text: Tools.active == "home" ? "Open a tool first, then drop files" : Tools.active == "images" ? "Drop images here" : "Drop PDF files here";
+                text: Tools.active == "home" || Tools.active == "about" ? "Open a tool first, then drop files" : Tools.active == "images" ? "Drop images here" : "Drop PDF files here";
                 color: white;
                 font-size: 16px;
                 font-weight: 600;
