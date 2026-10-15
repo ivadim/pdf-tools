@@ -188,6 +188,7 @@ fn ui_flows() {
     page_numbers();
     watermark();
     signature();
+    images_to_pdf();
     file_errors_and_drops();
 }
 
@@ -691,6 +692,93 @@ fn signature() {
     settle();
     let out = h.out("signed-image.pdf");
     assert!(h.run(id::SIGNATURE, Some(&out)).contains("Signed"));
+}
+
+fn images_to_pdf() {
+    use image::{Rgb, RgbImage, Rgba, RgbaImage};
+    use pdftools_app::previews::{render, DocCache, PreviewRequest};
+
+    let h = Harness::new("images");
+    h.open("Images to PDF");
+    assert_eq!(h.status(id::IMAGES), "Add images to get started.");
+    let t = id::IMAGES as i32;
+
+    // A wide JPEG, red on the left and blue on the right; a tall PNG with a
+    // transparent half; and a file that isn't an image.
+    let wide = h.out("b-wide.jpg");
+    RgbImage::from_fn(160, 100, |x, _| if x < 80 { Rgb([230, 20, 20]) } else { Rgb([20, 20, 230]) }).save(&wide).unwrap();
+    let tall = h.out("a-tall.png");
+    RgbaImage::from_fn(50, 100, |_, y| Rgba([0, 150, 0, if y < 50 { 255 } else { 0 }])).save(&tall).unwrap();
+    std::fs::write(h.out("notes.txt"), "text").unwrap();
+    h.dialogs.open(&[&wide, &tall, &h.out("notes.txt")]);
+    h.click("Add images…");
+    let pages = h.pages(id::IMAGES);
+    assert_eq!(pages.len(), 2, "the text file is ignored");
+    assert!(pages.iter().all(|p| p.loaded && p.has_overlay_image), "thumbnails shown");
+    assert!(pages[0].aspect > 1.0 && pages[1].aspect < 1.0, "Auto: landscape page for the wide image");
+    assert_eq!(h.view(id::IMAGES).summary, "2 images");
+
+    h.click("Sort by name");
+    let labels: Vec<String> = h.pages(id::IMAGES).iter().map(|p| p.label.to_string()).collect();
+    assert_eq!(labels, ["a-tall.png", "b-wide.jpg"]);
+    h.tools().invoke_tile_moved(t, 1, 0);
+    settle();
+    assert_eq!(h.pages(id::IMAGES)[0].label, "b-wide.jpg");
+
+    // Turn the wide image upright: its page turns portrait.
+    h.tools().invoke_tile_action(t, "rotate-right".into(), 0);
+    settle();
+    assert!(h.pages(id::IMAGES)[0].aspect < 1.0);
+    h.click("Letter");
+    h.click("Large");
+    let tile = &h.pages(id::IMAGES)[0];
+    assert!(tile.overlay_image_width < 1.0, "a margin around the image");
+
+    // The viewer shows the image placed on its page.
+    h.tools().invoke_tile_action(t, "view".into(), 0);
+    settle();
+    let viewer = h.ui.global::<Viewer>();
+    assert!(viewer.get_open() && viewer.get_tile().has_overlay_image);
+    assert!(viewer.get_tile().overlay_image.size().width > tile.overlay_image.size().width, "a sharper image");
+    viewer.invoke_close();
+
+    // A broken image blocks the run until it's removed.
+    let broken = h.out("broken.jpg");
+    std::fs::write(&broken, b"not a jpeg").unwrap();
+    h.app.borrow_mut().files_dropped(vec![broken]);
+    settle();
+    assert!(h.pages(id::IMAGES)[2].failed);
+    assert_eq!(h.status(id::IMAGES), "Remove the image that can’t be read to continue.");
+    h.tools().invoke_tile_action(t, "delete".into(), 2);
+    settle();
+    assert_eq!(h.status(id::IMAGES), "Ready.");
+
+    let out = h.out("images.pdf");
+    assert!(h.run(id::IMAGES, Some(&out)).contains("Saved 2 pages"));
+    let doc = lopdf::Document::load(&out).unwrap();
+    let boxes: Vec<Vec<f32>> = doc
+        .get_pages()
+        .values()
+        .map(|id| {
+            let page = doc.get_dictionary(*id).unwrap();
+            page.get(b"MediaBox").unwrap().as_array().unwrap().iter().map(|o| o.as_float().unwrap()).collect()
+        })
+        .collect();
+    assert_eq!(boxes, vec![vec![0.0, 0.0, 612.0, 792.0]; 2], "Letter, portrait");
+
+    // The turned photo: red, once on the left, is now at the top.
+    let request = PreviewRequest { path: out.clone(), page: 1, width: 100, rotation: 0, gray: false };
+    let page = render(&request, &mut DocCache::default()).unwrap();
+    let pixel = |x: u32, y: u32| {
+        let i = ((y * page.width + x) * 4) as usize;
+        [page.pixels[i], page.pixels[i + 1], page.pixels[i + 2]]
+    };
+    let (top, bottom) = (pixel(50, page.height * 3 / 10), pixel(50, page.height * 7 / 10));
+    assert!(top[0] > 150 && top[2] < 100, "top is red: {top:?}");
+    assert!(bottom[2] > 150 && bottom[0] < 100, "bottom is blue: {bottom:?}");
+
+    h.click("Clear");
+    assert!(h.pages(id::IMAGES).is_empty());
 }
 
 fn file_errors_and_drops() {

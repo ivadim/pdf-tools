@@ -39,6 +39,9 @@ pub enum Error {
     #[error("could not read the image: {0}")]
     Image(String),
 
+    #[error("could not read {}: {message}", path.display())]
+    ReadImage { path: PathBuf, message: String },
+
     #[error(transparent)]
     Pdf(#[from] lopdf::Error),
 }

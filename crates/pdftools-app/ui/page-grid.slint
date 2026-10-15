@@ -20,6 +20,8 @@ export component PageCanvas inherits Rectangle {
     x: (box-width - page-width) / 2;
     y: (box-height - page-height) / 2;
     background: white;
+    drop-shadow-blur: 3px;
+    drop-shadow-color: #0000003a;
     clip: true;
 
     if tile.loaded: Image {
@@ -136,9 +138,8 @@ export component PageGrid inherits Rectangle {
                 y: 0;
                 height: root.frame-height;
                 border-radius: 3px;
-                background: Theme.surface;
-                drop-shadow-blur: 3px;
-                drop-shadow-color: #0000003a;
+                // The page itself is white with a shadow, so its real shape
+                // shows (landscape pages are shorter than the frame).
                 border-width: tile.selected ? 3px : (touch.has-hover || focus.has-focus) ? 2px : 0;
                 border-color: Theme.accent;
                 opacity: tile.excluded ? 0.35 : 1;

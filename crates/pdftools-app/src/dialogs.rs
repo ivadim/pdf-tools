@@ -9,6 +9,7 @@ pub trait Dialogs {
     fn pick_pdfs(&self) -> Vec<PathBuf>;
     fn pick_folder(&self, near: &Path) -> Option<PathBuf>;
     fn pick_image(&self) -> Option<PathBuf>;
+    fn pick_images(&self) -> Vec<PathBuf>;
     /// Where to save a PDF; the result always ends in `.pdf`.
     fn save_pdf(&self, title: &str, suggested: &Path) -> Option<PathBuf>;
     /// A yes/no question; true for yes.
@@ -18,6 +19,7 @@ pub trait Dialogs {
 pub struct NativeDialogs;
 
 const PDF: (&str, &[&str]) = ("PDF documents", &["pdf"]);
+const IMAGES: (&str, &[&str]) = ("Images", &["jpg", "jpeg", "png"]);
 
 impl Dialogs for NativeDialogs {
     fn pick_pdf(&self) -> Option<PathBuf> {
@@ -39,8 +41,12 @@ impl Dialogs for NativeDialogs {
     fn pick_image(&self) -> Option<PathBuf> {
         rfd::FileDialog::new()
             .set_title("Choose an image")
-            .add_filter("Images", &["png", "jpg", "jpeg"])
+            .add_filter(IMAGES.0, IMAGES.1)
             .pick_file()
+    }
+
+    fn pick_images(&self) -> Vec<PathBuf> {
+        rfd::FileDialog::new().set_title("Add images").add_filter(IMAGES.0, IMAGES.1).pick_files().unwrap_or_default()
     }
 
     fn save_pdf(&self, title: &str, suggested: &Path) -> Option<PathBuf> {
@@ -114,6 +120,10 @@ impl Dialogs for ScriptedDialogs {
 
     fn pick_folder(&self, _near: &Path) -> Option<PathBuf> {
         self.next_file()
+    }
+
+    fn pick_images(&self) -> Vec<PathBuf> {
+        self.files.borrow_mut().pop_front().unwrap_or_default()
     }
 
     fn pick_image(&self) -> Option<PathBuf> {

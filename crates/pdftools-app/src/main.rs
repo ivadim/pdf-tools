@@ -45,8 +45,8 @@ fn main() -> Result<(), slint::PlatformError> {
     ui.run()
 }
 
-/// Development aid: `PDFTOOLS_SNAPSHOT=out.png PDFTOOLS_OPEN=tool[:file.pdf]`
-/// opens a tool (and file), waits for rendering, saves a screenshot and exits.
+/// Development aid: `PDFTOOLS_SNAPSHOT=out.png PDFTOOLS_OPEN=tool[:file[|file…]]`
+/// opens a tool (and files), waits for rendering, saves a screenshot and exits.
 #[cfg(debug_assertions)]
 fn dev_snapshot(ui: &AppWindow, app: &Rc<std::cell::RefCell<App>>) {
     let Some(out) = std::env::var_os("PDFTOOLS_SNAPSHOT") else { return };
@@ -54,7 +54,9 @@ fn dev_snapshot(ui: &AppWindow, app: &Rc<std::cell::RefCell<App>>) {
         let (tool, file) = open.split_once(':').map_or((open.as_str(), None), |(t, f)| (t, Some(f)));
         ui.global::<Tools>().set_active(tool.into());
         if let (Some(file), Some(index)) = (file, pdftools_app::tools::id::NAMES.iter().position(|n| *n == tool)) {
-            app.borrow_mut().load_file(index, file.into());
+            for file in file.split('|') {
+                app.borrow_mut().load_file(index, file.into());
+            }
         }
     }
     let weak = ui.as_weak();

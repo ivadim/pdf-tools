@@ -12,6 +12,7 @@ use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 use crate::dialogs::Dialogs;
 use crate::jobs;
 use crate::previews::{PreviewRequest, Previews};
+use crate::tools::images::ImagesTool;
 use crate::tools::merge::MergeTool;
 use crate::tools::signature::SignatureTool;
 use crate::tools::{self, id, preview_request, run_state, FileState, Loaded, Outcome, Shared, Tool};
@@ -46,6 +47,7 @@ impl App {
             Some(Box::new(tools::metadata::MetadataTool::new())),
             Some(Box::new(SignatureTool::new())),
             Some(Box::new(tools::grayscale::GrayscaleTool::new())),
+            Some(Box::new(ImagesTool::new())),
         ];
         let app = Rc::new(RefCell::new(App {
             s: Shared { ui: ui.clone_strong(), dialogs, previews: Previews::new(), views },
@@ -85,6 +87,11 @@ impl App {
             let mut merge = tool;
             merge.as_any().downcast_mut::<MergeTool>().expect("merge").refresh(&mut self.s);
             self.tools[index] = Some(merge);
+        } else if index == id::IMAGES {
+            self.with_tool(index, |tool, s| {
+                (tool as &mut dyn std::any::Any).downcast_mut::<ImagesTool>().expect("images").refresh(s)
+            });
+            self.read_images();
         } else {
             self.with_tool(index, |tool, s| refresh_single(tool, s));
         }
@@ -151,12 +158,17 @@ impl App {
 
     // ── Files ─────────────────────────────────────────────────────────────
 
-    /// Opens `path` in a single-file tool.
+    /// Opens `path` in a single-file tool, or adds it to Merge or Images.
     pub fn load_file(&mut self, index: usize, path: PathBuf) {
         if index == id::MERGE {
             self.tool::<MergeTool>(index).add_files(vec![path]);
             self.refresh(index);
             self.inspect_merge_files();
+            return;
+        }
+        if index == id::IMAGES {
+            self.tool::<ImagesTool>(index).add_files(vec![path]);
+            self.refresh(index);
             return;
         }
         self.with_tool(index, |tool, s| {
@@ -252,10 +264,38 @@ impl App {
         }
     }
 
+    /// Reads sizes and thumbnails of new images, one at a time in a single
+    /// background job, so large photos are never decoded all at once.
+    fn read_images(&mut self) {
+        let unread = self.tool::<ImagesTool>(id::IMAGES).take_unread();
+        if unread.is_empty() {
+            return;
+        }
+        let listener = jobs::listener(|app: &mut App, (entry, result): (u32, tools::images::ReadResult)| {
+            app.tool::<ImagesTool>(id::IMAGES).image_read(entry, result);
+            app.refresh(id::IMAGES);
+        });
+        jobs::spawn(
+            move || {
+                for (entry, path) in unread {
+                    jobs::post(listener, Box::new((entry, tools::images::read_image(&path))));
+                }
+            },
+            move |_: &mut App, ()| jobs::forget(listener),
+        );
+    }
+
     /// Files dropped onto the window.
     pub fn files_dropped(&mut self, paths: Vec<PathBuf>) {
         let active = self.s.ui.global::<Tools>().get_active().to_string();
         let Some(index) = id::NAMES.iter().position(|n| *n == active) else { return };
+        if index == id::IMAGES {
+            if !self.busy(index) {
+                self.tool::<ImagesTool>(index).add_files(paths);
+                self.refresh(index);
+            }
+            return;
+        }
         let pdfs: Vec<PathBuf> = paths.into_iter().filter(|p| tools::is_pdf(p)).collect();
         if pdfs.is_empty() || self.busy(index) {
             return;
@@ -351,8 +391,29 @@ impl App {
         viewer.set_can_prev(page > 0);
         viewer.set_can_next(page + 1 < count);
         viewer.set_can_rotate(view.caps.rotate);
-        viewer.set_tile(PageTile { loaded: false, ..tile.clone() });
         viewer.set_open(true);
+        if index == id::IMAGES {
+            // The tile already shows the thumbnail; swap in a sharper image.
+            viewer.set_tile(tile);
+            let Some((path, rotation)) = self.tool::<ImagesTool>(index).source(page) else { return };
+            jobs::spawn(
+                move || {
+                    let image = pdftools_core::images::load_image(&path, rotation).ok()?;
+                    let image = image.resize(VIEWER_WIDTH, VIEWER_WIDTH, image::imageops::FilterType::Triangle).to_rgba8();
+                    Some(crate::raster::Picture { width: image.width(), height: image.height(), pixels: image.into_raw() })
+                },
+                move |app: &mut App, picture: Option<crate::raster::Picture>| {
+                    if let (Some(picture), true) = (picture, app.viewer == Some((index, page))) {
+                        let viewer = app.s.ui.global::<Viewer>();
+                        let mut shown = viewer.get_tile();
+                        shown.overlay_image = picture.to_image();
+                        viewer.set_tile(shown);
+                    }
+                },
+            );
+            return;
+        }
+        viewer.set_tile(PageTile { loaded: false, ..tile.clone() });
         let gray = self.with_tool(index, |tool, _| tool.gray_previews());
         let Some(mut request) = tile_request(&tile, gray) else { return };
         request.width = VIEWER_WIDTH;
@@ -403,7 +464,7 @@ impl App {
     pub fn tile_action(&mut self, index: usize, action: &str, tile: usize) {
         match action {
             "view" => return self.open_viewer(index, tile),
-            "toggle-include" if index != id::MERGE => {
+            "toggle-include" if is_single(index) => {
                 self.with_tool(index, |tool, _| {
                     let page = tool.tiles().get(tile).map(|t| t.page as usize);
                     if let (Some(page), Some(base)) = (page, tool.base()) {
@@ -421,7 +482,7 @@ impl App {
     pub fn include_range(&mut self, index: usize, from: usize, to: usize, include: bool) {
         if index == id::MERGE {
             self.tool::<MergeTool>(index).include_range(from, to, include);
-        } else {
+        } else if is_single(index) {
             self.with_tool(index, |tool, _| {
                 let pages: Vec<usize> = tool.tiles().iter().map(|t| t.page as usize).collect();
                 if let Some(base) = tool.base() {
@@ -439,13 +500,18 @@ impl App {
     }
 
     pub fn grid_action(&mut self, index: usize, action: &str) {
-        if action == "include-all" && index != id::MERGE {
+        if action == "include-all" && is_single(index) {
             self.with_tool(index, |tool, _| tool.base().expect("single").excluded.clear());
         } else {
             self.with_tool(index, |tool, s| tool.grid_action(s, action));
         }
         self.refresh(index);
     }
+}
+
+/// Tools that work on one PDF (everything but Merge and Images).
+fn is_single(index: usize) -> bool {
+    index != id::MERGE && index != id::IMAGES
 }
 
 /// The preview request for a tile (its key encodes path, page and rotation).
@@ -568,6 +634,12 @@ fn connect(ui: &AppWindow, app: &Rc<RefCell<App>>) {
     on!(tools_global, on_pick_file, |app, tool: i32| {
         let index = tool as usize;
         if index == id::MERGE {
+            return;
+        }
+        if index == id::IMAGES {
+            let paths = app.s.dialogs.pick_images();
+            app.tool::<ImagesTool>(index).add_files(paths);
+            app.refresh(index);
             return;
         }
         if let Some(path) = app.s.dialogs.pick_pdf() {

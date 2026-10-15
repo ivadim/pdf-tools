@@ -154,6 +154,13 @@ pub(crate) fn embed_image(doc: &mut Document, bytes: &[u8]) -> Result<(ObjectId,
         }
     }
 
+    Ok(embed_pixels(doc, &decoded))
+}
+
+/// Embeds decoded pixels losslessly (Flate), with a soft mask when any pixel
+/// is transparent, and returns the image's id and pixel size.
+pub(crate) fn embed_pixels(doc: &mut Document, decoded: &DynamicImage) -> (ObjectId, u32, u32) {
+    let (width, height) = (decoded.width(), decoded.height());
     let rgba = decoded.to_rgba8();
     let mut rgb = Vec::with_capacity((width * height * 3) as usize);
     let mut alpha = Vec::with_capacity((width * height) as usize);
@@ -185,7 +192,7 @@ pub(crate) fn embed_image(doc: &mut Document, bytes: &[u8]) -> Result<(ObjectId,
     }
     let mut stream = Stream::new(dict, rgb);
     let _ = stream.compress();
-    Ok((doc.add_object(stream), width, height))
+    (doc.add_object(stream), width, height)
 }
 
 /// Ids of images used as (soft) masks of other images; recompressing those

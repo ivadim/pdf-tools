@@ -7,6 +7,7 @@ import { PageCanvas } from "page-grid.slint";
 import { MergePage } from "merge.slint";
 import { SignaturePage } from "signature.slint";
 import { ToolPage } from "tool-page.slint";
+import { ImagesPage } from "images.slint";
 
 export { Tools, Viewer, Merge, Sign, ToolInfo, ToolView, PageTile, MergeFile, SignBox, GridCaps, RunState, FileCard }
 
@@ -70,7 +71,8 @@ component CardGrid inherits Rectangle {
     property <int> columns: max(1, floor((self.width + 12px) / (215px + 12px)));
     property <[int]> indexes;
     property <length> card-width: (self.width - 12px * (columns - 1)) / columns;
-    property <int> count: featured ? 4 : 8;
+    // Four featured tools; the rest go in the full catalog.
+    property <int> count: featured ? 4 : tools.length - 4;
     height: ceil(count / columns) * 104px - 12px;
     for info[i] in tools: ToolCard {
         property <int> slot: featured ? i : i - 4;
@@ -235,6 +237,7 @@ export component AppWindow inherits Window {
             ToolPage { tool: 9; visible: Tools.active == "metadata"; }
             SignaturePage { visible: Tools.active == "signature"; }
             ToolPage { tool: 11; visible: Tools.active == "grayscale"; }
+            ImagesPage { visible: Tools.active == "images"; }
         }
     }
 
@@ -250,7 +253,7 @@ export component AppWindow inherits Window {
             border-radius: Theme.radius;
             background: Theme.accent;
             drop-label := Text {
-                text: Tools.active == "home" ? "Open a tool first, then drop files" : "Drop PDF files here";
+                text: Tools.active == "home" ? "Open a tool first, then drop files" : Tools.active == "images" ? "Drop images here" : "Drop PDF files here";
                 color: white;
                 font-size: 16px;
                 font-weight: 600;

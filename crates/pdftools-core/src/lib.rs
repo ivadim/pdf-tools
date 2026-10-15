@@ -6,6 +6,7 @@
 pub mod compress;
 mod error;
 pub mod grayscale;
+pub mod images;
 mod image_data;
 pub mod merge;
 pub mod metadata;

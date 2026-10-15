@@ -1,0 +1,166 @@
+// Images to PDF: page layout options and a preview of the pages, one image
+// per page.
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { Icon, IconButton, Button, ButtonKind, Muted, SectionTitle, Panel, Segmented } from "widgets.slint";
+import { PageGrid } from "page-grid.slint";
+import { Tools, ToolView } from "model.slint";
+import { ToolHeader, RunBar } from "common.slint";
+
+component OptionGroup inherits VerticalLayout {
+    in property <string> title;
+    spacing: 10px;
+    alignment: start;
+    SectionTitle { text: root.title.to-uppercase(); }
+    @children
+}
+
+export component ImagesPage inherits VerticalLayout {
+    property <int> tool: 12;
+    property <ToolView> view: Tools.views[12];
+    property <bool> busy: view.run.kind == 1;
+    property <bool> has-images: view.pages.length > 0;
+    property <string> size: "a4";
+
+    padding: 20px;
+    padding-left: 24px;
+    padding-right: 24px;
+    padding-bottom: 0;
+    spacing: 16px;
+
+    HorizontalLayout {
+        ToolHeader { info: Tools.catalog[12]; horizontal-stretch: 1; }
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: end;
+            Button {
+                y: (parent.height - self.height) / 2;
+                text: "Sort by name"; has-icon: true; icon: @image-url("icons/sort.svg");
+                tooltip: "Sort images by file name";
+                enabled: !root.busy && root.view.pages.length > 1;
+                clicked => { Tools.grid-action(root.tool, "sort"); }
+            }
+            Button {
+                y: (parent.height - self.height) / 2;
+                text: "Clear"; has-icon: true; icon: @image-url("icons/trash.svg");
+                enabled: !root.busy && root.has-images;
+                clicked => { Tools.grid-action(root.tool, "clear"); }
+            }
+            Button {
+                y: (parent.height - self.height) / 2;
+                text: "Add images…"; kind: ButtonKind.primary; has-icon: true; icon: @image-url("icons/plus.svg");
+                enabled: !root.busy;
+                clicked => { Tools.pick-file(root.tool); }
+            }
+        }
+    }
+
+    HorizontalLayout {
+        spacing: 16px;
+        vertical-stretch: 1;
+        Panel {
+            min-width: 300px;
+            max-width: 360px;
+            horizontal-stretch: 0;
+            ScrollView {
+                VerticalLayout {
+                    padding: 14px;
+                    spacing: 18px;
+                    alignment: start;
+                    OptionGroup {
+                        title: "Page size";
+                        Segmented {
+                            value <=> root.size;
+                            options: [{ value: "a4", label: "A4" }, { value: "letter", label: "Letter" }, { value: "fit", label: "Fit image" }];
+                            changed(v) => { Tools.option(root.tool, "size", v); }
+                        }
+                        if root.size == "fit": Muted {
+                            text: "Each page takes the size of its image, at 96 pixels per inch.";
+                            wrap: word-wrap;
+                        }
+                    }
+                    if root.size != "fit": OptionGroup {
+                        title: "Orientation";
+                        Segmented {
+                            value: "auto";
+                            options: [{ value: "auto", label: "Auto" }, { value: "portrait", label: "Portrait" }, { value: "landscape", label: "Landscape" }];
+                            changed(v) => { Tools.option(root.tool, "orientation", v); }
+                        }
+                        Muted { text: "Auto turns pages sideways for wide images."; wrap: word-wrap; }
+                    }
+                    OptionGroup {
+                        title: "Margin";
+                        Segmented {
+                            value: "none";
+                            options: [{ value: "none", label: "None" }, { value: "small", label: "Small" }, { value: "large", label: "Large" }];
+                            changed(v) => { Tools.option(root.tool, "margin", v); }
+                        }
+                    }
+                    Muted {
+                        text: "Images are scaled to fit the page and centred. JPEGs are added without re-compressing, so photos keep their quality.";
+                        wrap: word-wrap;
+                    }
+                }
+            }
+        }
+        Panel {
+            horizontal-stretch: 1;
+            VerticalLayout {
+                Rectangle {
+                    height: 46px;
+                    HorizontalLayout {
+                        padding-left: 14px;
+                        padding-right: 10px;
+                        spacing: 10px;
+                        SectionTitle { text: "PAGES"; vertical-alignment: center; }
+                        Text { text: root.view.summary; color: Theme.muted; vertical-alignment: center; horizontal-stretch: 1; }
+                        IconButton {
+                            y: (parent.height - self.height) / 2;
+                            icon: @image-url("icons/rotate-ccw.svg"); label: "Rotate all images left";
+                            enabled: !root.busy && root.has-images;
+                            clicked => { Tools.grid-action(root.tool, "rotate-all-left"); }
+                        }
+                        IconButton {
+                            y: (parent.height - self.height) / 2;
+                            icon: @image-url("icons/rotate-cw.svg"); label: "Rotate all images right";
+                            enabled: !root.busy && root.has-images;
+                            clicked => { Tools.grid-action(root.tool, "rotate-all-right"); }
+                        }
+                    }
+                    Rectangle { y: parent.height - 1px; height: 1px; background: Theme.border; }
+                }
+                if !root.has-images: VerticalLayout {
+                    alignment: center;
+                    spacing: 8px;
+                    vertical-stretch: 1;
+                    HorizontalLayout {
+                        alignment: center;
+                        Icon { icon: @image-url("icons/upload.svg"); tint: Theme.muted; size: 36px; }
+                    }
+                    Text { text: "Drop JPEG or PNG images here"; horizontal-alignment: center; color: Theme.text; }
+                    Muted { text: "or"; horizontal-alignment: center; }
+                    HorizontalLayout {
+                        alignment: center;
+                        Button {
+                            text: "Add images"; kind: ButtonKind.primary; has-icon: true; icon: @image-url("icons/plus.svg");
+                            clicked => { Tools.pick-file(root.tool); }
+                        }
+                    }
+                }
+                if root.has-images: PageGrid {
+                    vertical-stretch: 1;
+                    pages: root.view.pages;
+                    caps: root.view.caps;
+                    busy: root.busy;
+                    empty-text: root.view.empty-text;
+                    tile-clicked(index, shift, ctrl) => { Tools.tile-clicked(root.tool, index, shift, ctrl); }
+                    tile-action(action, index) => { Tools.tile-action(root.tool, action, index); }
+                    moved(from, to) => { Tools.tile-moved(root.tool, from, to); }
+                    visible-range(first, last) => { Tools.visible-range(root.tool, first, last); }
+                }
+            }
+        }
+    }
+
+    RunBar { tool: 12; run: root.view.run; icon: Tools.catalog[12].icon; }
+}

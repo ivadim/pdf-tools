@@ -36,6 +36,7 @@ Builds of the latest `main` are attached to each [CI run](https://github.com/iva
 | **Metadata** | Edit title, author, subject, keywords, creator and producer. |
 | **Signature** | Draw, type or upload a signature, then drag and resize it on one or more pages. |
 | **Grayscale** | Converts colours in page content, forms, annotations, palettes and images. Text stays real text. Gradients and spot colours are left as they are. |
+| **Images to PDF** | Turn JPEG and PNG images into a PDF, one per page. Reorder and rotate them, and choose the page size (A4, Letter or the image's own size), orientation and margin. JPEGs are embedded without re-compression, camera rotation (EXIF) is honoured and PNG transparency is kept. |
 
 **Leaving pages out:** in Merge, Rotate, Compress, Protect, Metadata, Grayscale, Page numbers and Watermark, untick a page's checkbox (Shift-click for a range, or press X) to drop it from the result. Removed pages stay in the preview, dimmed, so you can include them again. They're removed before the tool runs, so page numbers and "{total}" count only the pages that remain.
 
@@ -59,12 +60,13 @@ cargo test --workspace                        # every test
 
 The release profile is tuned for size (`opt-level = "z"`, LTO, stripped, `panic = "abort"`). The PDF renderer, rasteriser and compression crates are built at `opt-level = 3`, so previews stay fast. Dependencies build at `opt-level = 2` in debug builds too, so debug previews aren't slow.
 
-In debug builds, `PDFTOOLS_SNAPSHOT=out.png PDFTOOLS_OPEN=tool[:file.pdf]` opens a tool, saves a screenshot and exits. This is handy for checking layout changes.
+In debug builds, `PDFTOOLS_SNAPSHOT=out.png PDFTOOLS_OPEN=tool[:file[|file…]]` opens a tool with the given files, saves a screenshot and exits. This is handy for checking layout changes.
 
 Helper examples:
 
 ```bash
 cargo run -p pdftools-core --example sample_pdfs -- target/samples          # sample inputs
+cargo run -p pdftools-core --example sample_images -- target/samples        # sample photos for Images to PDF
 cargo run -p pdftools-core --example smoke -- target/samples target/smoke   # every operation, for checking by eye
 cargo run --release -p pdftools-core --example try_file -- some.pdf target/try   # timings on a real file
 ```

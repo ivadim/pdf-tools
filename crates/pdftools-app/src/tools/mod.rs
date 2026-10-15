@@ -3,6 +3,7 @@
 
 pub mod compress;
 pub mod grayscale;
+pub mod images;
 pub mod merge;
 pub mod metadata;
 pub mod page_numbers;
@@ -40,10 +41,11 @@ pub mod id {
     pub const METADATA: usize = 9;
     pub const SIGNATURE: usize = 10;
     pub const GRAYSCALE: usize = 11;
-    pub const COUNT: usize = 12;
+    pub const IMAGES: usize = 12;
+    pub const COUNT: usize = 13;
     pub const NAMES: [&str; COUNT] = [
         "merge", "split", "compress", "protect", "unlock", "rotate", "rearrange", "page-numbers", "watermark",
-        "metadata", "signature", "grayscale",
+        "metadata", "signature", "grayscale", "images",
     ];
 }
 
@@ -363,6 +365,11 @@ pub fn is_pdf(path: &Path) -> bool {
     path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf"))
 }
 
+/// JPEG or PNG, judged by the extension.
+pub fn is_image(path: &Path) -> bool {
+    path.extension().is_some_and(|e| ["jpg", "jpeg", "png"].iter().any(|x| e.eq_ignore_ascii_case(x)))
+}
+
 pub fn plural(count: usize, noun: &str) -> String {
     format!("{count} {noun}{}", if count == 1 { "" } else { "s" })
 }
@@ -420,6 +427,7 @@ mod tests {
         assert_eq!(normalize_rotation(-90), 270);
         assert_eq!(stem(Path::new("a/b.pdf")), "b");
         assert!(is_pdf(Path::new("X.PDF")) && !is_pdf(Path::new("x.txt")));
+        assert!(is_image(Path::new("a.JPEG")) && is_image(Path::new("b.png")) && !is_image(Path::new("c.gif")));
     }
 
     #[test]
