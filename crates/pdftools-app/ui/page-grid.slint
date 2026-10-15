@@ -1,0 +1,346 @@
+// A grid of page thumbnails with optional reordering, rotation, deletion,
+// duplication, selection, include checkboxes and overlay previews.
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { Icon, IconButton, Badge, Spinner, Muted } from "widgets.slint";
+import { PageTile, GridCaps } from "model.slint";
+
+// The rendered page plus any overlay preview, fitted inside a box.
+export component PageCanvas inherits Rectangle {
+    in property <PageTile> tile;
+    in property <length> box-width;
+    in property <length> box-height;
+    // The page area within the box.
+    property <bool> wide: tile.aspect > box-width / box-height;
+    out property <length> page-width: wide ? box-width : box-height * tile.aspect;
+    out property <length> page-height: wide ? box-width / tile.aspect : box-height;
+
+    width: page-width;
+    height: page-height;
+    x: (box-width - page-width) / 2;
+    y: (box-height - page-height) / 2;
+    background: white;
+    clip: true;
+
+    if tile.loaded: Image {
+        source: tile.image;
+        width: parent.width;
+        height: parent.height;
+        image-fit: fill;
+    }
+    if !tile.loaded && !tile.failed: Spinner { }
+    if tile.failed: Text { text: "No preview"; font-size: 11px; color: #9aa0ad; }
+
+    if tile.has-overlay-image: Image {
+        source: tile.overlay-image;
+        width: tile.overlay-image-width * root.page-width;
+        height: self.width * (self.source.height / max(1, self.source.width));
+        x: tile.overlay-image-x * root.page-width - self.width / 2;
+        y: tile.overlay-image-y * root.page-height - self.height / 2;
+        transform-rotation: -tile.overlay-image-angle * 1deg;
+        opacity: tile.overlay-image-opacity;
+    }
+    if tile.overlay-text != "": overlay-text := Text {
+        text: tile.overlay-text;
+        font-size: max(1px, tile.overlay-size * root.page-width);
+        font-family: "Arial";
+        color: tile.overlay-color;
+        x: tile.overlay-x * root.page-width - tile.overlay-align-x * self.preferred-width;
+        y: tile.overlay-y * root.page-height - tile.overlay-align-y * self.font-size * 0.75 - self.font-size * 0.12;
+    }
+}
+
+export component PageGrid inherits Rectangle {
+    in property <[PageTile]> pages;
+    in property <GridCaps> caps;
+    in property <bool> busy;
+    in property <string> empty-text;
+    in property <bool> dim-unhighlighted;
+    in property <int> highlight-stripe-index: -1;
+
+    callback tile-clicked(int, bool, bool);
+    callback tile-action(string, int);
+    callback moved(int, int);
+    callback include-range(int, int, bool);
+    callback visible-range(int, int);
+
+    // Layout: as many columns of at least 128px as fit.
+    property <length> gap: 14px;
+    property <length> pad: 14px;
+    property <int> columns: max(1, floor((self.width - 2 * pad + gap) / (128px + gap)));
+    property <length> cell-width: (self.width - 2 * pad - gap * (columns - 1)) / columns - 1px;
+    property <length> frame-height: cell-width * 1.3;
+    property <length> cell-height: frame-height + 44px;
+    property <int> rows: ceil(pages.length / columns);
+
+    // Dragging state.
+    property <bool> dragging: false;
+    property <int> drag-from: -1;
+    property <length> drag-x;
+    property <length> drag-y;
+    property <int> drop-index: -1;
+    property <bool> drop-after: false;
+    property <int> last-toggled: -1;
+
+    background: Theme.surface-2;
+
+    function target-for(px: length, py: length) {
+        // Nearest cell; insert before or after it depending on the half.
+        root.drop-index = min(pages.length - 1, max(0,
+            clamp(floor((py - pad) / (cell-height + gap)), 0, rows - 1) * columns
+            + clamp(floor((px - pad) / (cell-width + gap)), 0, columns - 1)));
+        root.drop-after = mod(px - pad, cell-width + gap) > cell-width / 2;
+    }
+
+    function report-visible() {
+        root.visible-range(
+            max(0, floor((-scroll.content-y - pad) / (cell-height + gap)) * columns),
+            min(pages.length - 1, ceil((-scroll.content-y + scroll.visible-height) / (cell-height + gap)) * columns));
+    }
+
+    if pages.length == 0: Muted {
+        text: root.empty-text;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        width: parent.width - 48px;
+    }
+
+    scroll := ScrollView {
+        visible: pages.length > 0;
+        content-width: root.width;
+        content-height: root.pad * 2 + root.rows * (root.cell-height + root.gap);
+        changed content-y => { root.report-visible(); }
+        changed visible-height => { root.report-visible(); }
+
+        for tile[index] in root.pages: cell := Rectangle {
+            property <bool> is-dragged: root.dragging && root.drag-from == index;
+            // Hover over the overlay controls (their ids are inside conditionals).
+            property <bool> include-hover;
+            property <bool> actions-hover;
+            x: root.pad + mod(index, root.columns) * (root.cell-width + root.gap);
+            y: root.pad + floor(index / root.columns) * (root.cell-height + root.gap);
+            width: root.cell-width;
+            height: root.cell-height;
+            opacity: is-dragged ? 0.45 : tile.dimmed ? 0.4 : (root.dim-unhighlighted && !tile.selected) ? 0.35 : 1;
+
+            accessible-role: list-item;
+            accessible-label: "Page " + (index + 1) + (tile.rotation != 0 ? ", rotated " + tile.rotation + "°" : "") + (tile.excluded ? ", left out" : "");
+            accessible-item-index: index;
+            accessible-item-selectable: root.caps.select;
+            accessible-item-selected: tile.selected;
+            accessible-action-default => {
+                if (root.caps.select) { root.tile-clicked(index, false, false); } else { root.tile-action("view", index); }
+            }
+
+            frame := Rectangle {
+                y: 0;
+                height: root.frame-height;
+                border-radius: 3px;
+                background: Theme.surface;
+                drop-shadow-blur: 3px;
+                drop-shadow-color: #0000003a;
+                border-width: tile.selected ? 3px : (touch.has-hover || focus.has-focus) ? 2px : 0;
+                border-color: Theme.accent;
+                opacity: tile.excluded ? 0.35 : 1;
+
+                PageCanvas {
+                    tile: tile;
+                    box-width: frame.width;
+                    box-height: frame.height - (tile.has-stripe ? 3px : 0);
+                }
+                if tile.has-stripe: Rectangle {
+                    y: parent.height - 3px;
+                    height: 3px;
+                    background: tile.stripe;
+                }
+            }
+
+            // Drop indicator.
+            if root.dragging && root.drop-index == index && root.drag-from != index
+                && !(root.drop-index == root.drag-from + 1 && !root.drop-after) && !(root.drop-index == root.drag-from - 1 && root.drop-after): Rectangle {
+                x: root.drop-after ? parent.width + 6px : -9px;
+                width: 3px;
+                height: root.frame-height;
+                border-radius: 2px;
+                background: Theme.accent;
+            }
+
+            if tile.excluded: Rectangle {
+                y: root.frame-height / 2 - 11px;
+                x: (parent.width - self.width) / 2;
+                width: excluded-text.preferred-width + 20px;
+                height: 22px;
+                border-radius: 11px;
+                background: Theme.text;
+                excluded-text := Text { text: "Removed"; color: Theme.surface; font-size: 12px; font-weight: 600; }
+            }
+
+            Rectangle {
+                y: root.frame-height + 6px;
+                height: 34px;
+                VerticalLayout {
+                    spacing: 2px;
+                    HorizontalLayout {
+                        spacing: 6px;
+                        alignment: start;
+                        Text { text: index + 1; font-size: 12px; font-weight: 700; color: Theme.text; }
+                        if tile.rotation != 0: Badge { text: tile.rotation + "°"; }
+                        if tile.badge != "": Badge { text: tile.badge; }
+                    }
+                    HorizontalLayout {
+                        spacing: 5px;
+                        if tile.has-stripe: Rectangle {
+                            width: 8px; height: 8px; y: 4px; border-radius: 2px; background: tile.stripe;
+                        }
+                        Text {
+                            text: tile.label != "" ? tile.label : "p. " + tile.page;
+                            font-size: 12px;
+                            color: Theme.muted;
+                            overflow: elide;
+                        }
+                    }
+                }
+            }
+
+            touch := TouchArea {
+                height: root.frame-height;
+                mouse-cursor: root.dragging ? grabbing : root.caps.reorder && !root.busy ? grab : root.caps.select ? pointer : default;
+                property <bool> moved-far: false;
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                        self.moved-far = false;
+                        focus.focus();
+                    }
+                    if (event.kind == PointerEventKind.up && event.button == PointerEventButton.left) {
+                        if (root.dragging) {
+                            root.dragging = false;
+                            root.moved(root.drag-from, root.drop-after ? root.drop-index + 1 : root.drop-index);
+                        } else if (!self.moved-far) {
+                            if (root.caps.select) {
+                                root.tile-clicked(index, event.modifiers.shift, event.modifiers.control || event.modifiers.meta);
+                            } else {
+                                root.tile-action("view", index);
+                            }
+                        }
+                    }
+                }
+                moved => {
+                    if (self.pressed && root.caps.reorder && !root.busy
+                        && (abs(self.mouse-x - self.pressed-x) > 6px || abs(self.mouse-y - self.pressed-y) > 6px)) {
+                        self.moved-far = true;
+                        root.dragging = true;
+                        root.drag-from = index;
+                        root.drag-x = root.pad + mod(index, root.columns) * (root.cell-width + root.gap) + self.mouse-x;
+                        root.drag-y = root.pad + floor(index / root.columns) * (root.cell-height + root.gap) + self.mouse-y;
+                        root.target-for(root.drag-x, root.drag-y);
+                        // Scroll when held near the edges.
+                        if (root.drag-y + scroll.content-y < 40px) { scroll.content-y = min(0, scroll.content-y + 12px); }
+                        if (root.drag-y + scroll.content-y > scroll.visible-height - 40px) {
+                            scroll.content-y = max(scroll.visible-height - scroll.content-height, scroll.content-y - 12px);
+                        }
+                    }
+                }
+            }
+
+            focus := FocusScope {
+                width: 0; height: 0;
+                key-pressed(event) => {
+                    if (event.text == Key.Return) { root.tile-action("view", index); return accept; }
+                    if (event.text == " " && root.caps.select) { root.tile-clicked(index, event.modifiers.shift, true); return accept; }
+                    if ((event.text == "r" || event.text == "R") && root.caps.rotate && !root.busy) {
+                        root.tile-action(event.modifiers.shift ? "rotate-left" : "rotate-right", index); return accept;
+                    }
+                    if ((event.text == "x" || event.text == "X") && root.caps.include && !root.busy) {
+                        root.tile-action("toggle-include", index); return accept;
+                    }
+                    if ((event.text == Key.Delete || event.text == Key.Backspace) && root.caps.delete && !root.busy) {
+                        root.tile-action("delete", index); return accept;
+                    }
+                    if (event.modifiers.alt && root.caps.reorder && !root.busy) {
+                        if (event.text == Key.LeftArrow && index > 0) { root.moved(index, index - 1); return accept; }
+                        if (event.text == Key.RightArrow && index < root.pages.length - 1) { root.moved(index, index + 2); return accept; }
+                    }
+                    reject
+                }
+            }
+
+            // Include checkbox: shown on hover, always shown once left out.
+            if root.caps.include && (touch.has-hover || tile.excluded || focus.has-focus || cell.include-hover): Rectangle {
+                x: 6px; y: 6px;
+                width: 24px; height: 24px;
+                border-radius: 6px;
+                border-width: 2px;
+                border-color: tile.excluded ? Theme.muted : Theme.accent;
+                background: tile.excluded ? Theme.surface : Theme.accent;
+                accessible-role: checkbox;
+                accessible-label: tile.excluded ? "Include this page" : "Leave this page out";
+                accessible-checkable: true;
+                accessible-checked: !tile.excluded;
+                accessible-action-default => { root.last-toggled = index; root.tile-action("toggle-include", index); }
+                if !tile.excluded: Icon { icon: @image-url("icons/check.svg"); tint: white; size: 15px; }
+                TouchArea {
+                    enabled: !root.busy;
+                    changed has-hover => { cell.include-hover = self.has-hover; }
+                    mouse-cursor: pointer;
+                    pointer-event(event) => {
+                        if (event.kind == PointerEventKind.up && event.button == PointerEventButton.left) {
+                            if (event.modifiers.shift && root.last-toggled >= 0) {
+                                root.include-range(min(root.last-toggled, index), max(root.last-toggled, index), tile.excluded);
+                            } else {
+                                root.tile-action("toggle-include", index);
+                            }
+                            root.last-toggled = index;
+                        }
+                    }
+                }
+            }
+            if !root.caps.include && root.caps.select: Rectangle {
+                x: 6px; y: 6px;
+                width: 22px; height: 22px;
+                border-radius: 11px;
+                border-width: 2px;
+                border-color: tile.selected ? Theme.accent : Theme.border;
+                background: tile.selected ? Theme.accent : Theme.surface;
+                if tile.selected: Icon { icon: @image-url("icons/check.svg"); tint: white; size: 14px; }
+            }
+
+            // Hover actions.
+            if (touch.has-hover || cell.actions-hover || focus.has-focus) && !root.dragging
+                && (root.caps.rotate || root.caps.delete || root.caps.duplicate || root.caps.select): Rectangle {
+                x: parent.width - self.width - 6px;
+                y: 6px;
+                width: actions.preferred-width + 4px;
+                height: 30px;
+                border-radius: 8px;
+                background: Theme.surface;
+                drop-shadow-blur: 4px;
+                drop-shadow-color: #00000033;
+                TouchArea { changed has-hover => { cell.actions-hover = self.has-hover; } }
+                actions := HorizontalLayout {
+                    padding: 2px;
+                    spacing: 1px;
+                    if root.caps.select: IconButton {
+                        icon: @image-url("icons/zoom.svg"); label: "View larger"; size: 26px;
+                        clicked => { root.tile-action("view", index); }
+                    }
+                    if root.caps.rotate: IconButton {
+                        icon: @image-url("icons/rotate-ccw.svg"); label: "Rotate left"; size: 26px; enabled: !root.busy;
+                        clicked => { root.tile-action("rotate-left", index); }
+                    }
+                    if root.caps.rotate: IconButton {
+                        icon: @image-url("icons/rotate-cw.svg"); label: "Rotate right"; size: 26px; enabled: !root.busy;
+                        clicked => { root.tile-action("rotate-right", index); }
+                    }
+                    if root.caps.duplicate: IconButton {
+                        icon: @image-url("icons/copy.svg"); label: "Duplicate"; size: 26px; enabled: !root.busy;
+                        clicked => { root.tile-action("duplicate", index); }
+                    }
+                    if root.caps.delete: IconButton {
+                        icon: @image-url("icons/trash.svg"); label: "Delete page"; size: 26px; danger: true; enabled: !root.busy;
+                        clicked => { root.tile-action("delete", index); }
+                    }
+                }
+            }
+        }
+    }
+}

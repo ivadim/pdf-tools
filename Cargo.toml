@@ -1,0 +1,49 @@
+[workspace]
+resolver = "2"
+members = ["crates/pdftools-core", "crates/pdftools-app"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Dmitry Ivanov"]
+repository = "https://github.com/ivadim/pdf-tools"
+
+[workspace.dependencies]
+pdftools-core = { path = "crates/pdftools-core" }
+lopdf = "0.36"
+thiserror = "2"
+
+# Dependencies (the PDF engine, renderer, UI toolkit) optimised in debug builds
+# too, so development and tests run at realistic speed.
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+# Small by default; the PDF engine and rasteriser keep full speed.
+opt-level = "z"
+
+[profile.release.package.hayro]
+opt-level = 3
+[profile.release.package.hayro-interpret]
+opt-level = 3
+[profile.release.package.hayro-syntax]
+opt-level = 3
+[profile.release.package.vello_cpu]
+opt-level = 3
+[profile.release.package.fearless_simd]
+opt-level = 3
+[profile.release.package.zune-jpeg]
+opt-level = 3
+[profile.release.package.lopdf]
+opt-level = 3
+[profile.release.package.flate2]
+opt-level = 3
+[profile.release.package.miniz_oxide]
+opt-level = 3
+[profile.release.package.i-slint-renderer-software]
+opt-level = 3

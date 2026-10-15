@@ -1,0 +1,26 @@
+import { Palette } from "std-widgets.slint";
+
+// Colours and metrics shared by every screen; follows the system light/dark setting.
+export global Theme {
+    out property <bool> dark: Palette.color-scheme == ColorScheme.dark;
+
+    out property <color> bg: dark ? #0e0f13 : #f4f5f8;
+    out property <color> surface: dark ? #18191e : #ffffff;
+    out property <color> surface-2: dark ? #1e2026 : #f6f7fa;
+    out property <color> surface-3: dark ? #26282f : #eceef3;
+    out property <color> sidebar: dark ? #131418 : #eceef3;
+    out property <color> border: dark ? #2a2c34 : #dfe2e9;
+    out property <color> text: dark ? #e8e9ee : #1c2130;
+    out property <color> muted: dark ? #9196a5 : #6b7283;
+    out property <color> accent: dark ? #5b82f0 : #2f5bd3;
+    out property <color> accent-hover: dark ? #6c90f5 : #2550c2;
+    out property <color> accent-soft: dark ? #232f52 : #e6ecfc;
+    out property <color> error: dark ? #ef6b6b : #c43d3d;
+    out property <color> success: dark ? #4cc28a : #23885a;
+    out property <color> catalog-red: #e5484d;
+
+    out property <length> radius: 12px;
+    out property <length> font-small: 12px;
+    out property <length> font: 14px;
+    out property <length> font-title: 20px;
+}

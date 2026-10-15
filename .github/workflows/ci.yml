@@ -1,0 +1,151 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Headers for winit, fontconfig and the file dialogs, plus fonts for the
+  # text-rendering tests. Everything else is loaded at runtime.
+  LINUX_DEPS: libfontconfig1-dev libxkbcommon-dev libwayland-dev libx11-dev fonts-dejavu-core
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y $LINUX_DEPS
+      - name: Unit, integration and UI tests
+        run: cargo test --workspace --locked
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - name: Install Linux dependencies
+        run: sudo apt-get update && sudo apt-get install -y $LINUX_DEPS
+      - name: Line coverage of at least 80%
+        run: cargo llvm-cov --workspace --locked --fail-under-lines 80 --summary-only
+
+  build:
+    name: Build (${{ matrix.name }})
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x86_64
+            os: windows-latest
+          - name: linux-x86_64
+            # The oldest supported runner, so the binary runs on older glibc.
+            os: ubuntu-22.04
+          - name: macos-arm64
+            # Apple silicon runner: a native arm64 build.
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y $LINUX_DEPS
+
+      - name: Version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)-${GITHUB_SHA::7}"
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "PACKAGE=pdftools-$version-${{ matrix.name }}" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: cargo build --release --locked -p pdftools-app
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force $env:PACKAGE | Out-Null
+          Copy-Item target/release/pdftools.exe, README.md, LICENSE $env:PACKAGE
+          Compress-Archive -Path $env:PACKAGE -DestinationPath "$env:PACKAGE.zip"
+          "ASSET=$env:PACKAGE.zip" | Out-File -Append $env:GITHUB_ENV
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p "$PACKAGE"
+          cp target/release/pdftools README.md LICENSE "$PACKAGE/"
+          tar -czf "$PACKAGE.tar.gz" "$PACKAGE"
+          echo "ASSET=$PACKAGE.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Package (macOS app)
+        if: runner.os == 'macOS'
+        run: |
+          app="PDF Tools.app"
+          mkdir -p "$app/Contents/MacOS"
+          cp target/release/pdftools "$app/Contents/MacOS/"
+          sed "s/@VERSION@/${VERSION%%-*}/" packaging/macos/Info.plist > "$app/Contents/Info.plist"
+          # Ad-hoc signature: required to run on Apple silicon. Not notarized.
+          codesign --force --deep --sign - "$app"
+          mkdir -p "$PACKAGE"
+          mv "$app" "$PACKAGE/"
+          cp README.md LICENSE "$PACKAGE/"
+          ditto -c -k --keepParent "$PACKAGE" "$PACKAGE.zip"
+          echo "ASSET=$PACKAGE.zip" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACKAGE }}
+          path: ${{ env.ASSET }}
+          if-no-files-found: error
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, coverage]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

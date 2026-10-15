@@ -1,0 +1,7 @@
+/target
+*.pdf.part
+.DS_Store
+# Local editor and assistant settings
+/.claude
+/.vscode
+/.idea

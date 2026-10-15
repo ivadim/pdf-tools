@@ -1,0 +1,38 @@
+[package]
+name = "pdftools-app"
+description = "PDF Tools desktop app (Slint)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "pdftools"
+path = "src/main.rs"
+
+[dependencies]
+pdftools-core.workspace = true
+lopdf.workspace = true
+slint = { version = "~1.18", default-features = false, features = [
+    "std",
+    "backend-winit",
+    "renderer-software",
+    "accessibility",
+    "compat-1-2",
+    "unstable-winit-030",
+] }
+hayro = { version = "0.8", default-features = false, features = ["embed-fonts", "simd"] }
+rfd = "0.17"
+# Already linked by Slint (text) and hayro (images): no extra size.
+parley = "0.11"
+swash = "0.2"
+tiny-skia = "0.12"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+
+[build-dependencies]
+slint-build = "~1.18"
+
+[dev-dependencies]
+i-slint-backend-testing = "~1.18"

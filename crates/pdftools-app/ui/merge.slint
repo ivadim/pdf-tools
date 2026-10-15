@@ -1,0 +1,272 @@
+// Merge: a reorderable list of files and a preview of the merged pages.
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { Icon, IconButton, Button, ButtonKind, Muted, SectionTitle, Panel } from "widgets.slint";
+import { PageGrid } from "page-grid.slint";
+import { Tools, Merge, MergeFile } from "model.slint";
+import { ToolHeader, RunBar } from "common.slint";
+
+component FileRow inherits Rectangle {
+    in property <MergeFile> file;
+    in property <int> index;
+    in property <int> count;
+    in property <bool> locked;
+    in property <bool> busy;
+    callback dragging(length);
+    callback dropped(length);
+
+    height: 74px;
+    border-radius: 9px;
+    background: row-touch.has-hover ? Theme.surface-2 : transparent;
+    border-width: file.error != "" ? 1px : 0;
+    border-color: Theme.error.with-alpha(0.45);
+
+    row-touch := TouchArea {
+        clicked => { Merge.file-action("focus", root.index); }
+        changed has-hover => { Merge.file-action(self.has-hover ? "hover" : "unhover", root.index); }
+    }
+
+    HorizontalLayout {
+        padding: 8px;
+        padding-left: 4px;
+        spacing: 8px;
+        handle := Rectangle {
+            width: 20px;
+            accessible-role: none;
+            Icon { icon: @image-url("icons/grip.svg"); tint: Theme.muted; size: 16px; opacity: root.locked ? 0.3 : 1; }
+            TouchArea {
+                enabled: !root.locked && !root.busy;
+                mouse-cursor: root.locked ? not-allowed : grab;
+                moved => { if (self.pressed) { root.dragging(handle.y + self.mouse-y); } }
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.up && abs(self.mouse-y - self.pressed-y) > 4px) {
+                        root.dropped(handle.y + self.mouse-y);
+                    }
+                }
+            }
+        }
+        Rectangle {
+            y: (parent.height - self.height) / 2;
+            width: 22px;
+            height: 22px;
+            border-radius: 11px;
+            background: root.file.tint;
+            Text { text: root.index + 1; color: white; font-size: 12px; font-weight: 700; }
+        }
+        Rectangle {
+            width: 44px;
+            border-radius: 3px;
+            background: white;
+            drop-shadow-blur: 3px;
+            drop-shadow-color: #0000002e;
+            clip: true;
+            if root.file.has-thumb: Image { source: root.file.thumb; width: parent.width; height: parent.height; image-fit: contain; }
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            horizontal-stretch: 1;
+            Text { text: root.file.name; font-weight: 550; color: Theme.text; overflow: elide; }
+            if root.file.error == "": Text { text: root.file.meta; color: Theme.muted; font-size: 12px; }
+            if root.file.error != "": Text { text: "Can’t be merged: " + root.file.error; color: Theme.error; font-size: 12px; overflow: elide; }
+        }
+        if root.file.locked: Button {
+            y: (parent.height - self.height) / 2;
+            small: true; text: "Unlock…";
+            clicked => { Merge.file-action("unlock", root.index); }
+        }
+        HorizontalLayout {
+            opacity: row-touch.has-hover ? 1 : 0.6;
+            IconButton {
+                y: (parent.height - self.height) / 2;
+                icon: @image-url("icons/up.svg"); label: "Move up"; enabled: root.index > 0 && !root.locked && !root.busy;
+                clicked => { Merge.file-action("up", root.index); }
+            }
+            IconButton {
+                y: (parent.height - self.height) / 2;
+                icon: @image-url("icons/down.svg"); label: "Move down"; enabled: root.index < root.count - 1 && !root.locked && !root.busy;
+                clicked => { Merge.file-action("down", root.index); }
+            }
+            IconButton {
+                y: (parent.height - self.height) / 2;
+                icon: @image-url("icons/x.svg"); label: "Remove"; enabled: !root.busy;
+                clicked => { Merge.file-action("remove", root.index); }
+            }
+        }
+    }
+}
+
+export component MergePage inherits VerticalLayout {
+    property <int> tool: 0;
+    property <bool> busy: Tools.views[0].run.kind == 1;
+    property <bool> locked: Merge.custom-order || busy;
+    property <int> drop-index: -1;
+    property <int> drag-from: -1;
+
+    padding: 20px;
+    padding-left: 24px;
+    padding-right: 24px;
+    padding-bottom: 0;
+    spacing: 16px;
+
+    HorizontalLayout {
+        ToolHeader { info: Tools.catalog[0]; horizontal-stretch: 1; }
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: end;
+            Button {
+                y: (parent.height - self.height) / 2;
+                text: "Sort by name"; has-icon: true; icon: @image-url("icons/sort.svg");
+                tooltip: Merge.custom-order ? "Reset the page order to sort files" : "Sort files by name";
+                enabled: !root.locked && Merge.files.length > 1;
+                clicked => { Merge.sort-files(); }
+            }
+            Button {
+                y: (parent.height - self.height) / 2;
+                text: "Clear"; has-icon: true; icon: @image-url("icons/trash.svg");
+                enabled: !root.busy && Merge.files.length > 0;
+                clicked => { Merge.clear-files(); }
+            }
+            Button {
+                y: (parent.height - self.height) / 2;
+                text: "Add files…"; kind: ButtonKind.primary; has-icon: true; icon: @image-url("icons/plus.svg");
+                enabled: !root.busy;
+                clicked => { Merge.add-files(); }
+            }
+        }
+    }
+
+    HorizontalLayout {
+        spacing: 16px;
+        vertical-stretch: 1;
+        Panel {
+            min-width: 300px;
+            max-width: 380px;
+            VerticalLayout {
+                Rectangle {
+                    height: 46px;
+                    HorizontalLayout {
+                        padding-left: 14px;
+                        padding-right: 14px;
+                        SectionTitle { text: "FILES"; vertical-alignment: center; horizontal-stretch: 1; }
+                        Text {
+                            text: Merge.files.length == 0 ? "" : Merge.files.length + (Merge.files.length == 1 ? " file" : " files");
+                            color: Theme.muted; vertical-alignment: center;
+                        }
+                    }
+                    Rectangle { y: parent.height - 1px; height: 1px; background: Theme.border; }
+                }
+                if Merge.files.length == 0: VerticalLayout {
+                    alignment: center;
+                    spacing: 8px;
+                    vertical-stretch: 1;
+                    HorizontalLayout {
+                        alignment: center;
+                        Icon { icon: @image-url("icons/upload.svg"); tint: Theme.muted; size: 36px; }
+                    }
+                    Text { text: "Drop PDF files here"; horizontal-alignment: center; color: Theme.text; }
+                    Muted { text: "or"; horizontal-alignment: center; }
+                    HorizontalLayout {
+                        alignment: center;
+                        Button {
+                            text: "Add PDF files"; kind: ButtonKind.primary; has-icon: true; icon: @image-url("icons/plus.svg");
+                            clicked => { Merge.add-files(); }
+                        }
+                    }
+                }
+                if Merge.files.length > 0: ScrollView {
+                    vertical-stretch: 1;
+                    content-height: Merge.files.length * 78px + 16px;
+                    for file[index] in Merge.files: FileRow {
+                        x: 8px;
+                        y: 8px + index * 78px;
+                        width: parent.width - 16px;
+                        file: file;
+                        index: index;
+                        count: Merge.files.length;
+                        locked: root.locked;
+                        busy: root.busy;
+                        dragging(y) => {
+                            root.drag-from = index;
+                            root.drop-index = clamp(floor((index * 78px + y) / 78px + 0.5), 0, Merge.files.length);
+                        }
+                        dropped(y) => {
+                            Merge.file-moved(index, clamp(floor((index * 78px + y) / 78px + 0.5), 0, Merge.files.length));
+                            root.drop-index = -1;
+                        }
+                    }
+                    if root.drop-index >= 0 && root.drop-index != root.drag-from && root.drop-index != root.drag-from + 1: Rectangle {
+                        x: 14px;
+                        y: 8px + root.drop-index * 78px - 3px;
+                        width: parent.width - 28px;
+                        height: 3px;
+                        border-radius: 2px;
+                        background: Theme.accent;
+                    }
+                }
+            }
+        }
+        Panel {
+            horizontal-stretch: 1;
+            VerticalLayout {
+                Rectangle {
+                    height: 46px;
+                    HorizontalLayout {
+                        padding-left: 14px;
+                        padding-right: 10px;
+                        spacing: 10px;
+                        SectionTitle { text: "MERGED RESULT"; vertical-alignment: center; }
+                        Text { text: Tools.views[0].summary; color: Theme.muted; vertical-alignment: center; horizontal-stretch: 1; }
+                        if Tools.views[0].include-all: Button {
+                            y: (parent.height - self.height) / 2;
+                            text: "Include all"; small: true; has-icon: true; icon: @image-url("icons/check.svg");
+                            clicked => { Tools.grid-action(0, "include-all"); }
+                        }
+                        IconButton {
+                            y: (parent.height - self.height) / 2;
+                            icon: @image-url("icons/rotate-ccw.svg"); label: "Rotate all pages left";
+                            enabled: !root.busy && Tools.views[0].pages.length > 0;
+                            clicked => { Tools.grid-action(0, "rotate-all-left"); }
+                        }
+                        IconButton {
+                            y: (parent.height - self.height) / 2;
+                            icon: @image-url("icons/rotate-cw.svg"); label: "Rotate all pages right";
+                            enabled: !root.busy && Tools.views[0].pages.length > 0;
+                            clicked => { Tools.grid-action(0, "rotate-all-right"); }
+                        }
+                    }
+                    Rectangle { y: parent.height - 1px; height: 1px; background: Theme.border; }
+                }
+                if Merge.custom-order: Rectangle {
+                    height: 40px;
+                    background: Theme.accent-soft;
+                    HorizontalLayout {
+                        padding-left: 14px;
+                        padding-right: 10px;
+                        Text { text: "Custom page order. File order is locked until you reset."; vertical-alignment: center; color: Theme.text; horizontal-stretch: 1; }
+                        Button {
+                            y: (parent.height - self.height) / 2;
+                            text: "Reset to file order"; small: true; has-icon: true; icon: @image-url("icons/reset.svg");
+                            clicked => { Tools.grid-action(0, "reset-order"); }
+                        }
+                    }
+                }
+                PageGrid {
+                    vertical-stretch: 1;
+                    pages: Tools.views[0].pages;
+                    caps: Tools.views[0].caps;
+                    busy: root.busy;
+                    empty-text: Tools.views[0].empty-text;
+                    dim-unhighlighted: Tools.views[0].flags.length > 0 && Tools.views[0].flags[0];
+                    tile-clicked(index, shift, ctrl) => { Tools.tile-clicked(0, index, shift, ctrl); }
+                    tile-action(action, index) => { Tools.tile-action(0, action, index); }
+                    moved(from, to) => { Tools.tile-moved(0, from, to); }
+                    include-range(from, to, include) => { Tools.include-range(0, from, to, include); }
+                    visible-range(first, last) => { Tools.visible-range(0, first, last); }
+                }
+            }
+        }
+    }
+
+    RunBar { tool: 0; run: Tools.views[0].run; icon: Tools.catalog[0].icon; }
+}

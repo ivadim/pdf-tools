@@ -1,0 +1,5 @@
+# Text is stored with LF; binary test files are never converted.
+* text=auto eol=lf
+*.pdf binary
+*.png binary
+*.jpg binary

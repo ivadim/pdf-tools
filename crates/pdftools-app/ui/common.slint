@@ -1,0 +1,204 @@
+// Pieces every tool page shares: header, file card and run bar.
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { Icon, IconButton, Button, ButtonKind, ToolChip, Muted, SectionTitle, Panel, Spinner } from "widgets.slint";
+import { Tools, ToolView, FileCard, RunState, ToolInfo } from "model.slint";
+
+export struct HeaderAction {
+    id: string,
+    label: string,
+    icon: image,
+    // Shown as a text button rather than an icon.
+    text: bool,
+    visible: bool,
+}
+
+export component ToolHeader inherits HorizontalLayout {
+    in property <ToolInfo> info;
+    spacing: 14px;
+    alignment: start;
+    ToolChip { icon: info.icon; tint: info.tint; size: 46px; }
+    VerticalLayout {
+        alignment: center;
+        spacing: 3px;
+        Text { text: info.name; font-size: Theme.font-title; font-weight: 650; color: Theme.text; }
+        Text { text: info.description; color: Theme.muted; }
+    }
+}
+
+// A layout (not a plain Rectangle) so it reserves its height in the panel.
+export component FileCardView inherits VerticalLayout {
+    in property <int> tool;
+    in property <FileCard> card;
+    in property <bool> busy;
+
+    if card.state == 0: Rectangle {
+        height: 130px;
+        border-radius: Theme.radius;
+        border-width: 2px;
+        border-color: drop-touch.has-hover ? Theme.accent : Theme.border;
+        background: Theme.surface-2;
+        accessible-role: button;
+        accessible-label: "Choose a PDF";
+        accessible-action-default => { Tools.pick-file(root.tool); }
+        VerticalLayout {
+            alignment: center;
+            spacing: 6px;
+            HorizontalLayout {
+                alignment: center;
+                Icon { icon: @image-url("icons/upload.svg"); tint: Theme.accent; size: 30px; }
+            }
+            Text { text: "Choose a PDF"; font-weight: 600; horizontal-alignment: center; color: Theme.text; }
+            Text { text: "or drop it anywhere on the window"; color: Theme.muted; horizontal-alignment: center; }
+        }
+        drop-touch := TouchArea {
+            enabled: !root.busy;
+            mouse-cursor: pointer;
+            clicked => { Tools.pick-file(root.tool); }
+        }
+    }
+    if card.state != 0: Rectangle {
+        border-radius: Theme.radius;
+        border-width: 1px;
+        border-color: card.state == 3 ? Theme.error.with-alpha(0.5) : Theme.border;
+        background: Theme.surface-2;
+        HorizontalLayout {
+            padding: 10px;
+            spacing: 12px;
+            Rectangle {
+                width: 46px;
+                height: 60px;
+                border-radius: 4px;
+                background: white;
+                drop-shadow-blur: 3px;
+                drop-shadow-color: #0000002e;
+                clip: true;
+                if card.has-thumb: Image { source: card.thumb; width: parent.width; height: parent.height; image-fit: contain; }
+                if card.state == 1: Spinner { }
+                if !card.has-thumb && card.state != 1: Icon {
+                    icon: card.locked ? @image-url("icons/protect.svg") : @image-url("icons/file.svg");
+                    tint: Theme.muted;
+                }
+            }
+            VerticalLayout {
+                spacing: 3px;
+                alignment: center;
+                Text { text: card.name; font-weight: 600; color: Theme.text; overflow: elide; }
+                if card.state == 1: Muted { text: "Reading…"; }
+                if card.state == 2: Muted { text: card.details; }
+                if card.state == 2 && card.restricted: Text { text: "Has permission restrictions"; color: Theme.accent; font-size: 11.5px; }
+                if card.state == 3: Text { text: card.error; color: Theme.error; font-size: 12.5px; wrap: word-wrap; }
+                if card.state == 3: HorizontalLayout {
+                    spacing: 6px;
+                    alignment: start;
+                    if card.locked: Button {
+                        text: "Unlock it"; small: true; has-icon: true; icon: @image-url("icons/unlock.svg");
+                        clicked => { Tools.unlock-file(root.tool); }
+                    }
+                    Button {
+                        text: "Choose another"; small: true; has-icon: true; icon: @image-url("icons/file.svg");
+                        clicked => { Tools.pick-file(root.tool); }
+                    }
+                }
+            }
+            if card.state == 2: VerticalLayout {
+                alignment: start;
+                HorizontalLayout {
+                    IconButton {
+                        icon: @image-url("icons/folder.svg"); label: "Choose another file"; enabled: !root.busy;
+                        clicked => { Tools.pick-file(root.tool); }
+                    }
+                    IconButton {
+                        icon: @image-url("icons/x.svg"); label: "Remove"; enabled: !root.busy;
+                        clicked => { Tools.clear-file(root.tool); }
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component RunBar inherits HorizontalLayout {
+    in property <int> tool;
+    in property <RunState> run;
+    in property <image> icon;
+    padding-top: 14px;
+    padding-bottom: 16px;
+    spacing: 16px;
+    min-height: 74px;
+
+    status := HorizontalLayout {
+        spacing: 10px;
+        alignment: start;
+        if run.kind == 1: HorizontalLayout {
+            spacing: 12px;
+            Rectangle {
+                y: (parent.height - self.height) / 2;
+                width: 260px;
+                height: 6px;
+                border-radius: 3px;
+                background: Theme.border;
+                clip: true;
+                Rectangle {
+                    x: run.progress < 0 ? mod(animation-tick() / 3ms, 1) * parent.width * 1.35 - parent.width * 0.35 : 0;
+                    width: run.progress < 0 ? parent.width * 0.35 : parent.width * run.progress;
+                    background: Theme.accent;
+                    border-radius: 3px;
+                }
+            }
+            Text { text: run.message; vertical-alignment: center; color: Theme.text; }
+        }
+        if run.kind == 2: HorizontalLayout {
+            spacing: 10px;
+            Rectangle {
+                y: (parent.height - self.height) / 2;
+                width: 22px; height: 22px; border-radius: 11px; background: Theme.success;
+                Icon { icon: @image-url("icons/check.svg"); tint: white; size: 14px; }
+            }
+            Text {
+                accessible-role: text;
+                accessible-label: "status";
+                text: run.message + (run.output-name != "" ? " " + run.output-name : "");
+                color: Theme.success;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            if run.output != "": Button {
+                text: "Show in folder"; has-icon: true; icon: @image-url("icons/folder.svg");
+                clicked => { Tools.reveal(root.tool); }
+            }
+        }
+        if run.kind == 3: HorizontalLayout {
+            spacing: 10px;
+            Rectangle {
+                y: (parent.height - self.height) / 2;
+                width: 22px; height: 22px; border-radius: 11px; background: Theme.error;
+                Icon { icon: @image-url("icons/x.svg"); tint: white; size: 14px; }
+            }
+            Text {
+                accessible-role: text;
+                accessible-label: "status";
+                text: run.message;
+                color: Theme.error;
+                vertical-alignment: center;
+                wrap: word-wrap;
+            }
+        }
+        if run.kind == 0: Text {
+            accessible-role: text;
+            accessible-label: "status";
+            text: run.hint != "" ? run.hint : "Ready.";
+            color: Theme.muted;
+            vertical-alignment: center;
+        }
+    }
+    Button {
+        text: run.label;
+        kind: ButtonKind.primary;
+        large: true;
+        has-icon: true;
+        icon: root.icon;
+        enabled: run.kind != 1 && run.hint == "";
+        clicked => { Tools.run(root.tool); }
+    }
+}
