@@ -15,7 +15,8 @@ use pdftools_app::dialogs::ScriptedDialogs;
 use pdftools_app::jobs;
 use pdftools_app::tools::id;
 use pdftools_app::{AppWindow, Merge, Sign, Tools, Viewer};
-use slint::{ComponentHandle, Model};
+use slint::platform::{PointerEventButton, WindowEvent};
+use slint::{ComponentHandle, LogicalPosition, Model};
 
 struct Harness {
     ui: AppWindow,
@@ -83,6 +84,32 @@ impl Harness {
                 )
             })
             .unwrap_or_else(|| panic!("no input {label:?}"))
+    }
+
+    /// Moves the mouse pointer to the middle of `element`, as a real mouse
+    /// would (accessibility actions skip hover and hit-testing).
+    fn hover(&self, element: &ElementHandle) -> LogicalPosition {
+        let (p, s) = (element.absolute_position(), element.size());
+        let at = LogicalPosition::new(p.x + s.width / 2.0, p.y + s.height / 2.0);
+        self.ui.window().dispatch_event(WindowEvent::PointerMoved { position: at });
+        settle();
+        at
+    }
+
+    /// Moves the pointer onto `element` and clicks it with the mouse.
+    fn mouse_click(&self, element: &ElementHandle) {
+        let at = self.hover(element);
+        self.ui.window().dispatch_event(WindowEvent::PointerPressed { position: at, button: PointerEventButton::Left });
+        self.ui.window().dispatch_event(WindowEvent::PointerReleased { position: at, button: PointerEventButton::Left });
+        settle();
+    }
+
+    /// The page tile at `index` (0-based) in the visible grid.
+    fn tile(&self, index: usize) -> ElementHandle {
+        self.all(&format!("Page {}", index + 1))
+            .into_iter()
+            .find(|e| e.accessible_role() == Some(AccessibleRole::ListItem))
+            .unwrap_or_else(|| panic!("no tile {index}"))
     }
 
     /// Opens a tool from the sidebar.
@@ -189,6 +216,7 @@ fn ui_flows() {
     watermark();
     signature();
     images_to_pdf();
+    mouse_controls();
     file_errors_and_drops();
 }
 
@@ -779,6 +807,45 @@ fn images_to_pdf() {
 
     h.click("Clear");
     assert!(h.pages(id::IMAGES).is_empty());
+}
+
+/// Page controls used with a real mouse: the hover buttons must still be
+/// there when the pointer reaches them, and the viewer's buttons must not move.
+fn mouse_controls() {
+    let h = Harness::new("mouse");
+    h.open("Merge");
+    h.dialogs.open(&[&fixture("sizes.pdf")]);
+    h.ui.global::<Merge>().invoke_add_files();
+    settle();
+
+    // Hovering the page shows its buttons; moving onto one keeps them.
+    let tile = h.tile(0);
+    let (p, s) = (tile.absolute_position(), tile.size());
+    h.ui.window().dispatch_event(WindowEvent::PointerMoved { position: LogicalPosition::new(p.x + s.width / 2.0, p.y + 60.0) });
+    settle();
+    let rotate = h.find("Rotate right");
+    h.mouse_click(&rotate);
+    assert_eq!(h.pages(id::MERGE)[0].rotation, 90, "the hover button rotates the page");
+    assert!(!h.ui.global::<Viewer>().get_open(), "the click didn't fall through to the page");
+    // Back over the page on the way to its checkbox.
+    h.ui.window().dispatch_event(WindowEvent::PointerMoved { position: LogicalPosition::new(p.x + s.width / 2.0, p.y + 60.0) });
+    settle();
+    let checkbox = h.find("Leave this page out");
+    h.mouse_click(&checkbox);
+    assert!(h.pages(id::MERGE)[0].excluded, "the include checkbox works with the mouse");
+
+    // The viewer's rotate buttons stay put although the caption changes.
+    h.tools().invoke_tile_action(id::MERGE as i32, "view".into(), 1);
+    settle();
+    let before = h.find("Rotate left").absolute_position();
+    h.mouse_click(&h.find("Rotate right"));
+    let viewer = h.ui.global::<Viewer>();
+    assert!(viewer.get_caption().contains("rotated 90°"), "{}", viewer.get_caption());
+    assert_eq!(h.find("Rotate left").absolute_position(), before);
+    h.mouse_click(&h.find("Rotate right"));
+    assert_eq!(h.pages(id::MERGE)[1].rotation, 180, "both clicks hit the button");
+    viewer.invoke_close();
+    settle();
 }
 
 fn file_errors_and_drops() {

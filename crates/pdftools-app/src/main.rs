@@ -47,6 +47,7 @@ fn main() -> Result<(), slint::PlatformError> {
 
 /// Development aid: `PDFTOOLS_SNAPSHOT=out.png PDFTOOLS_OPEN=tool[:file[|file…]]`
 /// opens a tool (and files), waits for rendering, saves a screenshot and exits.
+/// `PDFTOOLS_VIEW=<page>` also opens that page in the viewer.
 #[cfg(debug_assertions)]
 fn dev_snapshot(ui: &AppWindow, app: &Rc<std::cell::RefCell<App>>) {
     let Some(out) = std::env::var_os("PDFTOOLS_SNAPSHOT") else { return };
@@ -56,6 +57,12 @@ fn dev_snapshot(ui: &AppWindow, app: &Rc<std::cell::RefCell<App>>) {
         if let (Some(file), Some(index)) = (file, pdftools_app::tools::id::NAMES.iter().position(|n| *n == tool)) {
             for file in file.split('|') {
                 app.borrow_mut().load_file(index, file.into());
+            }
+            if let Some(page) = std::env::var("PDFTOOLS_VIEW").ok().and_then(|p| p.parse::<usize>().ok()) {
+                let app = app.clone();
+                slint::Timer::single_shot(std::time::Duration::from_millis(800), move || {
+                    app.borrow_mut().tile_action(index, "view", page.saturating_sub(1));
+                });
             }
         }
     }
