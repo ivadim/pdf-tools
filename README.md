@@ -17,8 +17,20 @@ Get the latest build for your system from [Releases](https://github.com/ivadim/p
 | System | File | How to run |
 | --- | --- | --- |
 | Windows 10/11 (x64) | `pdftools-…-windows-x86_64.zip` | Unzip and run `pdftools.exe`. The binary isn't code-signed, so SmartScreen may ask you to confirm: choose *More info* → *Run anyway*. |
-| macOS 11+ (Apple silicon) | `pdftools-…-macos-arm64.zip` | Unzip and move *PDF Tools.app* to Applications. It isn't notarized, so the first time, right-click it and choose *Open*, or run `xattr -dr com.apple.quarantine "/Applications/PDF Tools.app"`. |
+| macOS 11+ (Apple silicon) | `pdftools-…-macos-arm64.zip` | Unzip and move *PDF Tools.app* to Applications. The first time, macOS blocks it: see below. |
 | Linux (x86_64, glibc 2.35+) | `pdftools-…-linux-x86_64.tar.gz` | Extract and run `./pdftools`. Works on X11 and Wayland. File dialogs use the XDG desktop portal, which most desktops provide. |
+
+**First launch on macOS.** The app isn't notarized by Apple yet, so macOS says *"PDF Tools.app" Not Opened*. To allow it once:
+
+1. Click **Done** in that message.
+2. Open **System Settings → Privacy & Security**, scroll down to *Security* and click **Open Anyway** next to "PDF Tools.app was blocked".
+3. Confirm with your password, then click **Open**.
+
+Or run this in Terminal, then open the app as usual:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/PDF Tools.app"
+```
 
 Builds of the latest `main` are attached to each [CI run](https://github.com/ivadim/pdf-tools/actions/workflows/ci.yml) as artifacts.
 

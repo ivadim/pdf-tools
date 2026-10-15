@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- App icon. Follows the macOS grid: an 824 px rounded square centred on
+       a 1024 px canvas. After changing it, re-render the PNG and ICO files
+       with crates/pdftools-app/examples/render_icons.rs. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6375ff"/>
+      <stop offset="1" stop-color="#3442d6"/>
+    </linearGradient>
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#eef1fb"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#0b1260" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#bg)"/>
+
+  <!-- A second page behind, turned slightly. -->
+  <rect x="318" y="262" width="300" height="500" rx="30" fill="#aeb8ff" transform="rotate(-9 508 512)"/>
+
+  <!-- The document, with a folded corner. -->
+  <g filter="url(#shadow)">
+    <path d="M382 232 H620 L744 356 V762 A30 30 0 0 1 714 792 H382 A30 30 0 0 1 352 762 V262 A30 30 0 0 1 382 232 Z" fill="url(#page)"/>
+  </g>
+  <path d="M620 232 V326 A30 30 0 0 0 650 356 H744 Z" fill="#cdd4fb"/>
+
+  <!-- Lines of text. -->
+  <rect x="404" y="300" width="170" height="24" rx="12" fill="#c9cfe4"/>
+  <rect x="404" y="384" width="288" height="24" rx="12" fill="#c9cfe4"/>
+  <rect x="404" y="440" width="250" height="24" rx="12" fill="#c9cfe4"/>
+  <rect x="404" y="676" width="288" height="24" rx="12" fill="#c9cfe4"/>
+
+  <!-- The PDF tag, overhanging the page edge. -->
+  <g filter="url(#shadow)">
+    <rect x="282" y="508" width="330" height="136" rx="28" fill="#ef3b4f"/>
+  </g>
+  <text x="447" y="606" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="96" letter-spacing="4" fill="#ffffff">PDF</text>
+</svg>

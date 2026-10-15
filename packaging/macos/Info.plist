@@ -10,6 +10,8 @@
     <string>io.github.ivadim.pdftools</string>
     <key>CFBundleExecutable</key>
     <string>pdftools</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleVersion</key>
