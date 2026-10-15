@@ -257,7 +257,7 @@ mod tests {
     use image::{ImageFormat, Rgba, RgbaImage};
 
     fn content(doc: &Document, page: u32) -> String {
-        String::from_utf8_lossy(&doc.get_page_content(doc.get_pages()[&page]).unwrap()).into_owned()
+        String::from_utf8_lossy(&doc.get_page_content(doc.get_pages()[&page])).into_owned()
     }
 
     fn png() -> Vec<u8> {

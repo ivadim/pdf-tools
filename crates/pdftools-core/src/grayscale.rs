@@ -479,7 +479,7 @@ mod tests {
         let summary = grayscale_document(&mut doc, true);
         assert_eq!(summary, GrayscaleSummary { streams: 1, images: 1, skipped: 0 });
         let doc = round_trip(doc);
-        let content = String::from_utf8(doc.get_page_content(page_id).unwrap()).unwrap();
+        let content = String::from_utf8(doc.get_page_content(page_id)).unwrap();
         assert!(content.contains("0.299 g"), "{content}");
         assert_eq!(page_labels(&doc), ["a-1"]);
 
@@ -507,7 +507,7 @@ mod tests {
 
         let summary = grayscale_document(&mut doc, false);
         assert_eq!(summary.skipped, 0);
-        let content = String::from_utf8(doc.get_page_content(page_id).unwrap()).unwrap();
+        let content = String::from_utf8(doc.get_page_content(page_id)).unwrap();
         assert!(content.contains("0.299 g") && content.contains("(still here) Tj"), "{content}");
     }
 
@@ -522,7 +522,7 @@ mod tests {
         doc.get_dictionary_mut(page_id).unwrap().set("Contents", Object::Reference(id));
 
         grayscale_document(&mut doc, false);
-        let content = String::from_utf8(doc.get_page_content(page_id).unwrap()).unwrap();
+        let content = String::from_utf8(doc.get_page_content(page_id)).unwrap();
         assert!(content.contains("(x)") && content.contains("ET"), "content was truncated: {content}");
     }
 

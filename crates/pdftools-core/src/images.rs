@@ -313,7 +313,7 @@ mod tests {
 
     fn page_matrix(doc: &Document, page: u32) -> Vec<f32> {
         let id = doc.get_pages()[&page];
-        let content = Content::decode(&doc.get_page_content(id).unwrap()).unwrap();
+        let content = Content::decode(&doc.get_page_content(id)).unwrap();
         let cm = content.operations.iter().find(|op| op.operator == "cm").unwrap();
         cm.operands.iter().map(|o| o.as_float().unwrap()).collect()
     }

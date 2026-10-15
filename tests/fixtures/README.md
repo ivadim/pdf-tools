@@ -24,3 +24,12 @@ UI tests (`crates/pdftools-app/tests/`). Each was picked for something the tools
 | issue5010.pdf | Small file with unusual structure |
 
 To refresh a file: download it again from the pdf.js repository at the same path.
+
+`encrypted/` holds `sizes.pdf` encrypted by [qpdf](https://qpdf.readthedocs.io)
+(through pikepdf), so Unlock is tested against another implementation than
+the one Protect uses:
+
+| File | Encryption |
+| --- | --- |
+| aes256-password-test.pdf | AES-256 (R6), open password `test` |
+| aes256-restrictions-only.pdf | AES-256 (R6), no open password; printing and copying restricted |

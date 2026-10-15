@@ -238,7 +238,7 @@ mod tests {
         let mut doc = sample("a", 1);
         let id = doc.get_pages()[&1];
         add_overlay(&mut doc, id, &[], false, |_| vec![Operation::new("n", vec![])]).unwrap();
-        let content = String::from_utf8(doc.get_page_content(id).unwrap()).unwrap();
+        let content = String::from_utf8(doc.get_page_content(id)).unwrap();
         let original = content.find("(a-1)").unwrap();
         let overlay = content.rfind("\nn\n").unwrap();
         assert!(content.starts_with("q\n") && original < overlay);

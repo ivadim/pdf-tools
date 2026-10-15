@@ -179,7 +179,7 @@ pub(crate) mod test_support {
         doc.get_pages()
             .into_values()
             .map(|id| {
-                let content = String::from_utf8_lossy(&doc.get_page_content(id).unwrap()).into_owned();
+                let content = String::from_utf8_lossy(&doc.get_page_content(id)).into_owned();
                 let start = content.find('(').unwrap() + 1;
                 let end = content[start..].find(')').unwrap() + start;
                 content[start..end].to_owned()

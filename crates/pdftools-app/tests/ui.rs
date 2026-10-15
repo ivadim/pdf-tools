@@ -198,7 +198,7 @@ fn text(path: &Path, page: u32) -> String {
 
 fn content(path: &Path, page: u32) -> String {
     let doc = pdftools_core::load(path).unwrap();
-    String::from_utf8_lossy(&doc.get_page_content(doc.get_pages()[&page]).unwrap()).into_owned()
+    String::from_utf8_lossy(&doc.get_page_content(doc.get_pages()[&page])).into_owned()
 }
 
 #[test]

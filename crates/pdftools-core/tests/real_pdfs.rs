@@ -131,7 +131,7 @@ fn page_count(doc: &Document) -> usize {
 /// The decoded content of page `n` (1-based), all streams joined.
 fn page_content(doc: &Document, n: u32) -> String {
     let id = doc.get_pages()[&n];
-    String::from_utf8_lossy(&doc.get_page_content(id).unwrap_or_default()).into_owned()
+    String::from_utf8_lossy(&doc.get_page_content(id)).into_owned()
 }
 
 /// Compares extracted text page by page. Pages whose original text lopdf
@@ -344,6 +344,32 @@ fn protect_and_unlock_round_trip() {
         ensure(!doc.is_encrypted() && doc.trailer.get(b"Encrypt").is_err(), || "still encrypted".into())?;
         same_text(&before, &page_texts(&doc), "after unlock")
     });
+}
+
+/// Files encrypted by qpdf (tests/fixtures/encrypted), so Unlock is checked
+/// against another implementation and not only against our own output.
+#[test]
+fn unlocks_files_encrypted_elsewhere() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/encrypted");
+    let out = out_dir("unlock-elsewhere");
+    let original = load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/pdfjs/sizes.pdf")).unwrap();
+
+    // AES-256 with an open password: "test".
+    let locked = dir.join("aes256-password-test.pdf");
+    let info = pdftools_core::inspect(&locked).unwrap();
+    assert!(info.needs_password && info.pages.is_none());
+    assert!(matches!(unlock_file(&locked, "wrong", &out.join("x.pdf")), Err(Error::WrongPassword)));
+    unlock_file(&locked, "test", &out.join("unlocked.pdf")).unwrap();
+    let unlocked = load(&out.join("unlocked.pdf")).unwrap();
+    assert!(unlocked.trailer.get(b"Encrypt").is_err());
+    same_text(&page_texts(&original), &page_texts(&unlocked), "after unlock").unwrap();
+
+    // Restrictions only: opens without a password, and Unlock lifts them.
+    let restricted = dir.join("aes256-restrictions-only.pdf");
+    let info = pdftools_core::inspect(&restricted).unwrap();
+    assert!(!info.needs_password && info.encrypted && info.pages == Some(3));
+    unlock_file(&restricted, "", &out.join("free.pdf")).unwrap();
+    assert!(!pdftools_core::inspect(&out.join("free.pdf")).unwrap().encrypted);
 }
 
 #[test]

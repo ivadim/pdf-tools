@@ -9,7 +9,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let max: usize = args.next().map(|p| p.parse()).transpose()?.unwrap_or(2000);
     let doc = pdftools_core::load(std::path::Path::new(&path))?;
     let id = *doc.get_pages().get(&page).ok_or("no such page")?;
-    let content = doc.get_page_content(id)?;
+    let content = doc.get_page_content(id);
     let text = String::from_utf8_lossy(&content);
     println!("{}", text.chars().take(max).collect::<String>());
     Ok(())

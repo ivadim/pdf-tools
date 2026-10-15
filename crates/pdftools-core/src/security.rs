@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use lopdf::encryption::crypt_filters::{Aes256CryptFilter, CryptFilter};
 use lopdf::encryption::DecryptionError;
-use lopdf::{dictionary, Document, EncryptionState, EncryptionVersion, Permissions};
+use lopdf::{dictionary, Document, EncryptionState, EncryptionVersion, Object, Permissions};
 
 use crate::Error;
 
@@ -59,6 +59,12 @@ impl Protection {
 }
 
 pub fn protect_document(doc: &mut Document, protection: &Protection) -> Result<(), Error> {
+    let mut file_key = [0u8; 32];
+    getrandom::fill(&mut file_key).map_err(|e| Error::InvalidOption(format!("no randomness available: {e}")))?;
+    protect_with_key(doc, protection, &file_key)
+}
+
+fn protect_with_key(doc: &mut Document, protection: &Protection, file_key: &[u8; 32]) -> Result<(), Error> {
     if protection.user_password.is_empty() {
         return Err(Error::InvalidOption("the password must not be empty".into()));
     }
@@ -72,13 +78,11 @@ pub fn protect_document(doc: &mut Document, protection: &Protection) -> Result<(
         _ => &protection.user_password,
     };
 
-    let mut file_key = [0u8; 32];
-    getrandom::fill(&mut file_key).map_err(|e| Error::InvalidOption(format!("no randomness available: {e}")))?;
     let filter: Arc<dyn CryptFilter> = Arc::new(Aes256CryptFilter);
     let state = EncryptionState::try_from(EncryptionVersion::V5 {
         encrypt_metadata: true,
         crypt_filters: BTreeMap::from([(b"StdCF".to_vec(), filter)]),
-        file_encryption_key: &file_key,
+        file_encryption_key: file_key,
         stream_filter: b"StdCF".to_vec(),
         string_filter: b"StdCF".to_vec(),
         owner_password,
@@ -95,6 +99,17 @@ pub fn protect_document(doc: &mut Document, protection: &Protection) -> Result<(
     // Streams must be compressed before encryption, never after.
     doc.compress();
     doc.encrypt(&state)?;
+    complete_encryption_dictionary(doc)
+}
+
+/// Adds what lopdf leaves out of the encryption dictionary and Acrobat and
+/// qpdf write: the key length, and when the password is asked for.
+fn complete_encryption_dictionary(doc: &mut Document) -> Result<(), Error> {
+    let id = doc.trailer.get(b"Encrypt").and_then(Object::as_reference)?;
+    let dict = doc.get_dictionary_mut(id)?;
+    dict.set("Length", 256);
+    let filter = dict.get_mut(b"CF")?.as_dict_mut()?.get_mut(b"StdCF")?.as_dict_mut()?;
+    filter.set("AuthEvent", "DocOpen");
     Ok(())
 }
 
@@ -106,27 +121,39 @@ pub fn protect_file(input: &Path, protection: &Protection, output: &Path) -> Res
 
 /// Removes password protection and permission restrictions. `password` may
 /// be empty for files that only restrict permissions.
-pub fn unlock_document(doc: &mut Document, password: &str) -> Result<(), Error> {
+pub fn unlock_file(input: &Path, password: &str, output: &Path) -> Result<(), Error> {
+    let mut doc = load_with_password(input, password)?;
+    unlock_document(&mut doc)?;
+    crate::save(&mut doc, output)
+}
+
+/// Loads an encrypted PDF, decrypting it with `password` as it's read.
+pub fn load_with_password(path: &Path, password: &str) -> Result<Document, Error> {
+    match Document::load_with_password(path, password) {
+        Ok(doc) => Ok(doc),
+        Err(lopdf::Error::InvalidPassword | lopdf::Error::Decryption(DecryptionError::IncorrectPassword)) => {
+            Err(Error::WrongPassword)
+        }
+        Err(source) => Err(Error::Load { path: path.to_path_buf(), source }),
+    }
+}
+
+/// Makes a document loaded with its password save without password or
+/// restrictions (its content was decrypted while loading).
+pub fn unlock_document(doc: &mut Document) -> Result<(), Error> {
     if doc.is_encrypted() {
-        doc.decrypt(password).map_err(|e| match e {
-            lopdf::Error::Decryption(DecryptionError::IncorrectPassword) => Error::WrongPassword,
-            other => Error::Pdf(other),
-        })?;
-    } else if doc.encryption_state.is_none() {
+        return Err(Error::WrongPassword);
+    }
+    if !doc.was_encrypted() {
         return Err(Error::NotEncrypted);
     }
-    // Loading already decrypted the content; saving writes it unencrypted.
     doc.encryption_state = None;
     if let Ok(catalog) = doc.catalog_mut() {
         catalog.remove(b"Extensions");
     }
+    // The encryption dictionary is gone; keep the object count exact.
+    doc.max_id = doc.objects.keys().map(|id| id.0).max().unwrap_or(0);
     Ok(())
-}
-
-pub fn unlock_file(input: &Path, password: &str, output: &Path) -> Result<(), Error> {
-    let mut doc = crate::load_unchecked(input)?;
-    unlock_document(&mut doc, password)?;
-    crate::save(&mut doc, output)
 }
 
 fn random_hex(bytes: usize) -> Result<String, Error> {
@@ -179,9 +206,32 @@ mod tests {
     }
 
     #[test]
+    fn perms_entry_is_encrypted_with_the_file_key() {
+        use aes::cipher::{BlockDecrypt, KeyInit};
+        let mut doc = sample("a", 1);
+        let key = [7u8; 32];
+        let protection = Protection { allow_copy: false, ..Protection::with_password("open") };
+        protect_with_key(&mut doc, &protection, &key).unwrap();
+        let dict = doc.get_encrypted().unwrap();
+        let perms = dict.get(b"Perms").and_then(Object::as_str).unwrap();
+        let mut block = aes::Block::clone_from_slice(perms);
+        aes::Aes256::new(&key.into()).decrypt_block(&mut block);
+        let p = dict.get(b"P").and_then(Object::as_i64).unwrap() as i32;
+        assert_eq!(&block[..4], &p.to_le_bytes());
+        assert_eq!(&block[4..12], &[0xff, 0xff, 0xff, 0xff, b'T', b'a', b'd', b'b']);
+        assert_eq!(dict.get(b"Length").and_then(Object::as_i64).unwrap(), 256);
+        // Still opens with the password after a save.
+        let mut bytes = Vec::new();
+        doc.save_to(&mut bytes).unwrap();
+        let mut reopened = Document::load_mem_with_options(&bytes, lopdf::LoadOptions::with_password("open")).unwrap();
+        unlock_document(&mut reopened).unwrap();
+        assert_eq!(page_labels(&reopened), ["a-1"]);
+    }
+
+    #[test]
     fn rejects_empty_password_and_unencrypted_unlock() {
         let mut doc = sample("a", 1);
         assert!(matches!(protect_document(&mut doc, &Protection::with_password("")), Err(Error::InvalidOption(_))));
-        assert!(matches!(unlock_document(&mut doc, ""), Err(Error::NotEncrypted)));
+        assert!(matches!(unlock_document(&mut doc), Err(Error::NotEncrypted)));
     }
 }
