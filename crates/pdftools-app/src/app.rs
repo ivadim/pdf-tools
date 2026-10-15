@@ -254,11 +254,18 @@ impl App {
     /// Reads page counts of Merge's files that are still loading.
     pub fn inspect_merge_files(&mut self) {
         for (entry, path) in self.tool::<MergeTool>(id::MERGE).take_unread() {
+            let path_for_thumb = path.clone();
             jobs::spawn(
                 move || pdftools_core::inspect(&path).map_err(|e| e.to_string()),
                 move |app: &mut App, result| {
+                    let readable = matches!(&result, Ok(info) if info.pages.is_some_and(|p| p > 0));
                     app.tool::<MergeTool>(id::MERGE).file_read(entry, result);
                     app.refresh(id::MERGE);
+                    // Page 1 doubles as the file's thumbnail in the list.
+                    if readable {
+                        let request = preview_request(&path_for_thumb, 1, 0, false);
+                        app.s.previews.request(request, true, |app: &mut App, _| app.refresh(id::MERGE));
+                    }
                 },
             );
         }

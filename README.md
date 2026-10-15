@@ -8,6 +8,8 @@ Everything runs locally; files never leave your computer.
 
 It is a single native executable, about 15 MB, with no web view and no runtime to install. Idle, it uses about 20 MB of memory.
 
+![PDF Tools home screen with all thirteen tools](docs/screenshots/home.png)
+
 ## Download
 
 Get the latest build for your system from [Releases](https://github.com/ivadim/pdf-tools/releases):
@@ -37,6 +39,13 @@ Builds of the latest `main` are attached to each [CI run](https://github.com/iva
 | **Signature** | Draw, type or upload a signature, then drag and resize it on one or more pages. |
 | **Grayscale** | Converts colours in page content, forms, annotations, palettes and images. Text stays real text. Gradients and spot colours are left as they are. |
 | **Images to PDF** | Turn JPEG and PNG images into a PDF, one per page. Reorder and rotate them, and choose the page size (A4, Letter or the image's own size), orientation and margin. JPEGs are embedded without re-compression, camera rotation (EXIF) is honoured and PNG transparency is kept. |
+
+| | |
+| --- | --- |
+| ![Merging three PDFs](docs/screenshots/merge.png) | ![Splitting a PDF by page ranges](docs/screenshots/split.png) |
+| **Merge**: reorder files and pages, rotate or leave out pages | **Split**: pages are coloured by the file they'll end up in |
+| ![A watermark previewed on every page](docs/screenshots/watermark.png) | ![Photos turned into PDF pages](docs/screenshots/images.png) |
+| **Watermark**: see the result on every page before saving | **Images to PDF**: each photo on a page of the right shape |
 
 **Leaving pages out:** in Merge, Rotate, Compress, Protect, Metadata, Grayscale, Page numbers and Watermark, untick a page's checkbox (Shift-click for a range, or press X) to drop it from the result. Removed pages stay in the preview, dimmed, so you can include them again. They're removed before the tool runs, so page numbers and "{total}" count only the pages that remain.
 
