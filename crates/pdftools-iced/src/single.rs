@@ -4,12 +4,14 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
+use iced::keyboard::Modifiers;
 use iced::widget::svg::Handle;
-use iced::Element;
+use iced::{Color, Element};
 use pdftools_core::PdfInfo;
 
 use crate::app::Message;
 use crate::catalog::ToolId;
+use crate::dialogs::Dialogs;
 use crate::widgets::{Caps, Run, TileEvent};
 
 #[derive(Debug, Clone)]
@@ -38,6 +40,31 @@ pub enum FileState {
 /// written, or what went wrong.
 pub type Job = Box<dyn FnOnce() -> Result<(String, Option<PathBuf>), String> + Send>;
 
+/// A page as a tool wants it shown: which source page, turned how, and
+/// any marks. The app adds the preview.
+#[derive(Debug, Clone, Default)]
+pub struct TileSpec {
+    pub page: usize,
+    pub rotation: i32,
+    pub label: String,
+    pub badge: Option<String>,
+    pub stripe: Option<Color>,
+    pub excluded: bool,
+    pub dimmed: bool,
+    pub selected: bool,
+}
+
+/// A preview of what a tool will add to a page, positioned in fractions of
+/// the page (from the top left).
+#[derive(Debug, Clone)]
+pub enum Overlay {
+    /// `align` is where the anchor point sits in the text box: 0 start,
+    /// 0.5 centre, 1 end. `size` is a fraction of the page width.
+    Text { text: String, x: f32, y: f32, align_x: f32, align_y: f32, size: f32, color: Color },
+    /// Centred at (x, y); `width` is a fraction of the page width.
+    Image { handle: iced::widget::image::Handle, aspect: f32, x: f32, y: f32, width: f32, opacity: f32 },
+}
+
 /// What a single-file tool adds to the shared behaviour.
 pub trait ToolOptions {
     fn id(&self) -> ToolId;
@@ -45,10 +72,23 @@ pub trait ToolOptions {
     /// The options panel; changes come back through [`ToolOptions::set`].
     fn view<'a>(&'a self, file: &'a Single) -> Element<'a, Message>;
 
-    fn set(&mut self, key: &str, value: String);
+    fn set(&mut self, key: &str, value: String, file: &Single, dialogs: &dyn Dialogs);
 
     fn caps(&self) -> Caps {
         Caps { include: true, ..Default::default() }
+    }
+
+    /// The pages shown, in order. By default every page, as it is.
+    fn tiles(&self, file: &Single) -> Vec<TileSpec> {
+        (1..=file.page_count())
+            .map(|page| TileSpec {
+                page,
+                rotation: self.rotation(page),
+                label: format!("p. {page}"),
+                excluded: file.excluded.contains(&page),
+                ..Default::default()
+            })
+            .collect()
     }
 
     /// Extra rotation shown for (and applied to) a page.
@@ -56,14 +96,26 @@ pub trait ToolOptions {
         0
     }
 
-    fn tile_event(&mut self, _page: usize, _event: TileEvent) {}
+    /// What the tool will add to a page, once its size (in points) is known.
+    fn overlay(&self, _file: &Single, _tile: &TileSpec, _page_size: (f32, f32)) -> Option<Overlay> {
+        None
+    }
+
+    /// A page button was used (`index` is the position in [`ToolOptions::tiles`]).
+    fn tile_event(&mut self, _index: usize, _page: usize, _event: TileEvent) {}
+
+    /// A page was clicked; return true if the tool used the click (e.g. to
+    /// select it) instead of opening the viewer.
+    fn clicked(&mut self, _index: usize, _page: usize, _modifiers: Modifiers) -> bool {
+        false
+    }
 
     /// Buttons above the page grid: (label, icon, action).
     fn grid_actions(&self) -> Vec<(&'static str, fn() -> Handle, &'static str)> {
         Vec::new()
     }
 
-    fn grid_action(&mut self, _action: &str, _pages: usize) {}
+    fn grid_action(&mut self, _action: &str, _file: &Single) {}
 
     fn file_changed(&mut self, _file: &Single) {}
 
@@ -77,15 +129,25 @@ pub trait ToolOptions {
         false
     }
 
+    /// Shown instead of the grid when it's empty.
+    fn empty_text(&self, _file: &Single) -> Option<&'static str> {
+        None
+    }
+
     /// `None` when ready, otherwise what's missing.
     fn validate(&self, file: &Single) -> Option<String>;
 
     fn run_label(&self) -> &'static str;
 
-    /// Suggested output name: `<input>-<suffix>.pdf`.
-    fn suffix(&self) -> &'static str;
+    /// Asks where to save etc. and returns the work, or `None` if cancelled.
+    fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job>;
+}
 
-    fn job(&self, file: &Single, output: PathBuf) -> Job;
+/// Asks where to save, suggesting `<input>-<suffix>.pdf` next to the input.
+pub fn choose_output(dialogs: &dyn Dialogs, file: &Single, suffix: &str) -> Option<PathBuf> {
+    let input = file.path()?;
+    let stem = input.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    dialogs.save_pdf("Save PDF", &input.with_file_name(format!("{stem}-{suffix}.pdf")))
 }
 
 /// The file, page selection and run state of a single-file tool.
@@ -121,6 +183,14 @@ impl Single {
     /// Pages to keep for the backend: `None` when nothing was left out.
     pub fn keep(&self) -> Option<Vec<usize>> {
         (!self.excluded.is_empty()).then(|| self.kept_pages())
+    }
+
+    /// Position of an original page in the result, if kept.
+    pub fn final_position(&self, page: usize) -> Option<usize> {
+        if self.excluded.contains(&page) {
+            return None;
+        }
+        Some((1..=page).filter(|p| !self.excluded.contains(p)).count())
     }
 
     /// " (2 pages removed)" for result messages.

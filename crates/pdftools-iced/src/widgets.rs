@@ -12,6 +12,7 @@ use iced::{Alignment, Color, ContentFit, Element, Font, Length, Padding};
 use crate::catalog::ToolInfo;
 use crate::icons;
 use crate::previews::Thumb;
+use crate::single::Overlay;
 use crate::theme;
 
 pub const BOLD: Font = Font { weight: iced::font::Weight::Semibold, ..Font::DEFAULT };
@@ -52,7 +53,12 @@ pub fn icon_button<'a, M: Clone + 'a>(handle: Handle, label: &'a str, size: f32,
 }
 
 /// A button with an optional icon; `primary` for the main action.
-pub fn action<'a, M: Clone + 'a>(label: &'a str, handle: Option<Handle>, primary: bool, on_press: Option<M>) -> Element<'a, M> {
+pub fn action<'a, M: Clone + 'a>(
+    label: impl text::IntoFragment<'a>,
+    handle: Option<Handle>,
+    primary: bool,
+    on_press: Option<M>,
+) -> Element<'a, M> {
     let color = if primary { Color::WHITE } else { theme::TEXT };
     let mut content = row![].spacing(7).align_y(Alignment::Center);
     if let Some(handle) = handle {
@@ -196,6 +202,12 @@ pub struct Tile {
     pub failed: bool,
     pub badge: Option<String>,
     pub stripe: Option<Color>,
+    pub dimmed: bool,
+    pub selected: bool,
+    pub overlay: Option<Overlay>,
+    /// A blank page of this aspect, shown instead of a rendered one (the
+    /// overlay supplies the content, e.g. a photo placed on the page).
+    pub blank: Option<f32>,
 }
 
 /// What a grid offers.
@@ -204,6 +216,7 @@ pub struct Caps {
     pub include: bool,
     pub rotate: bool,
     pub delete: bool,
+    pub duplicate: bool,
     pub reorder: bool,
 }
 
@@ -215,6 +228,7 @@ pub enum TileEvent {
     RotateLeft,
     RotateRight,
     ToggleInclude,
+    Duplicate,
     Delete,
     MoveEarlier,
     MoveLater,
@@ -240,15 +254,29 @@ fn tile_view<'a, M: Clone + 'a>(
     let thumb = tile.thumb.clone();
     let failed = tile.failed;
     let excluded = tile.excluded;
+    let selected = tile.selected;
+    let overlay = tile.overlay.clone();
+    let blank = tile.blank;
     let page = responsive(move |size| {
-        let aspect = thumb.as_ref().map_or(1.0 / 1.3, |t| t.aspect);
+        let aspect = thumb.as_ref().map(|t| t.aspect).or(blank).unwrap_or(1.0 / 1.3);
         let (w, h) = fitted(aspect, size);
         let content: Element<'_, M> = match &thumb {
             Some(t) => image(t.handle.clone()).width(w).height(h).content_fit(ContentFit::Fill).into(),
             None if failed => center(muted("No preview")).into(),
             None => space().into(),
         };
-        center(container(content).width(w).height(h).style(theme::page)).into()
+        let mut layers = iced::widget::stack![content].width(w).height(h);
+        if let (Some(overlay), true) = (&overlay, thumb.is_some() || blank.is_some()) {
+            layers = layers.push(overlay_view(overlay, w, h));
+        }
+        let frame = container(layers).width(w).height(h).style(move |t| {
+            let mut style = theme::page(t);
+            if selected {
+                style.border = iced::Border { width: 3.0, color: theme::ACCENT, radius: 2.0.into() };
+            }
+            style
+        });
+        center(frame).into()
     });
     let mut base = iced::widget::stack![page];
     if excluded {
@@ -262,6 +290,13 @@ fn tile_view<'a, M: Clone + 'a>(
                 }),
         ));
     }
+    if tile.dimmed {
+        // Fades the page into the grid background.
+        base = base.push(container(space()).width(Length::Fill).height(Length::Fill).style(|_| container::Style {
+            background: Some(Color { a: 0.6, ..theme::SURFACE_2 }.into()),
+            ..Default::default()
+        }));
+    }
     let base = mouse_area(container(base).height(Length::Fill)).on_press(on(index, TileEvent::View));
 
     let mut actions = row![].spacing(1);
@@ -274,6 +309,9 @@ fn tile_view<'a, M: Clone + 'a>(
         actions = actions
             .push(icon_button(icons::rotate_ccw(), "Rotate left", 26.0, (!busy).then(|| on(index, TileEvent::RotateLeft))))
             .push(icon_button(icons::rotate_cw(), "Rotate right", 26.0, (!busy).then(|| on(index, TileEvent::RotateRight))));
+    }
+    if caps.duplicate {
+        actions = actions.push(icon_button(icons::copy(), "Duplicate", 26.0, (!busy).then(|| on(index, TileEvent::Duplicate))));
     }
     if caps.delete {
         actions = actions.push(icon_button(icons::trash(), "Remove", 26.0, (!busy).then(|| on(index, TileEvent::Delete))));
@@ -329,6 +367,31 @@ fn tile_view<'a, M: Clone + 'a>(
     .spacing(6);
     let shown = on(index, TileEvent::Shown);
     sensor(cell).key(tile.key).anticipate(300).on_show(move |_| shown.clone()).into()
+}
+
+/// What a tool will add to the page, drawn over a `w` × `h` preview.
+fn overlay_view<'a, M: 'a>(overlay: &Overlay, w: f32, h: f32) -> Element<'a, M> {
+    match overlay {
+        Overlay::Text { text: content, x, y, align_x, align_y, size, color } => {
+            let font = (size * w).max(1.0);
+            // A box ending, centred on or starting at the anchor, as aligned.
+            let (x, y) = (x * w, y * h);
+            let half = x.min(w - x).max(0.0);
+            let (left, width, horizontal) = match *align_x {
+                a if a <= 0.25 => (x, (w - x).max(1.0), iced::alignment::Horizontal::Left),
+                a if a >= 0.75 => (0.0, x.max(1.0), iced::alignment::Horizontal::Right),
+                _ => (x - half, (2.0 * half).max(1.0), iced::alignment::Horizontal::Center),
+            };
+            let top = y - align_y * font * 0.75 - font * 0.12;
+            let label = text(content.clone()).size(font).color(*color).wrapping(text::Wrapping::None);
+            iced::widget::pin(container(label).width(width).align_x(horizontal).clip(false)).x(left).y(top).into()
+        }
+        Overlay::Image { handle, aspect, x, y, width, opacity } => {
+            let iw = width * w;
+            let ih = iw / aspect.max(0.01);
+            iced::widget::pin(image(handle.clone()).width(iw).height(ih).opacity(*opacity)).x(x * w - iw / 2.0).y(y * h - ih / 2.0).into()
+        }
+    }
 }
 
 /// The pages of a document as a scrolling grid of thumbnails.

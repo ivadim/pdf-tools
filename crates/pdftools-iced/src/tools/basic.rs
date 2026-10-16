@@ -1,6 +1,4 @@
-//! The single-file tools ported so far. Each mirrors its Slint counterpart.
-
-use std::path::PathBuf;
+//! Compress, Grayscale, Rotate, Protect and Unlock.
 
 use iced::widget::{checkbox, column, text, text_input};
 use iced::Element;
@@ -9,20 +7,14 @@ use pdftools_core::grayscale::grayscale_document;
 use pdftools_core::security::{protect_document, Protection};
 use pdftools_core::PageSpec;
 
+use super::{set, toggle};
 use crate::app::Message;
 use crate::catalog::ToolId;
 use crate::icons;
-use crate::single::{edit, format_bytes, plural, Job, Single, ToolOptions};
+use crate::dialogs::Dialogs;
+use crate::single::{choose_output, edit, format_bytes, plural, Job, Single, ToolOptions};
 use crate::theme;
 use crate::widgets::{card_options, field, muted, section, Caps, TileEvent};
-
-fn set(tool: ToolId, key: &'static str) -> impl Fn(String) -> Message {
-    move |value| Message::Option(tool, key, value)
-}
-
-fn toggle(tool: ToolId, key: &'static str) -> impl Fn(bool) -> Message {
-    move |on| Message::Option(tool, key, if on { "1" } else { "0" }.into())
-}
 
 // ── Compress ─────────────────────────────────────────────────────────────
 
@@ -61,7 +53,7 @@ impl ToolOptions for Compress {
         )
     }
 
-    fn set(&mut self, key: &str, value: String) {
+    fn set(&mut self, key: &str, value: String, _file: &Single, _dialogs: &dyn Dialogs) {
         if key == "level" {
             self.level = match value.as_str() {
                 "lossless" => Level::Lossless,
@@ -79,14 +71,11 @@ impl ToolOptions for Compress {
         "Compress PDF…"
     }
 
-    fn suffix(&self) -> &'static str {
-        "compressed"
-    }
-
-    fn job(&self, file: &Single, output: PathBuf) -> Job {
+    fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {
+        let output = choose_output(dialogs, file, "compressed")?;
         let input = file.path().expect("file loaded").to_path_buf();
         let (keep, level, note) = (file.keep(), self.level, file.removed_note());
-        Box::new(move || {
+        Some(Box::new(move || {
             let before = pdftools_core::file_size(&input);
             let images = edit(&input, keep.as_deref(), &output, |doc| Ok(compress_document(doc, level)))?;
             let after = pdftools_core::file_size(&output);
@@ -102,7 +91,7 @@ impl ToolOptions for Compress {
                 n => format!(", {n} images re-encoded"),
             };
             Ok((format!("{change}{detail}{note}. Saved as"), Some(output)))
-        })
+        }))
     }
 }
 
@@ -133,7 +122,7 @@ impl ToolOptions for Grayscale {
         )
     }
 
-    fn set(&mut self, key: &str, value: String) {
+    fn set(&mut self, key: &str, value: String, _file: &Single, _dialogs: &dyn Dialogs) {
         if key == "images" {
             self.images = value == "1";
         }
@@ -151,17 +140,14 @@ impl ToolOptions for Grayscale {
         "Convert to grayscale…"
     }
 
-    fn suffix(&self) -> &'static str {
-        "grayscale"
-    }
-
-    fn job(&self, file: &Single, output: PathBuf) -> Job {
+    fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {
+        let output = choose_output(dialogs, file, "grayscale")?;
         let input = file.path().expect("file loaded").to_path_buf();
         let (keep, images, note) = (file.keep(), self.images, file.removed_note());
-        Box::new(move || {
+        Some(Box::new(move || {
             edit(&input, keep.as_deref(), &output, |doc| Ok(grayscale_document(doc, images)))?;
             Ok((format!("Grayscale copy{note} saved as"), Some(output)))
-        })
+        }))
     }
 }
 
@@ -191,7 +177,7 @@ impl ToolOptions for Rotate {
         muted("Turn pages with the buttons on each page, or all at once with the buttons above them.")
     }
 
-    fn set(&mut self, _key: &str, _value: String) {}
+    fn set(&mut self, _key: &str, _value: String, _file: &Single, _dialogs: &dyn Dialogs) {}
 
     fn caps(&self) -> Caps {
         Caps { include: true, rotate: true, ..Default::default() }
@@ -201,7 +187,7 @@ impl ToolOptions for Rotate {
         self.rotations.get(page - 1).copied().unwrap_or(0)
     }
 
-    fn tile_event(&mut self, page: usize, event: TileEvent) {
+    fn tile_event(&mut self, _index: usize, page: usize, event: TileEvent) {
         match event {
             TileEvent::RotateLeft => self.turn([page], -90),
             TileEvent::RotateRight => self.turn([page], 90),
@@ -217,7 +203,8 @@ impl ToolOptions for Rotate {
         ]
     }
 
-    fn grid_action(&mut self, action: &str, pages: usize) {
+    fn grid_action(&mut self, action: &str, file: &Single) {
+        let pages = file.page_count();
         match action {
             "rotate-all-left" => self.turn(1..=pages, -90),
             "rotate-all-right" => self.turn(1..=pages, 90),
@@ -240,22 +227,19 @@ impl ToolOptions for Rotate {
         "Save rotated PDF…"
     }
 
-    fn suffix(&self) -> &'static str {
-        "rotated"
-    }
-
-    fn job(&self, file: &Single, output: PathBuf) -> Job {
+    fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {
+        let output = choose_output(dialogs, file, "rotated")?;
         let input = file.path().expect("file loaded").to_path_buf();
         let pages: Vec<PageSpec> =
             file.kept_pages().into_iter().map(|p| PageSpec::new(0, p).rotated(self.rotation(p) as i64)).collect();
         let note = file.removed_note();
-        Box::new(move || {
+        Some(Box::new(move || {
             pdftools_core::organize::organize_file(&input, &pages, &output).map_err(|e| e.to_string())?;
             let changed = pages.iter().filter(|p| p.rotation != 0).count();
             let what =
                 if changed > 0 { format!("Rotated {}", plural(changed, "page")) } else { format!("Saved {}", plural(pages.len(), "page")) };
             Ok((format!("{what}{note} into"), Some(output)))
-        })
+        }))
     }
 }
 
@@ -309,7 +293,7 @@ impl ToolOptions for Protect {
         .into()
     }
 
-    fn set(&mut self, key: &str, value: String) {
+    fn set(&mut self, key: &str, value: String, _file: &Single, _dialogs: &dyn Dialogs) {
         let on = value == "1";
         match key {
             "password" => self.password = value,
@@ -337,11 +321,8 @@ impl ToolOptions for Protect {
         "Protect PDF…"
     }
 
-    fn suffix(&self) -> &'static str {
-        "protected"
-    }
-
-    fn job(&self, file: &Single, output: PathBuf) -> Job {
+    fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {
+        let output = choose_output(dialogs, file, "protected")?;
         let input = file.path().expect("file loaded").to_path_buf();
         let protection = Protection {
             user_password: self.password.clone(),
@@ -352,10 +333,10 @@ impl ToolOptions for Protect {
             allow_annotate: self.allow[3],
         };
         let (keep, note) = (file.keep(), file.removed_note());
-        Box::new(move || {
+        Some(Box::new(move || {
             edit(&input, keep.as_deref(), &output, |doc| protect_document(doc, &protection))?;
             Ok((format!("Password-protected copy{note} saved as"), Some(output)))
-        })
+        }))
     }
 }
 
@@ -393,7 +374,7 @@ impl ToolOptions for Unlock {
         }
     }
 
-    fn set(&mut self, key: &str, value: String) {
+    fn set(&mut self, key: &str, value: String, _file: &Single, _dialogs: &dyn Dialogs) {
         if key == "password" {
             self.password = value;
         }
@@ -426,16 +407,13 @@ impl ToolOptions for Unlock {
         "Unlock PDF…"
     }
 
-    fn suffix(&self) -> &'static str {
-        "unlocked"
-    }
-
-    fn job(&self, file: &Single, output: PathBuf) -> Job {
+    fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {
+        let output = choose_output(dialogs, file, "unlocked")?;
         let input = file.path().expect("file loaded").to_path_buf();
         let password = self.password.clone();
-        Box::new(move || {
+        Some(Box::new(move || {
             pdftools_core::security::unlock_file(&input, &password, &output).map_err(|e| e.to_string())?;
             Ok(("Unlocked copy saved as".into(), Some(output)))
-        })
+        }))
     }
 }

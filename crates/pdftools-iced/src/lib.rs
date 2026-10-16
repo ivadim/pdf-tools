@@ -5,6 +5,8 @@ pub mod app;
 pub mod catalog;
 pub mod dialogs;
 pub mod icons;
+pub mod images;
+pub mod merge;
 pub mod previews;
 pub mod single;
 pub mod theme;
