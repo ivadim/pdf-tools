@@ -3562,7 +3562,7 @@ dependencies = [
 
 [[package]]
 name = "pdftools-app"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "hayro",
  "i-slint-backend-testing",
@@ -3581,7 +3581,7 @@ dependencies = [
 
 [[package]]
 name = "pdftools-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "aes 0.8.4",
  "getrandom 0.3.4",
