@@ -1,0 +1,12 @@
+//! PDF Tools: the iced desktop app (experimental port of the Slint app).
+
+pub mod about;
+pub mod app;
+pub mod catalog;
+pub mod dialogs;
+pub mod icons;
+pub mod previews;
+pub mod single;
+pub mod theme;
+pub mod tools;
+pub mod widgets;
