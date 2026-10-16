@@ -13,6 +13,7 @@ use pdftools_render::raster::{load_picture, render_text, rotate_picture, Family,
 
 use super::{set, toggle};
 use crate::app::Message;
+use crate::previews::Thumb;
 use crate::catalog::ToolId;
 use crate::dialogs::Dialogs;
 use crate::icons;
@@ -64,12 +65,14 @@ fn anchor_picker<'a>(tool: ToolId, anchor: Anchor, middle_row: bool) -> Element<
                     border: iced::border::rounded(5),
                     ..Default::default()
                 });
-            button(center(dot))
+            let name = format!("{}{} {hname}", vname[..1].to_uppercase(), &vname[1..]);
+            let spot = button(center(dot))
                 .width(40)
                 .height(30)
                 .padding(0)
                 .style(theme::segment(chosen))
-                .on_press(Message::Option(tool, "anchor", format!("{vname} {hname}")))
+                .on_press(Message::Option(tool, "anchor", format!("{vname} {hname}")));
+            iced::widget::tooltip(spot, container(text(name).size(12)).padding([4, 8]).style(theme::hover_bar), iced::widget::tooltip::Position::Top)
                 .into()
         }))
         .spacing(2)
@@ -175,12 +178,57 @@ impl PageNumbers {
     }
 }
 
+/// The close-up's size in pixels: a 2× view of the page around the number.
+const CLOSEUP: (f32, f32) = (300.0, 110.0);
+
+impl PageNumbers {
+    /// The part of `page` around its number, at about twice its real size.
+    fn closeup_view<'a>(&self, file: &Single, page: usize, thumb: &Thumb) -> Element<'a, Message> {
+        let spec = TileSpec { page, ..Default::default() };
+        let Some(Overlay::Text { text, x, y, align_x, align_y, size, color }) = self.overlay(file, &spec, thumb.page_size) else {
+            return muted("This page isn’t numbered.");
+        };
+        let image_w = crate::single::CLOSEUP_WIDTH as f32;
+        let image_h = image_w / thumb.aspect;
+        let (cw, ch) = CLOSEUP;
+        let (ax, ay) = (x * image_w, y * image_h);
+        let left = (ax - cw / 2.0).clamp(0.0, (image_w - cw).max(0.0));
+        let top = (ay - ch / 2.0).clamp(0.0, (image_h - ch).max(0.0));
+
+        // The same overlay, in the close-up's coordinates.
+        let overlay = Overlay::Text {
+            text,
+            x: (ax - left) / cw,
+            y: (ay - top) / ch,
+            align_x,
+            align_y,
+            size: size * image_w / cw,
+            color,
+        };
+        // The whole page at full size, shifted so the number is in view, in
+        // a frame that clips the rest.
+        container(
+            iced::widget::stack![
+                iced::widget::pin(iced::widget::image(thumb.handle.clone()).width(image_w).height(image_h)).x(-left).y(-top),
+                crate::widgets::overlay_view(&overlay, cw, ch),
+            ]
+            .width(cw)
+            .height(ch),
+        )
+        .width(cw)
+        .height(ch)
+        .clip(true)
+        .style(theme::page)
+        .into()
+    }
+}
+
 impl ToolOptions for PageNumbers {
     fn id(&self) -> ToolId {
         ToolId::PageNumbers
     }
 
-    fn view<'a>(&'a self, _file: &'a Single) -> Element<'a, Message> {
+    fn view<'a>(&'a self, file: &'a Single, closeup: Option<&'a Thumb>) -> Element<'a, Message> {
         let t = ToolId::PageNumbers;
         let presets = ["{n}", "Page {n}", "Page {n} of {total}", "{n} / {total}"];
         let preset_buttons = presets.chunks(2).map(|pair| {
@@ -201,9 +249,22 @@ impl ToolOptions for PageNumbers {
             ]
             .spacing(5));
         }
-        column![
-            section("Position", [anchor_picker(t, self.anchor, false)]),
-            section(
+        let position = row![
+            anchor_picker(t, self.anchor, false),
+            column![
+                labelled_slider("Size", self.size, 6.0..=36.0, 1.0, " pt", move |v| Message::Option(t, "size", v.to_string())),
+                labelled_slider("Margin", self.margin, 0.0..=100.0, 2.0, " pt", move |v| Message::Option(t, "margin", v.to_string())),
+            ]
+            .spacing(8)
+            .width(Length::Fill),
+        ]
+        .spacing(14);
+        let mut content = column![];
+        if let (Some(thumb), Some(page)) = (closeup, self.closeup(file)) {
+            content = content.push(section("Close-up", [self.closeup_view(file, page, thumb)]));
+        }
+        content
+            .push(section(
                 "Text",
                 [
                     column![
@@ -213,16 +274,18 @@ impl ToolOptions for PageNumbers {
                     .spacing(5)
                     .into(),
                     column(preset_buttons).spacing(6).into(),
-                    labelled_slider("Size", self.size, 6.0..=36.0, 1.0, " pt", move |v| Message::Option(t, "size", v.to_string())),
-                    labelled_slider("Margin", self.margin, 0.0..=100.0, 2.0, " pt", move |v| Message::Option(t, "margin", v.to_string())),
-                    field("Colour", swatches(t, &TEXT_COLORS, self.color)),
+                    row![
+                        field("Colour", swatches(t, &TEXT_COLORS, self.color)),
+                        field("First number", text_input("1", &self.start_at).on_input(set(t, "start")).padding(8).width(70).style(theme::input)),
+                    ]
+                    .spacing(16)
+                    .into(),
                 ]
-            ),
-            section("Pages", [pages.into()]),
-            field("First number", text_input("1", &self.start_at).on_input(set(t, "start")).padding(8).style(theme::input)),
-        ]
-        .spacing(18)
-        .into()
+            ))
+            .push(section("Position", [position.into()]))
+            .push(section("Pages", [pages.into()]))
+            .spacing(18)
+            .into()
     }
 
     fn set(&mut self, key: &str, value: String, _file: &Single, _dialogs: &dyn Dialogs) {
@@ -239,6 +302,11 @@ impl ToolOptions for PageNumbers {
         }
     }
 
+    fn closeup(&self, file: &Single) -> Option<usize> {
+        file.loaded()?;
+        self.numbered(file).first().copied()
+    }
+
     fn tiles(&self, file: &Single) -> Vec<TileSpec> {
         let numbered = self.numbered(file);
         (1..=file.page_count())
@@ -246,7 +314,6 @@ impl ToolOptions for PageNumbers {
                 let excluded = file.excluded.contains(&page);
                 TileSpec {
                     page,
-                    label: format!("p. {page}"),
                     excluded,
                     dimmed: !excluded && !numbered.contains(&page),
                     ..Default::default()
@@ -430,7 +497,7 @@ impl ToolOptions for Watermark {
         ToolId::Watermark
     }
 
-    fn view<'a>(&'a self, _file: &'a Single) -> Element<'a, Message> {
+    fn view<'a>(&'a self, _file: &'a Single, _closeup: Option<&'a Thumb>) -> Element<'a, Message> {
         let t = ToolId::Watermark;
         let mut stamp = column![segmented(
             &[("text", "Text"), ("image", "Image")],
@@ -439,13 +506,26 @@ impl ToolOptions for Watermark {
         )]
         .spacing(10);
         if self.image_mode {
-            let chosen = self.image_path.as_deref().map(file_name);
-            stamp = stamp.push(action(
-                chosen.unwrap_or_else(|| "Choose image…".into()),
-                Some(icons::image()),
-                false,
-                Some(Message::Option(t, "choose-image", String::new())),
-            ));
+            // Choosing the image is the main step: a full-width button until
+            // there is one, then the name with a way to change it.
+            let choose = Message::Option(t, "choose-image", String::new());
+            let chooser: Element<'a, Message> = match self.image_path.as_deref().map(file_name) {
+                None => iced::widget::button(
+                    row![crate::widgets::icon(icons::image(), 16.0, Color::WHITE), text("Choose image…").font(crate::widgets::BOLD)]
+                        .spacing(7)
+                        .align_y(iced::Alignment::Center),
+                )
+                .width(Length::Fill)
+                .padding([9, 13])
+                .style(theme::primary)
+                .on_press(choose)
+                .into(),
+                Some(name) => row![text(name).font(crate::widgets::BOLD).width(Length::Fill), action("Change…", None, false, Some(choose))]
+                    .spacing(10)
+                    .align_y(iced::Alignment::Center)
+                    .into(),
+            };
+            stamp = stamp.push(chooser);
             stamp = stamp.push(match &self.image_error {
                 Some(e) => text(e.clone()).size(12).color(theme::ERROR).into(),
                 None => muted("PNG with transparency works best."),
@@ -467,8 +547,11 @@ impl ToolOptions for Watermark {
                         move |v| Message::Option(t, "font", v.into()),
                     ),
                 ))
-                .push(checkbox(self.bold).label("Bold").on_toggle(toggle(t, "bold")))
-                .push(field("Colour", swatches(t, &STAMP_COLORS, self.color)));
+                .push(
+                    row![field("Colour", swatches(t, &STAMP_COLORS, self.color)), checkbox(self.bold).label("Bold").on_toggle(toggle(t, "bold"))]
+                        .spacing(16)
+                        .align_y(iced::Alignment::End),
+                );
         }
         let mut pages = column![segmented(
             &[("all", "All pages"), ("custom", "Some pages")],
@@ -479,19 +562,23 @@ impl ToolOptions for Watermark {
         if self.custom {
             pages = pages.push(text_input("e.g. 1, 3-5", &self.pages_text).on_input(set(t, "pages")).padding(8).style(theme::input));
         }
+        let placement = row![
+            anchor_picker(t, self.anchor, true),
+            column![
+                labelled_slider("Size", self.width * 100.0, 5.0..=100.0, 1.0, "%", move |v| Message::Option(t, "width", v.to_string())),
+                labelled_slider("Angle", self.angle, -90.0..=90.0, 5.0, "°", move |v| Message::Option(t, "angle", v.to_string())),
+                labelled_slider("Opacity", self.opacity * 100.0, 5.0..=100.0, 5.0, "%", move |v| Message::Option(t, "opacity", v.to_string())),
+            ]
+            .spacing(8)
+            .width(Length::Fill),
+        ]
+        .spacing(14);
         column![
             section("Watermark", [stamp.into()]),
             section(
                 "Placement",
-                [
-                    anchor_picker(t, self.anchor, true),
-                    labelled_slider("Size", self.width * 100.0, 5.0..=100.0, 1.0, "% of width", move |v| Message::Option(t, "width", v.to_string())),
-                    labelled_slider("Angle", self.angle, -90.0..=90.0, 5.0, "°", move |v| Message::Option(t, "angle", v.to_string())),
-                    labelled_slider("Opacity", self.opacity * 100.0, 5.0..=100.0, 5.0, "%", move |v| Message::Option(t, "opacity", v.to_string())),
-                    checkbox(self.under).label("Behind page content").on_toggle(toggle(t, "under")).into(),
-                ]
+                [placement.into(), checkbox(self.under).label("Behind page content").on_toggle(toggle(t, "under")).into(), pages.into()]
             ),
-            section("Pages", [pages.into()]),
         ]
         .spacing(18)
         .into()
@@ -539,7 +626,6 @@ impl ToolOptions for Watermark {
                 let excluded = file.excluded.contains(&page);
                 TileSpec {
                     page,
-                    label: format!("p. {page}"),
                     excluded,
                     dimmed: !excluded && stamped.as_ref().is_some_and(|s| !s.contains(&page)),
                     ..Default::default()

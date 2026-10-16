@@ -78,6 +78,10 @@ pub struct PdfInfo {
     pub encrypted: bool,
     pub file_size: u64,
     pub metadata: Metadata,
+    /// Images in the file and their stored size, which is what lossy
+    /// compression can shrink.
+    pub images: usize,
+    pub image_bytes: u64,
 }
 
 pub fn inspect(path: &Path) -> Result<PdfInfo, Error> {
@@ -93,6 +97,14 @@ pub fn inspect(path: &Path) -> Result<PdfInfo, Error> {
         encrypted: doc.encryption_state.is_some(),
         file_size,
         metadata: metadata::read(&doc),
+        images: doc.objects.values().filter(|o| image_data::is_image(o)).count(),
+        image_bytes: doc
+            .objects
+            .values()
+            .filter(|o| image_data::is_image(o))
+            .filter_map(|o| o.as_stream().ok())
+            .map(|s| s.content.len() as u64)
+            .sum(),
     })
 }
 

@@ -70,7 +70,14 @@ pub trait ToolOptions {
     fn id(&self) -> ToolId;
 
     /// The options panel; changes come back through [`ToolOptions::set`].
-    fn view<'a>(&'a self, file: &'a Single) -> Element<'a, Message>;
+    /// `closeup` is the page asked for by [`ToolOptions::closeup`], rendered
+    /// [`CLOSEUP_WIDTH`] wide.
+    fn view<'a>(&'a self, file: &'a Single, closeup: Option<&'a crate::previews::Thumb>) -> Element<'a, Message>;
+
+    /// A page to render large for a close-up in the options panel.
+    fn closeup(&self, _file: &Single) -> Option<usize> {
+        None
+    }
 
     fn set(&mut self, key: &str, value: String, file: &Single, dialogs: &dyn Dialogs);
 
@@ -84,7 +91,6 @@ pub trait ToolOptions {
             .map(|page| TileSpec {
                 page,
                 rotation: self.rotation(page),
-                label: format!("p. {page}"),
                 excluded: file.excluded.contains(&page),
                 ..Default::default()
             })
@@ -154,6 +160,9 @@ pub trait ToolOptions {
     fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job>;
 }
 
+/// Width of the page rendered for close-ups.
+pub const CLOSEUP_WIDTH: u32 = 1200;
+
 /// Asks where to save, suggesting `<input>-<suffix>.pdf` next to the input.
 pub fn choose_output(dialogs: &dyn Dialogs, file: &Single, suffix: &str) -> Option<PathBuf> {
     let input = file.path()?;
@@ -220,7 +229,10 @@ impl Single {
                 Some("Every page is left out — tick at least one to keep it.".into())
             }
             FileState::Ready(_) => None,
-            _ => Some("Choose a PDF to get started.".into()),
+            FileState::Failed { locked: true, .. } => Some("Unlock the file first — use “Unlock…” above.".into()),
+            FileState::Failed { .. } => Some("This file can’t be opened. Choose another one.".into()),
+            FileState::Loading(_) => Some("Reading the file…".into()),
+            FileState::Empty => Some("Choose a PDF to get started.".into()),
         }
     }
 }

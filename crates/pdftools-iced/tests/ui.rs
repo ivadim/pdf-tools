@@ -152,10 +152,12 @@ impl Harness {
 fn screens_render() {
     let mut h = Harness::new("screens");
     h.screenshot("home");
-    assert!(h.shows("FULL TOOL CATALOG"));
+    assert!(h.shows("MORE TOOLS") && h.shows("What would you like to do?"));
 
     h.click("About");
     assert_eq!(h.app.screen, Screen::About);
+    h.click("Copy");
+    assert!(h.shows("Copied"));
     h.click("GitHub");
     assert_eq!(*h.dialogs.opened_urls.borrow(), ["https://github.com/ivadim/pdf-tools"]);
     h.screenshot("about");
@@ -163,9 +165,10 @@ fn screens_render() {
     h.click("Compress");
     h.screenshot("compress-empty");
     h.dialogs.open(&[&fixture("tracemonkey.pdf")]);
-    h.click("Choose a PDF");
+    h.click("Choose a PDF…");
     h.render_pages(ToolId::Compress, 14);
     h.screenshot("compress");
+    assert!(h.shows("Images are only 98 KB of this file (10%), so even Strong won’t shrink it much."));
     let out = h.out("small.pdf");
     assert!(h.run("Compress PDF…", Some(&out)).contains("Saved as"));
     assert_eq!(page_count(&out), 14);
@@ -180,6 +183,7 @@ fn single_file_tools() {
     h.render_pages(ToolId::Split, 14);
     h.screenshot("split");
     assert!(h.shows("File 1") && h.shows("File 2"));
+    assert!(h.shows("2 files: 7 + 7 pages"));
     h.option(ToolId::Split, "ranges", "1-3, 40");
     assert!(h.shows("“40” is outside 1–14"));
     h.option(ToolId::Split, "ranges", "1-2, 3");
@@ -193,7 +197,7 @@ fn single_file_tools() {
     h.send(Message::Tile(ToolId::Split, 1, TileEvent::View));
     h.send(Message::Tile(ToolId::Split, 3, TileEvent::View));
     let out = h.out("extract.pdf");
-    assert!(h.run("Split PDF…", Some(&out)).contains("Extracted 2 pages"));
+    assert!(h.run("Extract pages…", Some(&out)).contains("Extracted 2 pages"));
     assert_eq!(page_count(&out), 2);
 
     // Rotate pages and save; the viewer rotates too.
@@ -204,9 +208,11 @@ fn single_file_tools() {
     h.send(Message::ViewerRotate(-90));
     h.render_pages(ToolId::Rotate, 3);
     h.screenshot("rotate-viewer");
-    assert!(h.shows("Page 2 of 3 · rotated 270°"));
+    assert!(h.shows("Page 2 of 3 · rotated 270° · scroll to zoom"));
+    h.send(Message::ViewerStep(1));
+    h.click("Leave this page out");
+    assert!(h.shows("Put this page back"));
     h.send(Message::CloseViewer);
-    h.send(Message::Tile(ToolId::Rotate, 2, TileEvent::ToggleInclude));
     let out = h.out("rotated.pdf");
     assert!(h.run("Save rotated PDF…", Some(&out)).contains("Rotated 2 pages (1 page removed)"));
     assert_eq!(rotations(&out), [90, 270]);
@@ -223,6 +229,8 @@ fn single_file_tools() {
     // Protect, then Unlock with the password.
     h.choose(ToolId::Protect, &fixture("sizes.pdf"));
     h.option(ToolId::Protect, "password", "s3cret");
+    assert!(h.shows("Weak password — use 8 or more characters, mixing letters and numbers"));
+    h.option(ToolId::Protect, "confirm", "s3");
     assert!(h.shows("The passwords don’t match."));
     h.option(ToolId::Protect, "confirm", "s3cret");
     let locked = h.out("locked.pdf");
@@ -230,6 +238,7 @@ fn single_file_tools() {
     assert!(pdftools_core::inspect(&locked).unwrap().needs_password);
     h.choose(ToolId::Compress, &locked);
     assert!(h.shows("This file is password-protected."));
+    assert!(h.shows("Unlock the file first — use “Unlock…” above."));
     h.click("Unlock…");
     assert_eq!(h.app.screen, Screen::Tool(ToolId::Unlock));
     h.option(ToolId::Unlock, "password", "s3cret");
@@ -276,7 +285,7 @@ fn merge_and_images() {
     assert!(h.shows("Add PDF files to get started."));
     std::fs::write(h.out("notes.txt"), "text").unwrap();
     h.dialogs.open(&[&fixture("sizes.pdf"), &fixture("rotation.pdf"), &h.out("notes.txt")]);
-    h.click("Add files…");
+    h.click("Add PDF files…");
     assert_eq!(h.app.merge.entries.len(), 2, "only PDFs are added");
     for i in 0..5 {
         h.send(Message::Merge(merge::Msg::Tile(i, TileEvent::Shown)));
@@ -287,7 +296,7 @@ fn merge_and_images() {
     h.send(Message::Merge(merge::Msg::Tile(0, TileEvent::RotateRight)));
     h.send(Message::Merge(merge::Msg::Tile(1, TileEvent::ToggleInclude)));
     let out = h.out("merged.pdf");
-    assert!(h.run("Merge files…", Some(&out)).contains("Saved 4 pages from 2 files (1 page left out)"));
+    assert!(h.run("Merge PDFs…", Some(&out)).contains("Saved 4 pages from 2 files (1 page left out)"));
     assert_eq!(page_count(&out), 4);
 
     h.click("Images to PDF");
@@ -322,7 +331,7 @@ fn signature() {
         h.option(ToolId::Signature, key, at);
     }
     assert!(h.shows("Add the signature to a page."));
-    h.click("Every page");
+    h.click("Add to all 3 pages");
     assert!(h.shows("Page 1 of 3 · 1 signature"));
     // Drag the box to the top left, as the page stage reports it.
     h.option(ToolId::Signature, "box", "1,0.05,0.05,0.4");
@@ -333,4 +342,51 @@ fn signature() {
     let out = h.out("signed.pdf");
     assert!(h.run("Sign PDF…", Some(&out)).contains("Signed 2 pages"));
     assert!(content(&out, 1).contains("PdfToolsSig") && !content(&out, 2).contains("PdfToolsSig"));
+}
+
+/// Screenshots of every page in a typical state, for design reviews:
+/// `cargo test -p pdftools-iced --test ui tour -- --ignored`.
+#[test]
+#[ignore]
+fn tour() {
+    let mut h = Harness::new("tour");
+    h.click("Merge");
+    h.screenshot("tour-merge-empty");
+    h.click("Images to PDF");
+    h.screenshot("tour-images-empty");
+    for (tool, file, pages, name) in [
+        (ToolId::Protect, "sizes.pdf", 3, "protect"),
+        (ToolId::Rearrange, "tracemonkey.pdf", 8, "rearrange"),
+        (ToolId::Metadata, "tracemonkey.pdf", 8, "metadata"),
+        (ToolId::Grayscale, "canvas.pdf", 1, "grayscale"),
+        (ToolId::Rotate, "rotation.pdf", 2, "rotate"),
+    ] {
+        h.choose(tool, &fixture(file));
+        h.render_pages(tool, pages);
+        h.screenshot(&format!("tour-{name}"));
+    }
+    h.option(ToolId::Protect, "password", "pw");
+    let locked = h.out("locked.pdf");
+    h.choose(ToolId::Protect, &fixture("sizes.pdf"));
+    h.option(ToolId::Protect, "password", "pw");
+    h.option(ToolId::Protect, "confirm", "pw");
+    h.run("Protect PDF…", Some(&locked));
+    h.screenshot("tour-protect-done");
+    h.choose(ToolId::Compress, &locked);
+    h.screenshot("tour-locked-file");
+    h.click("Unlock…");
+    h.screenshot("tour-unlock");
+    h.choose(ToolId::Split, &fixture("tracemonkey.pdf"));
+    h.option(ToolId::Split, "mode", "extract");
+    h.render_pages(ToolId::Split, 8);
+    h.send(Message::Tile(ToolId::Split, 1, TileEvent::View));
+    h.send(Message::Tile(ToolId::Split, 2, TileEvent::View));
+    h.screenshot("tour-split-extract");
+    h.choose(ToolId::Watermark, &fixture("tracemonkey.pdf"));
+    h.option(ToolId::Watermark, "kind", "image");
+    h.screenshot("tour-watermark-image");
+    h.choose(ToolId::Signature, &fixture("sizes.pdf"));
+    h.option(ToolId::Signature, "source", "type");
+    h.option(ToolId::Signature, "name", "Ada Lovelace");
+    h.screenshot("tour-signature-type");
 }

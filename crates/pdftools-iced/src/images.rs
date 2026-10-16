@@ -20,7 +20,7 @@ use crate::merge::{natural_key, Context, Effect};
 use crate::single::{file_name, plural, Overlay};
 use crate::theme;
 use crate::tools::move_item;
-use crate::widgets::{self, action, icon_button, muted, run_bar, section, section_title, segmented, Caps, Run, Tile, TileEvent};
+use crate::widgets::{self, action, muted, run_bar, section, section_title, segmented, Caps, Run, Tile, TileEvent};
 
 /// Longest side of preview thumbnails, in pixels.
 const THUMB_SIZE: u32 = 360;
@@ -323,14 +323,17 @@ impl Images {
         let tiles = self.tiles();
         let busy = self.run.busy();
         let wrap = Message::Images;
-        let header = row![
-            container(widgets::tool_header(catalog::info(ToolId::Images))).width(Length::Fill),
-            action("Sort by name", Some(icons::sort()), false, (!busy && self.entries.len() > 1).then_some(wrap(Msg::Sort))),
-            action("Clear", Some(icons::trash()), false, (!busy && !self.entries.is_empty()).then_some(wrap(Msg::Clear))),
-            action("Add images…", Some(icons::plus()), true, (!busy).then_some(wrap(Msg::Add))),
-        ]
-        .spacing(8)
-        .align_y(Alignment::Center);
+        let mut header = row![container(widgets::tool_header(catalog::info(ToolId::Images))).width(Length::Fill)]
+            .spacing(8)
+            .align_y(Alignment::Center);
+        if self.entries.len() > 1 {
+            header = header.push(action("Sort by name", Some(icons::sort()), false, (!busy).then_some(wrap(Msg::Sort))));
+        }
+        if !self.entries.is_empty() {
+            header = header
+                .push(action("Clear", Some(icons::trash()), false, (!busy).then_some(wrap(Msg::Clear))))
+                .push(action("Add images…", Some(icons::plus()), true, (!busy).then_some(wrap(Msg::Add))));
+        }
 
         let size = match self.layout.page_size {
             PageSize::A4 => "a4",
@@ -371,29 +374,21 @@ impl Images {
 
         let count = tiles.len();
         let any = count > 0 && !busy;
-        let grid_header = row![
+        let mut grid_header = row![
             section_title("Pages"),
             text(if count == 0 { String::new() } else { plural(count, "image") }).color(theme::MUTED).width(Length::Fill),
-            icon_button(icons::rotate_ccw(), "Rotate all images left", 30.0, any.then_some(wrap(Msg::RotateAll(-90)))),
-            icon_button(icons::rotate_cw(), "Rotate all images right", 30.0, any.then_some(wrap(Msg::RotateAll(90)))),
         ]
         .spacing(10)
         .align_y(Alignment::Center)
         .padding(Padding { top: 0.0, right: 10.0, bottom: 0.0, left: 14.0 })
         .height(46);
+        if count > 0 {
+            grid_header = grid_header
+                .push(widgets::small_action("Rotate all left", icons::rotate_ccw(), any.then_some(wrap(Msg::RotateAll(-90)))))
+                .push(widgets::small_action("Rotate all right", icons::rotate_cw(), any.then_some(wrap(Msg::RotateAll(90)))));
+        }
         let body: Element<'_, Message> = if tiles.is_empty() {
-            container(
-                column![
-                    widgets::icon(icons::upload(), 36.0, theme::MUTED),
-                    text("Drop JPEG or PNG images here"),
-                    muted("or"),
-                    action("Add images", Some(icons::plus()), true, Some(wrap(Msg::Add))),
-                ]
-                .spacing(8)
-                .align_x(Alignment::Center),
-            )
-            .center(Length::Fill)
-            .into()
+            crate::app::drop_zone("Drop JPEG or PNG images here", "or anywhere on the window", "Add images…", Some(wrap(Msg::Add)))
         } else {
             let caps = Caps { rotate: true, delete: true, reorder: true, ..Default::default() };
             widgets::page_grid(tiles, caps, busy, "", move |i, e| wrap(Msg::Tile(i, e)))

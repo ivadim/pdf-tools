@@ -45,14 +45,22 @@ fn credit<'a>(name: &'a str, purpose: &'a str, url: &str) -> Element<'a, Message
     row![container(link(name, url.into())).width(140), muted(purpose)].align_y(Alignment::Center).into()
 }
 
-pub fn view<'a>() -> Element<'a, Message> {
+pub fn view<'a>(copied: bool) -> Element<'a, Message> {
     let logo = image::Handle::from_bytes(include_bytes!("../../../packaging/icon-256.png").as_slice());
     let content = column![
         row![
             image(logo).width(96).height(96),
             column![
                 text("PDF Tools").size(28).font(BOLD),
-                text(format!("Version {} · {}", env!("CARGO_PKG_VERSION"), platform())).color(theme::MUTED),
+                row![
+                    text(format!("Version {} · {}", env!("CARGO_PKG_VERSION"), platform())).color(theme::MUTED),
+                    button(text(if copied { "Copied" } else { "Copy" }).size(13))
+                        .padding(0)
+                        .style(theme::link)
+                        .on_press(Message::CopyVersion),
+                ]
+                .spacing(10)
+                .align_y(Alignment::Center),
                 text("Merge, split, protect and edit PDFs — on your computer."),
             ]
             .spacing(4),

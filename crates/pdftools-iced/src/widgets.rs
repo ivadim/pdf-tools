@@ -72,6 +72,16 @@ pub fn action<'a, M: Clone + 'a>(
         .into()
 }
 
+/// A compact button with an icon and a label, for headers and toolbars.
+pub fn small_action<'a, M: Clone + 'a>(label: &'a str, handle: Handle, on_press: Option<M>) -> Element<'a, M> {
+    let color = if on_press.is_some() { theme::TEXT } else { Color { a: 0.4, ..theme::TEXT } };
+    button(row![icon(handle, 14.0, color), text(label).size(13).color(color)].spacing(5).align_y(Alignment::Center))
+        .padding([4, 9])
+        .style(theme::secondary)
+        .on_press_maybe(on_press)
+        .into()
+}
+
 /// Mutually exclusive options side by side.
 pub fn segmented<'a, M: Clone + 'a>(
     options: &[(&'static str, &'static str)],
@@ -273,6 +283,8 @@ fn tile_view<'a, M: Clone + 'a>(
             let mut style = theme::page(t);
             if selected {
                 style.border = iced::Border { width: 3.0, color: theme::ACCENT, radius: 2.0.into() };
+            } else if blank.is_some() {
+                style.border = iced::Border { width: 1.0, color: theme::BORDER, radius: 0.0.into() };
             }
             style
         });
@@ -289,6 +301,18 @@ fn tile_view<'a, M: Clone + 'a>(
                     ..Default::default()
                 }),
         ));
+    }
+    if tile.selected {
+        base = base.push(
+            container(
+                container(icon(icons::check(), 14.0, Color::WHITE)).center(22).style(|_| container::Style {
+                    background: Some(theme::ACCENT.into()),
+                    border: iced::border::rounded(11),
+                    ..Default::default()
+                }),
+            )
+            .padding(6),
+        );
     }
     if tile.dimmed {
         // Fades the page into the grid background.
@@ -348,10 +372,20 @@ fn tile_view<'a, M: Clone + 'a>(
         number = number.push(container(text(format!("{}°", tile.rotation)).size(11)).padding([1, 6]).style(theme::badge));
     }
     if let Some(badge) = tile.badge {
-        number = number.push(container(text(badge).size(11)).padding([1, 6]).style(theme::badge));
+        // A coloured badge (Split's output files) when the tile has a colour.
+        let tint = tile.stripe;
+        number = number.push(container(text(badge).size(11)).padding([1, 6]).style(move |t| match tint {
+            Some(c) => container::Style {
+                background: Some(Color { a: 0.15, ..c }.into()),
+                text_color: Some(c),
+                border: iced::border::rounded(6),
+                ..Default::default()
+            },
+            None => theme::badge(t),
+        }));
     }
     let mut label = row![].spacing(5).align_y(Alignment::Center);
-    if let Some(stripe) = tile.stripe {
+    if let (Some(stripe), false) = (tile.stripe, tile.label.is_empty()) {
         label = label.push(container(space()).width(8).height(8).style(move |_| container::Style {
             background: Some(stripe.into()),
             border: iced::border::rounded(2),
@@ -370,7 +404,7 @@ fn tile_view<'a, M: Clone + 'a>(
 }
 
 /// What a tool will add to the page, drawn over a `w` × `h` preview.
-fn overlay_view<'a, M: 'a>(overlay: &Overlay, w: f32, h: f32) -> Element<'a, M> {
+pub fn overlay_view<'a, M: 'a>(overlay: &Overlay, w: f32, h: f32) -> Element<'a, M> {
     match overlay {
         Overlay::Text { text: content, x, y, align_x, align_y, size, color } => {
             let font = (size * w).max(1.0);

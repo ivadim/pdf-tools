@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use iced::keyboard::Modifiers;
-use iced::widget::{column, text_input};
+use iced::widget::{column, row, text, text_input};
 use iced::{color, Color, Element};
 use pdftools_core::organize::{split_file, SplitPart};
 use pdftools_core::PageSpec;
@@ -11,6 +11,7 @@ use pdftools_render::ranges::{format_list, parse_groups};
 
 use super::set;
 use crate::app::Message;
+use crate::previews::Thumb;
 use crate::catalog::ToolId;
 use crate::dialogs::Dialogs;
 use crate::icons;
@@ -78,12 +79,26 @@ impl Split {
     }
 }
 
+impl Split {
+    /// "2 files: 7 + 7 pages", or what's selected.
+    fn summary(&self) -> Option<String> {
+        let parts = self.parts().ok().filter(|p| !p.is_empty())?;
+        let sizes: Vec<usize> = parts.iter().map(Vec::len).collect();
+        Some(if sizes.iter().all(|s| *s == sizes[0]) && sizes.len() > 3 {
+            format!("{} files of {} each", sizes.len(), plural(sizes[0], "page"))
+        } else {
+            let list: Vec<String> = sizes.iter().map(usize::to_string).collect();
+            format!("{}: {} pages", plural(sizes.len(), "file"), list.join(" + "))
+        })
+    }
+}
+
 impl ToolOptions for Split {
     fn id(&self) -> ToolId {
         ToolId::Split
     }
 
-    fn view<'a>(&'a self, _file: &'a Single) -> Element<'a, Message> {
+    fn view<'a>(&'a self, _file: &'a Single, _closeup: Option<&'a Thumb>) -> Element<'a, Message> {
         let t = ToolId::Split;
         let selected = match self.mode {
             Mode::Ranges => "ranges",
@@ -118,6 +133,9 @@ impl ToolOptions for Split {
                 content = content.push(muted("Click pages in the preview to select them. Shift-click selects a range, Ctrl-click toggles."));
             }
             Mode::Each => {}
+        }
+        if let (Some(summary), true) = (self.summary(), self.mode != Mode::Extract) {
+            content = content.push(text(summary).size(13).color(theme::ACCENT));
         }
         if self.mode != Mode::Extract {
             content = content.push(column![
@@ -154,7 +172,7 @@ impl ToolOptions for Split {
         let parts = self.parts().unwrap_or_default();
         (1..=file.page_count())
             .map(|page| {
-                let tile = TileSpec { page, label: format!("p. {page}"), ..Default::default() };
+                let tile = TileSpec { page, ..Default::default() };
                 if self.mode == Mode::Extract {
                     let selected = self.selected.contains(&page);
                     return TileSpec { selected, dimmed: !self.selected.is_empty() && !selected, ..tile };
@@ -231,7 +249,11 @@ impl ToolOptions for Split {
     }
 
     fn run_label(&self) -> &'static str {
-        "Split PDF…"
+        if self.mode == Mode::Extract {
+            "Extract pages…"
+        } else {
+            "Split PDF…"
+        }
     }
 
     fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {
@@ -302,7 +324,7 @@ impl ToolOptions for Rearrange {
         ToolId::Rearrange
     }
 
-    fn view<'a>(&'a self, _file: &'a Single) -> Element<'a, Message> {
+    fn view<'a>(&'a self, _file: &'a Single, _closeup: Option<&'a Thumb>) -> Element<'a, Message> {
         muted("Move pages with the arrows on each page, or duplicate and delete them. Reverse or reset the order with the buttons above the pages.")
     }
 
@@ -318,7 +340,7 @@ impl ToolOptions for Rearrange {
             .enumerate()
             .map(|(i, &page)| TileSpec {
                 page,
-                label: if page == i + 1 { format!("p. {page}") } else { format!("was p. {page}") },
+                label: if page == i + 1 { String::new() } else { format!("was p. {page}") },
                 ..Default::default()
             })
             .collect()
@@ -417,22 +439,24 @@ impl ToolOptions for Metadata {
         ToolId::Metadata
     }
 
-    fn view<'a>(&'a self, file: &'a Single) -> Element<'a, Message> {
+    fn view<'a>(&'a self, file: &'a Single, _closeup: Option<&'a Thumb>) -> Element<'a, Message> {
         if file.loaded().is_none() {
             return column![].into();
         }
         let fields = FIELDS.iter().zip(&self.values).map(|((key, label, placeholder), value)| {
             field(label, input(placeholder, value, set(ToolId::Metadata, key)))
         });
+        let clear = iced::widget::button(text("Clear all").size(13))
+            .padding(0)
+            .style(theme::link)
+            .on_press(Message::Option(ToolId::Metadata, "clear", String::new()));
         column![
-            section("Document properties", fields),
-            section(
-                "Dates",
-                [muted(format!("Created: {}", self.dates[0])), muted(format!("Modified: {}", self.dates[1]))]
-            ),
-            crate::widgets::action("Clear all fields", Some(icons::trash()), false, Some(Message::Option(ToolId::Metadata, "clear", String::new()))),
+            row![crate::widgets::section_title("Document properties"), iced::widget::space::horizontal(), clear]
+                .align_y(iced::Alignment::Center),
+            muted(format!("Created {} · Modified {}", self.dates[0], self.dates[1])),
+            column(fields).spacing(10),
         ]
-        .spacing(18)
+        .spacing(10)
         .into()
     }
 

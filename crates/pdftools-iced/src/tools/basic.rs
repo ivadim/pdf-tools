@@ -1,7 +1,7 @@
 //! Compress, Grayscale, Rotate, Protect and Unlock.
 
-use iced::widget::{checkbox, column, text, text_input};
-use iced::Element;
+use iced::widget::{checkbox, column, row, text, text_input};
+use iced::{Alignment, Element, Length};
 use pdftools_core::compress::{compress_document, Level};
 use pdftools_core::grayscale::grayscale_document;
 use pdftools_core::security::{protect_document, Protection};
@@ -9,12 +9,13 @@ use pdftools_core::PageSpec;
 
 use super::{set, toggle};
 use crate::app::Message;
+use crate::previews::Thumb;
 use crate::catalog::ToolId;
 use crate::icons;
 use crate::dialogs::Dialogs;
 use crate::single::{choose_output, edit, format_bytes, plural, Job, Single, ToolOptions};
 use crate::theme;
-use crate::widgets::{card_options, field, muted, section, Caps, TileEvent};
+use crate::widgets::{card_options, field, icon_button, muted, section, Caps, TileEvent};
 
 // ── Compress ─────────────────────────────────────────────────────────────
 
@@ -33,7 +34,7 @@ impl ToolOptions for Compress {
         ToolId::Compress
     }
 
-    fn view<'a>(&'a self, _file: &'a Single) -> Element<'a, Message> {
+    fn view<'a>(&'a self, file: &'a Single, _closeup: Option<&'a Thumb>) -> Element<'a, Message> {
         let selected = match self.level {
             Level::Lossless => "lossless",
             Level::Balanced => "balanced",
@@ -49,7 +50,7 @@ impl ToolOptions for Compress {
                 ],
                 selected,
                 |v| Message::Option(ToolId::Compress, "level", v.into()),
-            )],
+            ), estimate(file)],
         )
     }
 
@@ -95,6 +96,30 @@ impl ToolOptions for Compress {
     }
 }
 
+/// What compression can work with: the share of the file that's images.
+fn estimate<'a>(file: &Single) -> Element<'a, Message> {
+    let Some(info) = file.loaded().map(|f| &f.info) else { return column![].into() };
+    let share = if info.file_size > 0 { info.image_bytes as f64 / info.file_size as f64 } else { 0.0 };
+    let text_of = if info.images == 0 {
+        "There are no images in this file, so only Lossless clean-up applies; savings will be small.".to_owned()
+    } else if share < 0.2 {
+        format!(
+            "Images are only {} of this file ({:.0}%), so even Strong won’t shrink it much.",
+            format_bytes(info.image_bytes),
+            share * 100.0
+        )
+    } else {
+        format!(
+            "{} make up {} of {} ({:.0}%). Balanced and Strong re-encode these; that’s where the savings are.",
+            plural(info.images, "image"),
+            format_bytes(info.image_bytes),
+            format_bytes(info.file_size),
+            share * 100.0
+        )
+    };
+    text(text_of).size(13).color(theme::ACCENT).into()
+}
+
 // ── Grayscale ────────────────────────────────────────────────────────────
 
 pub struct Grayscale {
@@ -112,7 +137,7 @@ impl ToolOptions for Grayscale {
         ToolId::Grayscale
     }
 
-    fn view<'a>(&'a self, _file: &'a Single) -> Element<'a, Message> {
+    fn view<'a>(&'a self, _file: &'a Single, _closeup: Option<&'a Thumb>) -> Element<'a, Message> {
         section(
             "Options",
             [
@@ -173,7 +198,7 @@ impl ToolOptions for Rotate {
         ToolId::Rotate
     }
 
-    fn view<'a>(&'a self, _file: &'a Single) -> Element<'a, Message> {
+    fn view<'a>(&'a self, _file: &'a Single, _closeup: Option<&'a Thumb>) -> Element<'a, Message> {
         muted("Turn pages with the buttons on each page, or all at once with the buttons above them.")
     }
 
@@ -246,6 +271,7 @@ impl ToolOptions for Rotate {
 // ── Protect ──────────────────────────────────────────────────────────────
 
 pub struct Protect {
+    show: bool,
     password: String,
     confirm: String,
     owner: String,
@@ -255,7 +281,7 @@ pub struct Protect {
 
 impl Default for Protect {
     fn default() -> Self {
-        Self { password: String::new(), confirm: String::new(), owner: String::new(), allow: [true; 4] }
+        Self { show: false, password: String::new(), confirm: String::new(), owner: String::new(), allow: [true; 4] }
     }
 }
 
@@ -264,18 +290,37 @@ impl ToolOptions for Protect {
         ToolId::Protect
     }
 
-    fn view<'a>(&'a self, _file: &'a Single) -> Element<'a, Message> {
+    fn view<'a>(&'a self, _file: &'a Single, _closeup: Option<&'a Thumb>) -> Element<'a, Message> {
         let t = ToolId::Protect;
         let secret = |placeholder: &'a str, value: &'a str, key: &'static str| {
-            text_input(placeholder, value).secure(true).on_input(set(t, key)).padding(8).style(theme::input)
+            text_input(placeholder, value)
+                .secure(!self.show)
+                .on_input(set(t, key))
+                .on_submit(Message::Run(t))
+                .padding(8)
+                .style(theme::input)
         };
+        let (eye, eye_label) = if self.show { (icons::eye_off(), "Hide passwords") } else { (icons::eye(), "Show passwords") };
+        let mut password = column![
+            row![
+                secret("Password", &self.password, "password").width(Length::Fill),
+                icon_button(eye, eye_label, 34.0, Some(Message::Option(t, "show", if self.show { "0" } else { "1" }.into()))),
+            ]
+            .spacing(6)
+            .align_y(Alignment::Center),
+        ]
+        .spacing(5);
+        if let Some((label, color)) = strength(&self.password) {
+            password = password.push(text(label).size(12).color(color));
+        }
+        let mut confirm = column![secret("Password again", &self.confirm, "confirm")].spacing(5);
+        if !self.confirm.is_empty() && self.confirm != self.password {
+            confirm = confirm.push(text("The passwords don’t match.").size(12).color(theme::ERROR));
+        }
         column![
             section(
                 "Password",
-                [
-                    field("Password to open the file", secret("Password", &self.password, "password")),
-                    field("Repeat the password", secret("Password again", &self.confirm, "confirm")),
-                ]
+                [field("Password to open the file", password), field("Repeat the password", confirm)]
             ),
             section(
                 "Permissions",
@@ -296,6 +341,7 @@ impl ToolOptions for Protect {
     fn set(&mut self, key: &str, value: String, _file: &Single, _dialogs: &dyn Dialogs) {
         let on = value == "1";
         match key {
+            "show" => self.show = value == "1",
             "password" => self.password = value,
             "confirm" => self.confirm = value,
             "owner" => self.owner = value,
@@ -340,6 +386,30 @@ impl ToolOptions for Protect {
     }
 }
 
+/// A rough guide to a password's strength.
+fn strength(password: &str) -> Option<(&'static str, iced::Color)> {
+    if password.is_empty() {
+        return None;
+    }
+    let kinds = [
+        password.chars().any(|c| c.is_lowercase()),
+        password.chars().any(|c| c.is_uppercase()),
+        password.chars().any(|c| c.is_ascii_digit()),
+        password.chars().any(|c| !c.is_alphanumeric()),
+    ]
+    .iter()
+    .filter(|k| **k)
+    .count();
+    let length = password.chars().count();
+    Some(if length >= 12 && kinds >= 3 {
+        ("Strong password", theme::SUCCESS)
+    } else if length >= 8 && kinds >= 2 {
+        ("Fair password — longer is stronger", iced::color!(0xc77c12))
+    } else {
+        ("Weak password — use 8 or more characters, mixing letters and numbers", theme::ERROR)
+    })
+}
+
 // ── Unlock ───────────────────────────────────────────────────────────────
 
 #[derive(Default)]
@@ -352,7 +422,7 @@ impl ToolOptions for Unlock {
         ToolId::Unlock
     }
 
-    fn view<'a>(&'a self, file: &'a Single) -> Element<'a, Message> {
+    fn view<'a>(&'a self, file: &'a Single, _closeup: Option<&'a Thumb>) -> Element<'a, Message> {
         let Some(loaded) = file.loaded() else { return column![].into() };
         if !loaded.info.encrypted {
             return section("Nothing to unlock", [muted("This file has no password or restrictions.")]);
@@ -365,6 +435,7 @@ impl ToolOptions for Unlock {
                     text_input("Password", &self.password)
                         .secure(true)
                         .on_input(set(ToolId::Unlock, "password"))
+                        .on_submit(Message::Run(ToolId::Unlock))
                         .padding(8)
                         .style(theme::input),
                 )],
@@ -390,6 +461,17 @@ impl ToolOptions for Unlock {
 
     fn allow_locked(&self) -> bool {
         true
+    }
+
+    fn empty_text(&self, file: &Single) -> Option<&'static str> {
+        let info = &file.loaded()?.info;
+        Some(if info.needs_password {
+            "This file needs its password to open. Enter it on the left and choose “Unlock PDF…” to save an unlocked copy."
+        } else if info.encrypted {
+            "This file opens without a password but restricts printing, copying or editing."
+        } else {
+            "This file isn’t protected."
+        })
     }
 
     fn validate(&self, file: &Single) -> Option<String> {

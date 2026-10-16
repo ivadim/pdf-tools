@@ -148,7 +148,7 @@ impl ToolOptions for Signature {
         T
     }
 
-    fn view<'a>(&'a self, file: &'a Single) -> Element<'a, Message> {
+    fn view<'a>(&'a self, file: &'a Single, _closeup: Option<&'a Thumb>) -> Element<'a, Message> {
         let source = match self.source {
             Source::Draw => "draw",
             Source::Type => "type",
@@ -207,11 +207,24 @@ impl ToolOptions for Signature {
                 .into()
         }))
         .spacing(6);
-        let mut content = column![section(
-            "Signature",
-            [segmented(&[("draw", "Draw"), ("type", "Type"), ("upload", "Image")], source, |v| Message::Option(T, "source", v.into())), input]
-        )]
-        .spacing(18);
+        let mut signature = column![
+            segmented(&[("draw", "Draw"), ("type", "Type"), ("upload", "Image")], source, |v| Message::Option(T, "source", v.into())),
+            input,
+        ]
+        .spacing(10);
+        // Typed and uploaded signatures are shown as they'll be placed.
+        if self.source != Source::Draw {
+            if let Some((_, _, handle)) = &self.signature {
+                signature = signature.push(
+                    container(image(handle.clone()).height(64))
+                        .width(Length::Fill)
+                        .center_x(Length::Fill)
+                        .padding(10)
+                        .style(theme::drop_zone(false)),
+                );
+            }
+        }
+        let mut content = column![section("Signature", [signature.into()])].spacing(18);
         if self.source != Source::Upload {
             content = content.push(field("Ink", inks));
         }
@@ -221,7 +234,12 @@ impl ToolOptions for Signature {
             [
                 row![
                     action("Add to this page", Some(icons::plus()), true, ready.then(|| Message::Option(T, "add", String::new()))),
-                    action("Every page", None, false, ready.then(|| Message::Option(T, "add-every", String::new()))),
+                    action(
+                        if self.pages > 1 { format!("Add to all {} pages", self.pages) } else { "Add to every page".into() },
+                        None,
+                        false,
+                        (ready && self.pages > 1).then(|| Message::Option(T, "add-every", String::new())),
+                    ),
                 ]
                 .spacing(8)
                 .into(),

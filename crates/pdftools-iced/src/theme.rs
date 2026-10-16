@@ -21,7 +21,7 @@ pub const CATALOG_RED: Color = color!(0xe5484d);
 
 pub const RADIUS: f32 = 12.0;
 pub const FONT: f32 = 14.0;
-pub const FONT_SMALL: f32 = 12.0;
+pub const FONT_SMALL: f32 = 13.0;
 pub const FONT_TITLE: f32 = 20.0;
 
 pub fn theme() -> Theme {

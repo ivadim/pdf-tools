@@ -363,14 +363,29 @@ impl Merge {
         let busy = self.run.busy();
         let locked = self.custom_order.is_some() || busy;
         let wrap = Message::Merge;
-        let header = row![
-            container(widgets::tool_header(catalog::info(ToolId::Merge))).width(Length::Fill),
-            action("Sort by name", Some(icons::sort()), false, (!locked && self.entries.len() > 1).then_some(wrap(Msg::Sort))),
-            action("Clear", Some(icons::trash()), false, (!busy && !self.entries.is_empty()).then_some(wrap(Msg::Clear))),
-            action("Add files…", Some(icons::plus()), true, (!busy).then_some(wrap(Msg::Add))),
-        ]
-        .spacing(8)
-        .align_y(Alignment::Center);
+        // Actions that don't apply yet stay hidden rather than disabled.
+        let mut header = row![container(widgets::tool_header(catalog::info(ToolId::Merge))).width(Length::Fill)]
+            .spacing(8)
+            .align_y(Alignment::Center);
+        if self.entries.len() > 1 {
+            header = header.push(action("Sort by name", Some(icons::sort()), false, (!locked).then_some(wrap(Msg::Sort))));
+        }
+        if !self.entries.is_empty() {
+            header = header
+                .push(action("Clear", Some(icons::trash()), false, (!busy).then_some(wrap(Msg::Clear))))
+                .push(action("Add files…", Some(icons::plus()), true, (!busy).then_some(wrap(Msg::Add))));
+        }
+        if self.entries.is_empty() {
+            // One place to start: a single drop zone across both panels.
+            let zone = crate::app::drop_zone("Drop PDF files here", "or anywhere on the window", "Add PDF files…", Some(wrap(Msg::Add)));
+            return column![
+                container(header).padding(Padding { top: 20.0, right: 24.0, bottom: 0.0, left: 24.0 }),
+                container(container(zone).style(theme::panel)).padding(Padding { top: 0.0, right: 24.0, bottom: 0.0, left: 24.0 }).height(Length::Fill),
+                run_bar(&self.run, self.validate(), "Merge PDFs…", icons::merge(), wrap(Msg::Run), wrap(Msg::Reveal)),
+            ]
+            .spacing(16)
+            .into();
+        }
 
         let files: Element<'a, Message> = if self.entries.is_empty() {
             container(
@@ -418,8 +433,8 @@ impl Merge {
         }
         let any = !tiles.is_empty() && !busy;
         grid_header = grid_header
-            .push(icon_button(icons::rotate_ccw(), "Rotate all pages left", 30.0, any.then_some(wrap(Msg::RotateAll(-90)))))
-            .push(icon_button(icons::rotate_cw(), "Rotate all pages right", 30.0, any.then_some(wrap(Msg::RotateAll(90)))));
+            .push(widgets::small_action("Rotate all left", icons::rotate_ccw(), any.then_some(wrap(Msg::RotateAll(-90)))))
+            .push(widgets::small_action("Rotate all right", icons::rotate_cw(), any.then_some(wrap(Msg::RotateAll(90)))));
         let mut right = column![grid_header];
         if self.custom_order.is_some() {
             right = right.push(
@@ -443,7 +458,7 @@ impl Merge {
         right = right.push(widgets::page_grid(tiles, caps, busy, empty, move |i, e| wrap(Msg::Tile(i, e))));
         let right = container(right).width(Length::Fill).height(Length::Fill).style(theme::panel);
 
-        let label = if self.entries.len() > 1 { "Merge files…" } else { "Save PDF…" };
+        let label = "Merge PDFs…";
         column![
             container(header).padding(Padding { top: 20.0, right: 24.0, bottom: 0.0, left: 24.0 }),
             row![left, right].spacing(16).padding(Padding { top: 0.0, right: 24.0, bottom: 0.0, left: 24.0 }).height(Length::Fill),
@@ -481,11 +496,15 @@ fn file_row<'a>(index: usize, count: usize, entry: &'a Entry, previews: &'a Prev
     if matches!(entry.state, EntryState::Failed { locked: true, .. }) {
         row = row.push(action("Unlock…", None, false, Some(wrap(Msg::Unlock(index)))));
     }
-    row = row
-        .push(icon_button(icons::up(), "Move up", 28.0, (index > 0 && !locked).then_some(wrap(Msg::FileUp(index)))))
-        .push(icon_button(icons::down(), "Move down", 28.0, (index + 1 < count && !locked).then_some(wrap(Msg::FileDown(index)))))
-        .push(icon_button(icons::x(), "Remove", 28.0, (!busy).then_some(wrap(Msg::FileRemove(index)))));
-    container(row).padding(8).into()
+    // Move and remove appear on hover, keeping the list calm.
+    let buttons = iced::widget::row![
+        icon_button(icons::up(), "Move up", 28.0, (index > 0 && !locked).then_some(wrap(Msg::FileUp(index)))),
+        icon_button(icons::down(), "Move down", 28.0, (index + 1 < count && !locked).then_some(wrap(Msg::FileDown(index)))),
+        icon_button(icons::x(), "Remove", 28.0, (!busy).then_some(wrap(Msg::FileRemove(index)))),
+    ]
+    .spacing(1);
+    let buttons = container(container(buttons).padding(2).style(theme::hover_bar)).center_y(Length::Fill).align_right(Length::Fill);
+    iced::widget::hover(container(row).padding(8), buttons)
 }
 
 /// What the app gives a multi-file tool to work with.

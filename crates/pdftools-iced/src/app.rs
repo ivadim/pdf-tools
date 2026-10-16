@@ -36,7 +36,7 @@ pub enum Screen {
 #[derive(Debug, Clone)]
 pub enum Message {
     Navigate(Screen),
-    ToggleCatalog,
+    CopyVersion,
     // Files.
     PickFile(ToolId),
     ClearFile(ToolId),
@@ -57,6 +57,8 @@ pub enum Message {
     // Viewer.
     ViewerStep(i32),
     ViewerRotate(i32),
+    /// Leave the viewed page out of the result, or put it back.
+    ViewerToggleInclude,
     CloseViewer,
     // About.
     OpenUrl(String),
@@ -84,7 +86,8 @@ pub struct App {
     viewer: Option<Viewer>,
     viewer_image: Option<(usize, image::Handle)>,
     hovering: bool,
-    catalog_open: bool,
+    /// The version was just copied (About).
+    pub copied: bool,
     modifiers: iced::keyboard::Modifiers,
     /// Run background work immediately and queue its messages (for tests).
     inline: bool,
@@ -116,7 +119,7 @@ impl App {
             viewer: None,
             viewer_image: None,
             hovering: false,
-            catalog_open: true,
+            copied: false,
             modifiers: iced::keyboard::Modifiers::default(),
             inline,
             queued: Vec::new(),
@@ -364,6 +367,22 @@ impl App {
     /// For tools that show one page at a time: render it, and tell the tool
     /// its proportions once known.
     fn sync_stage(&mut self, id: ToolId) -> Task<Message> {
+        let closeup = self.closeup_request(id).filter(|r| self.previews.get(r).is_none());
+        let closeup = match closeup {
+            Some(request) => self.render(request),
+            None => Task::none(),
+        };
+        Task::batch([closeup, self.sync_page(id)])
+    }
+
+    /// The close-up a tool asks for, if any.
+    fn closeup_request(&self, id: ToolId) -> Option<PreviewRequest> {
+        let (single, tool) = self.single(id)?;
+        let page = tool.closeup(single)?;
+        Some(PreviewRequest { path: single.path()?.to_path_buf(), page, width: crate::single::CLOSEUP_WIDTH, rotation: 0, gray: false })
+    }
+
+    fn sync_page(&mut self, id: ToolId) -> Task<Message> {
         let Some((single, tool)) = self.single(id) else { return Task::none() };
         let (Some(page), Some(path)) = (tool.stage_page(), single.path()) else { return Task::none() };
         let request = PreviewRequest { path: path.to_path_buf(), page, width: crate::tools::STAGE_WIDTH, rotation: 0, gray: false };
@@ -383,9 +402,13 @@ impl App {
         match message {
             Message::Navigate(screen) => {
                 self.screen = screen;
+                self.copied = false;
                 self.viewer = None;
             }
-            Message::ToggleCatalog => self.catalog_open = !self.catalog_open,
+            Message::CopyVersion => {
+                self.copied = true;
+                return iced::clipboard::write(format!("PDF Tools {} ({})", env!("CARGO_PKG_VERSION"), crate::about::platform()));
+            }
             Message::PickFile(id) => {
                 if let Some(path) = self.dialogs.pick_pdf() {
                     return self.load(id, path);
@@ -510,6 +533,15 @@ impl App {
                     return self.show_viewer();
                 }
             }
+            Message::ViewerToggleInclude => {
+                if let Some(Viewer { tool, index }) = self.viewer {
+                    return match tool {
+                        ToolId::Merge => self.merge_update(merge::Msg::Tile(index, TileEvent::ToggleInclude)),
+                        ToolId::Images => Task::none(),
+                        _ => self.handle(Message::Tile(tool, index, TileEvent::ToggleInclude)),
+                    };
+                }
+            }
             Message::CloseViewer => self.viewer = None,
             Message::OpenUrl(url) => self.dialogs.open_url(&url),
             Message::Modifiers(modifiers) => self.modifiers = modifiers,
@@ -541,7 +573,7 @@ impl App {
     pub fn view(&self) -> Element<'_, Message> {
         let page: Element<'_, Message> = match self.screen {
             Screen::Home => self.home(),
-            Screen::About => crate::about::view(),
+            Screen::About => crate::about::view(self.copied),
             Screen::Tool(ToolId::Merge) => self.merge.view(&self.previews),
             Screen::Tool(ToolId::Images) => self.images.view(),
             Screen::Tool(id) if self.single(id).is_some() => self.single_page(id),
@@ -610,19 +642,21 @@ impl App {
     }
 
     fn home(&self) -> Element<'_, Message> {
+        // Tall enough for four lines of description, so none is cut off.
+        const CARD_HEIGHT: f32 = 112.0;
         let card = |info: &'static catalog::ToolInfo| -> Element<'static, Message> {
             button(
                 row![widgets::chip(info, 40.0), column![text(info.name).size(15).font(BOLD), muted(info.description)].spacing(3)]
                     .spacing(14),
             )
             .width(Length::Fill)
-            .height(92)
+            .height(CARD_HEIGHT)
             .padding(14)
             .style(theme::tool_card)
             .on_press(Message::Navigate(Screen::Tool(info.id)))
             .into()
         };
-        // As many columns of at least 215 px as fit; every card 92 px tall.
+        // As many columns of at least 215 px as fit.
         let cards = move |featured: bool| {
             iced::widget::responsive(move |size| {
                 let columns = (((size.width + 12.0) / (215.0 + 12.0)).floor() as usize).max(1);
@@ -630,37 +664,25 @@ impl App {
                 let rows = tools.chunks(columns).map(|chunk| {
                     let mut cells: Vec<Element<'_, Message>> = chunk.iter().map(|info| card(info)).collect();
                     cells.resize_with(columns, || space::horizontal().into());
-                    row(cells).spacing(12).height(92).into()
+                    row(cells).spacing(12).height(CARD_HEIGHT).into()
                 });
                 column(rows).spacing(12).into()
             })
             .height(Length::Shrink)
         };
-        let toggle = button(
-            row![
-                text("FULL TOOL CATALOG").size(12.5).font(BOLD).color(theme::CATALOG_RED).width(Length::Fill),
-                icon(if self.catalog_open { icons::chevron_up() } else { icons::down() }, 16.0, theme::CATALOG_RED),
-            ]
-            .align_y(Alignment::Center),
-        )
-        .width(Length::Fill)
-        .padding([16, 20])
-        .style(theme::tool_card)
-        .on_press(Message::ToggleCatalog);
-        let mut content = column![
+        let content = column![
             column![
-                text("PDF Tools").size(28).font(BOLD),
+                text("What would you like to do?").size(28).font(BOLD),
                 text("Everything runs on your computer — your files never leave it.").color(theme::MUTED),
             ]
             .spacing(6),
+            section_title("Most used"),
             cards(true),
-            toggle,
+            section_title("More tools"),
+            cards(false),
         ]
-        .spacing(16)
+        .spacing(14)
         .padding(Padding { top: 36.0, right: 28.0, bottom: 36.0, left: 28.0 });
-        if self.catalog_open {
-            content = content.push(cards(false));
-        }
         scrollable(content).into()
     }
 
@@ -671,7 +693,8 @@ impl App {
         let caps = tool.caps();
         let tiles = self.tiles(id);
 
-        let left = column![file_card(id, single, &self.previews, busy), tool_options(single, tool.as_ref())]
+        let closeup = self.closeup_request(id).and_then(|r| self.previews.get(&r));
+        let left = column![file_card(id, single, &self.previews, busy), tool.view(single, closeup)]
             .spacing(18)
             .padding(14);
         let left = container(scrollable(left)).width(340).height(Length::Fill).style(theme::panel);
@@ -691,7 +714,7 @@ impl App {
             header = header.push(action("Include all", Some(icons::check()), false, Some(Message::IncludeAll(id))));
         }
         for (label, handle, act) in tool.grid_actions() {
-            header = header.push(icon_button(handle(), label, 30.0, (!busy && !tiles.is_empty()).then_some(Message::GridAction(id, act))));
+            header = header.push(widgets::small_action(label, handle(), (!busy && !tiles.is_empty()).then_some(Message::GridAction(id, act))));
         }
         let empty = tool.empty_text(single).unwrap_or(match &single.state {
             FileState::Ready(f) if f.info.needs_password => "Pages can be previewed once the file is unlocked.",
@@ -699,6 +722,13 @@ impl App {
             _ => "Pages will appear here once you choose a file.",
         });
         let right: Element<'_, Message> = match (tool.stage_page(), single.path()) {
+            // Before there's a file, the big area is where to put one.
+            _ if matches!(single.state, FileState::Empty) => drop_zone(
+                "Drop a PDF here",
+                "or anywhere on the window",
+                "Choose a PDF…",
+                (!busy).then_some(Message::PickFile(id)),
+            ),
             (Some(page), Some(path)) => {
                 let request = PreviewRequest { path: path.to_path_buf(), page, width: crate::tools::STAGE_WIDTH, rotation: 0, gray: false };
                 tool.stage(single, self.previews.get(&request))
@@ -718,6 +748,19 @@ impl App {
         ]
         .spacing(16)
         .into()
+    }
+
+    /// Whether the viewed page is left out (`None` if the tool can't).
+    fn viewer_excluded(&self) -> Option<bool> {
+        let viewer = self.viewer.as_ref()?;
+        match viewer.tool {
+            ToolId::Merge => Some(self.merge.tiles(&self.previews).get(viewer.index)?.excluded),
+            ToolId::Images => None,
+            tool => {
+                let (_, options) = self.single(tool)?;
+                options.caps().include.then(|| self.specs(tool).get(viewer.index).is_some_and(|s| s.excluded))
+            }
+        }
     }
 
     fn viewer_view(&self) -> Option<Element<'_, Message>> {
@@ -746,11 +789,15 @@ impl App {
             }
         };
         let page: Element<'_, Message> = match handle {
-            Some(handle) => image(handle).content_fit(ContentFit::Contain).width(Length::Fill).height(Length::Fill).into(),
+            // Scroll to zoom, drag to move around.
+            Some(handle) => image::viewer(handle).width(Length::Fill).height(Length::Fill).min_scale(1.0).max_scale(8.0).into(),
             None => center(text("Loading…").color(Color::WHITE)).into(),
         };
         let rotation = if rotation != 0 { format!(" · rotated {rotation}°") } else { String::new() };
-        let caption = text(format!("Page {} of {count}{rotation}", viewer.index + 1)).color(Color { a: 0.8, ..Color::WHITE });
+        let excluded = self.viewer_excluded();
+        let left_out = if excluded == Some(true) { " · left out" } else { "" };
+        let caption = text(format!("Page {} of {count}{rotation}{left_out} · scroll to zoom", viewer.index + 1))
+            .color(Color { a: 0.8, ..Color::WHITE });
         let light = |handle, label, msg: Option<Message>| -> Element<'_, Message> {
             let tint = if msg.is_some() { Color { a: 0.8, ..Color::WHITE } } else { Color { a: 0.3, ..Color::WHITE } };
             iced::widget::tooltip(
@@ -760,11 +807,24 @@ impl App {
             )
             .into()
         };
-        let mut controls = row![].spacing(8);
+        let mut controls = row![].spacing(8).align_y(Alignment::Center);
         if can_rotate {
             controls = controls
                 .push(light(icons::rotate_ccw(), "Rotate left", Some(Message::ViewerRotate(-90))))
                 .push(light(icons::rotate_cw(), "Rotate right", Some(Message::ViewerRotate(90))));
+        }
+        if let Some(excluded) = excluded {
+            let (label, handle) = if excluded { ("Put this page back", icons::check()) } else { ("Leave this page out", icons::eye_off()) };
+            controls = controls.push(
+                button(row![icon(handle, 18.0, Color::WHITE), text(label).color(Color::WHITE)].spacing(6).align_y(Alignment::Center))
+                    .padding([8, 12])
+                    .style(|_, status| button::Style {
+                        background: Some(Color { a: if matches!(status, button::Status::Hovered) { 0.22 } else { 0.12 }, ..Color::WHITE }.into()),
+                        border: iced::border::rounded(9),
+                        ..Default::default()
+                    })
+                    .on_press(Message::ViewerToggleInclude),
+            );
         }
         let body = column![
             row![space::horizontal(), light(icons::x(), "Close", Some(Message::CloseViewer))],
@@ -804,41 +864,49 @@ fn not_ported<'a>(id: ToolId) -> Element<'a, Message> {
     .into()
 }
 
-/// The chosen file (or a place to choose one).
+/// A large place to choose or drop files.
+pub fn drop_zone<'a>(heading: &'a str, hint: &'a str, button: &'a str, on_choose: Option<Message>) -> Element<'a, Message> {
+    container(
+        column![
+            icon(icons::upload(), 40.0, theme::ACCENT),
+            text(heading).size(18).font(BOLD),
+            muted(hint),
+            action(button, Some(icons::plus()), true, on_choose),
+        ]
+        .spacing(10)
+        .align_x(Alignment::Center),
+    )
+    .center(Length::Fill)
+    .style(theme::grid_bg)
+    .into()
+}
+
+/// The chosen file (or a note that there's none yet).
 fn file_card<'a>(id: ToolId, single: &'a Single, previews: &'a Previews, busy: bool) -> Element<'a, Message> {
     match &single.state {
-        FileState::Empty => button(
-            column![
-                icon(icons::upload(), 30.0, theme::ACCENT),
-                text("Choose a PDF").font(BOLD),
-                muted("or drop it anywhere on the window"),
+        FileState::Empty => container(
+            row![
+                icon(icons::file(), 22.0, theme::MUTED),
+                text("No PDF chosen").color(theme::MUTED).width(Length::Fill),
+                action("Choose…", None, false, (!busy).then_some(Message::PickFile(id))),
             ]
-            .spacing(6)
-            // Full width, so the content centres in the box, not just on itself.
-            .width(Length::Fill)
-            .align_x(Alignment::Center),
+            .spacing(10)
+            .align_y(Alignment::Center),
         )
-        .width(Length::Fill)
-        .padding([28, 12])
-        .style(|_, status| button::Style {
+        .padding(10)
+        .style(|_| container::Style {
             background: Some(theme::SURFACE_2.into()),
-            border: iced::Border {
-                width: 1.5,
-                color: if matches!(status, button::Status::Hovered) { theme::ACCENT } else { theme::BORDER },
-                radius: 12.0.into(),
-            },
-            text_color: theme::TEXT,
+            border: iced::Border { width: 1.0, color: theme::BORDER, radius: 12.0.into() },
             ..Default::default()
         })
-        .on_press_maybe((!busy).then_some(Message::PickFile(id)))
         .into(),
-        FileState::Loading(path) => card(text(file_name(path)).font(BOLD).into(), muted("Reading…"), None, id, busy),
+        FileState::Loading(path) => card(text(file_name(path)).font(BOLD).into(), muted("Reading…"), None, None, id, busy),
         FileState::Failed { path, message, locked } => {
-            let mut details = column![text(message.clone()).size(12).color(theme::ERROR)].spacing(6);
+            let mut problem = column![text(message.clone()).size(13).color(theme::ERROR)].spacing(8);
             if *locked && id != ToolId::Unlock {
-                details = details.push(action("Unlock…", Some(icons::unlock()), false, Some(Message::OpenInUnlock(id))));
+                problem = problem.push(action("Unlock…", Some(icons::unlock()), false, Some(Message::OpenInUnlock(id))));
             }
-            card(text(file_name(path)).font(BOLD).into(), details.into(), None, id, busy)
+            card(text(file_name(path)).font(BOLD).into(), muted("Can’t be used"), None, Some(problem.into()), id, busy)
         }
         FileState::Ready(file) => {
             let pages = file.info.pages.map_or_else(|| "Locked".to_owned(), |p| plural(p, "page"));
@@ -848,6 +916,7 @@ fn file_card<'a>(id: ToolId, single: &'a Single, previews: &'a Previews, busy: b
                 text(file.name.clone()).font(BOLD).into(),
                 muted(format!("{pages} · {}", crate::single::format_bytes(file.info.file_size))),
                 thumb,
+                None,
                 id,
                 busy,
             )
@@ -859,6 +928,7 @@ fn card<'a>(
     name: Element<'a, Message>,
     details: Element<'a, Message>,
     thumb: Option<iced::widget::image::Handle>,
+    below: Option<Element<'a, Message>>,
     id: ToolId,
     busy: bool,
 ) -> Element<'a, Message> {
@@ -866,16 +936,20 @@ fn card<'a>(
         Some(handle) => container(image(handle).content_fit(ContentFit::Contain)).width(46).height(60).style(theme::page).into(),
         None => container(space()).width(46).height(60).style(theme::page).into(),
     };
-    container(
-        row![
-            thumb,
-            column![name, details].spacing(3).width(Length::Fill),
-            icon_button(icons::folder(), "Choose another file", 30.0, (!busy).then_some(Message::PickFile(id))),
-            icon_button(icons::x(), "Remove", 30.0, (!busy).then_some(Message::ClearFile(id))),
-        ]
-        .spacing(12)
-        .align_y(Alignment::Center),
-    )
+    let mut content = column![row![
+        thumb,
+        column![name, details].spacing(3).width(Length::Fill),
+        icon_button(icons::folder(), "Choose another file", 30.0, (!busy).then_some(Message::PickFile(id))),
+        icon_button(icons::x(), "Remove", 30.0, (!busy).then_some(Message::ClearFile(id))),
+    ]
+    .spacing(12)
+    .align_y(Alignment::Center)]
+    .spacing(10);
+    // Problems get the card's full width rather than squeezing beside the name.
+    if let Some(below) = below {
+        content = content.push(below);
+    }
+    container(content)
     .padding(10)
     .style(|_| container::Style {
         background: Some(theme::SURFACE_2.into()),
@@ -883,10 +957,6 @@ fn card<'a>(
         ..Default::default()
     })
     .into()
-}
-
-fn tool_options<'a>(single: &'a Single, tool: &'a dyn ToolOptions) -> Element<'a, Message> {
-    tool.view(single)
 }
 
 /// Starts the app with native dialogs.
