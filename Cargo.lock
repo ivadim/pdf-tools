@@ -3570,6 +3570,7 @@ dependencies = [
  "lopdf",
  "parley",
  "pdftools-core",
+ "pdftools-render",
  "resvg",
  "rfd",
  "slint",
@@ -3588,6 +3589,17 @@ dependencies = [
  "image",
  "lopdf",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "pdftools-render"
+version = "0.2.1"
+dependencies = [
+ "hayro",
+ "image",
+ "parley",
+ "swash",
+ "tiny-skia 0.12.0",
 ]
 
 [[package]]

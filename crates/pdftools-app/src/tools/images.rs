@@ -16,6 +16,7 @@ use slint::{ModelRc, VecModel};
 use super::merge::natural_key;
 use super::rearrange::move_item;
 use super::{file_name, normalize_rotation, plural, run_state, Job, Outcome, Run, Shared, Tool};
+use crate::ToImage;
 use crate::raster::Picture;
 use crate::{GridCaps, PageTile, ToolView};
 

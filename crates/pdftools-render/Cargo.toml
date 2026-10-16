@@ -1,0 +1,15 @@
+[package]
+name = "pdftools-render"
+description = "UI-independent page rendering, text rasterising and page ranges for PDF Tools front-ends"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+hayro = { version = "0.8", default-features = false, features = ["embed-fonts", "simd"] }
+parley = "0.11"
+swash = "0.2"
+tiny-skia = "0.12"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
