@@ -103,6 +103,7 @@ impl App {
             Box::new(tools::PageNumbers::default()),
             Box::new(tools::Watermark::default()),
             Box::new(tools::Metadata::default()),
+            Box::new(tools::Signature::default()),
             Box::new(tools::Grayscale::default()),
         ];
         Self {
@@ -353,6 +354,32 @@ impl App {
     // ── Update ───────────────────────────────────────────────────────────
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        let task = self.handle(message);
+        match self.screen {
+            Screen::Tool(id) => Task::batch([task, self.sync_stage(id)]),
+            _ => task,
+        }
+    }
+
+    /// For tools that show one page at a time: render it, and tell the tool
+    /// its proportions once known.
+    fn sync_stage(&mut self, id: ToolId) -> Task<Message> {
+        let Some((single, tool)) = self.single(id) else { return Task::none() };
+        let (Some(page), Some(path)) = (tool.stage_page(), single.path()) else { return Task::none() };
+        let request = PreviewRequest { path: path.to_path_buf(), page, width: crate::tools::STAGE_WIDTH, rotation: 0, gray: false };
+        match self.previews.get(&request).map(|t| t.aspect) {
+            Some(aspect) => {
+                let dialogs = self.dialogs.clone();
+                if let Some((single, tool)) = self.single_mut(id) {
+                    tool.set("page-aspect", aspect.to_string(), single, &*dialogs);
+                }
+                Task::none()
+            }
+            None => self.render(request),
+        }
+    }
+
+    fn handle(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Navigate(screen) => {
                 self.screen = screen;
@@ -671,8 +698,17 @@ impl App {
             FileState::Ready(_) => "This file has no pages to preview.",
             _ => "Pages will appear here once you choose a file.",
         });
-        let grid = widgets::page_grid(tiles, caps, busy, empty, move |i, e| Message::Tile(id, i, e));
-        let right = container(column![header, divider(), grid]).width(Length::Fill).height(Length::Fill).style(theme::panel);
+        let right: Element<'_, Message> = match (tool.stage_page(), single.path()) {
+            (Some(page), Some(path)) => {
+                let request = PreviewRequest { path: path.to_path_buf(), page, width: crate::tools::STAGE_WIDTH, rotation: 0, gray: false };
+                tool.stage(single, self.previews.get(&request))
+            }
+            _ => {
+                let grid = widgets::page_grid(tiles, caps, busy, empty, move |i, e| Message::Tile(id, i, e));
+                column![header, divider(), grid].into()
+            }
+        };
+        let right = container(right).width(Length::Fill).height(Length::Fill).style(theme::panel);
 
         let hint = single.hint(caps).or_else(|| tool.validate(single));
         column![

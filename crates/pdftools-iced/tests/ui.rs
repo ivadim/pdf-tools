@@ -309,3 +309,27 @@ fn merge_and_images() {
     assert!(h.run("Create PDF…", Some(&out)).contains("Saved 2 pages"));
     assert_eq!(page_count(&out), 2);
 }
+
+#[test]
+fn signature() {
+    let mut h = Harness::new("signature");
+    h.choose(ToolId::Signature, &fixture("sizes.pdf"));
+    assert!(h.shows("Draw your signature."));
+    assert!(h.shows("Page 1 of 3"));
+    // Strokes as the drawing pad reports them.
+    for (key, at) in [("pad-down", "20,90"), ("pad-move", "60,40"), ("pad-move", "100,95"), ("pad-move", "160,50"), ("pad-up", "")] {
+        h.option(ToolId::Signature, key, at);
+    }
+    assert!(h.shows("Add the signature to a page."));
+    h.click("Every page");
+    assert!(h.shows("Page 1 of 3 · 1 signature"));
+    // Drag the box to the top left, as the page stage reports it.
+    h.option(ToolId::Signature, "box", "1,0.05,0.05,0.4");
+    h.screenshot("signature");
+    h.option(ToolId::Signature, "page", "1");
+    assert!(h.shows("Page 2 of 3 · 1 signature"));
+    h.option(ToolId::Signature, "remove", "2");
+    let out = h.out("signed.pdf");
+    assert!(h.run("Sign PDF…", Some(&out)).contains("Signed 2 pages"));
+    assert!(content(&out, 1).contains("PdfToolsSig") && !content(&out, 2).contains("PdfToolsSig"));
+}

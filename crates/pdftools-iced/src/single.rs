@@ -129,6 +129,17 @@ pub trait ToolOptions {
         false
     }
 
+    /// Tools that place things on one page at a time (Signature) show that
+    /// page, rendered this wide, instead of the page grid.
+    fn stage_page(&self) -> Option<usize> {
+        None
+    }
+
+    /// The page view shown instead of the grid; `page` is its rendering.
+    fn stage<'a>(&'a self, _file: &'a Single, _page: Option<&'a crate::previews::Thumb>) -> Element<'a, Message> {
+        iced::widget::column![].into()
+    }
+
     /// Shown instead of the grid when it's empty.
     fn empty_text(&self, _file: &Single) -> Option<&'static str> {
         None
