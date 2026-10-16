@@ -11,6 +11,7 @@ use pdftools_core::PdfInfo;
 use pdftools_render::pages::PreviewRequest;
 
 use crate::catalog::{self, ToolId, TOOLS};
+use crate::settings::{Settings, ThemeChoice};
 use crate::images::{self, Images};
 use crate::merge::{self, Context, Effect, Merge};
 use crate::dialogs::{self, Dialogs};
@@ -37,6 +38,10 @@ pub enum Screen {
 pub enum Message {
     Navigate(Screen),
     CopyVersion,
+    /// The user picked a theme.
+    Theme(ThemeChoice),
+    /// The system switched between light and dark.
+    SystemTheme(iced::theme::Mode),
     // Files.
     PickFile(ToolId),
     ClearFile(ToolId),
@@ -88,6 +93,8 @@ pub struct App {
     hovering: bool,
     /// The version was just copied (About).
     pub copied: bool,
+    pub settings: Settings,
+    system_dark: bool,
     modifiers: iced::keyboard::Modifiers,
     /// Run background work immediately and queue its messages (for tests).
     inline: bool,
@@ -120,10 +127,18 @@ impl App {
             viewer_image: None,
             hovering: false,
             copied: false,
+            // Tests start from the defaults and never touch the real file.
+            settings: if inline { Settings::default() } else { Settings::load() },
+            system_dark: false,
             modifiers: iced::keyboard::Modifiers::default(),
             inline,
             queued: Vec::new(),
         }
+    }
+
+    /// Switches the colours to the theme chosen (or the system's).
+    pub fn apply_theme(&self) {
+        theme::set_dark(self.settings.theme.is_dark(self.system_dark));
     }
 
     pub fn title(&self) -> String {
@@ -405,6 +420,17 @@ impl App {
                 self.copied = false;
                 self.viewer = None;
             }
+            Message::Theme(choice) => {
+                self.settings.theme = choice;
+                self.apply_theme();
+                if !self.inline {
+                    self.settings.save();
+                }
+            }
+            Message::SystemTheme(mode) => {
+                self.system_dark = mode == iced::theme::Mode::Dark;
+                self.apply_theme();
+            }
             Message::CopyVersion => {
                 self.copied = true;
                 return iced::clipboard::write(format!("PDF Tools {} ({})", env!("CARGO_PKG_VERSION"), crate::about::platform()));
@@ -559,13 +585,15 @@ impl App {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        event::listen_with(|event, _status, _window| match event {
+        let theme = iced::system::theme_changes().map(Message::SystemTheme);
+        let events = event::listen_with(|event, _status, _window| match event {
             Event::Window(window::Event::FileHovered(_)) => Some(Message::Hovering(true)),
             Event::Window(window::Event::FilesHoveredLeft) => Some(Message::Hovering(false)),
             Event::Window(window::Event::FileDropped(path)) => Some(Message::Dropped(path)),
             Event::Keyboard(iced::keyboard::Event::ModifiersChanged(modifiers)) => Some(Message::Modifiers(modifiers)),
             _ => None,
-        })
+        });
+        Subscription::batch([events, theme])
     }
 
     // ── View ─────────────────────────────────────────────────────────────
@@ -591,12 +619,12 @@ impl App {
                 _ => "Open a tool first, then drop files",
             };
             layers = layers.push(
-                container(center(text(label).size(18).font(BOLD).color(theme::ACCENT)))
+                container(center(text(label).size(18).font(BOLD).color(theme::c().accent)))
                     .width(Length::Fill)
                     .height(Length::Fill)
                     .style(|_| container::Style {
-                        background: Some(Color { a: 0.12, ..theme::ACCENT }.into()),
-                        border: iced::Border { width: 3.0, color: theme::ACCENT, radius: 0.0.into() },
+                        background: Some(Color { a: 0.12, ..theme::c().accent }.into()),
+                        border: iced::Border { width: 3.0, color: theme::c().accent, radius: 0.0.into() },
                         ..Default::default()
                     }),
             );
@@ -619,7 +647,7 @@ impl App {
             .into()
         };
         let plain_chip = |handle| -> Element<'static, Message> {
-            container(icon(handle, 15.0, theme::MUTED)).center(26).style(theme::chip(theme::MUTED)).into()
+            container(icon(handle, 15.0, theme::c().muted)).center(26).style(theme::chip(theme::c().muted)).into()
         };
         let mut tools = column![nav(Screen::Home, "All tools", plain_chip(icons::home())), divider()].spacing(1);
         for info in &TOOLS {
@@ -631,6 +659,7 @@ impl App {
                 tools,
                 space::vertical(),
                 nav(Screen::About, "About", plain_chip(icons::info())),
+                self.theme_switch(),
             ]
             .spacing(14)
             .padding(Padding { top: 18.0, right: 10.0, bottom: 18.0, left: 10.0 }),
@@ -639,6 +668,31 @@ impl App {
         .height(Length::Fill)
         .style(theme::sidebar)
         .into()
+    }
+
+    /// Follow the system, light or dark.
+    fn theme_switch(&self) -> Element<'_, Message> {
+        let choices = [
+            (ThemeChoice::System, icons::monitor(), "Match the system"),
+            (ThemeChoice::Light, icons::sun(), "Light"),
+            (ThemeChoice::Dark, icons::moon(), "Dark"),
+        ];
+        let buttons = choices.into_iter().map(|(choice, handle, label)| {
+            let chosen = self.settings.theme == choice;
+            let tint = if chosen { theme::c().text } else { theme::c().muted };
+            iced::widget::tooltip(
+                button(center(icon(handle, 16.0, tint)))
+                    .width(Length::Fill)
+                    .height(28)
+                    .padding(0)
+                    .style(theme::segment(chosen))
+                    .on_press(Message::Theme(choice)),
+                container(text(label).size(12)).padding([4, 8]).style(theme::hover_bar),
+                iced::widget::tooltip::Position::Top,
+            )
+            .into()
+        });
+        container(row(buttons).spacing(3)).padding(3).style(theme::segmented_track).into()
     }
 
     fn home(&self) -> Element<'_, Message> {
@@ -673,7 +727,7 @@ impl App {
         let content = column![
             column![
                 text("What would you like to do?").size(28).font(BOLD),
-                text("Everything runs on your computer — your files never leave it.").color(theme::MUTED),
+                text("Everything runs on your computer — your files never leave it.").color(theme::c().muted),
             ]
             .spacing(6),
             section_title("Most used"),
@@ -705,7 +759,7 @@ impl App {
             n if kept == n => plural(n, "page"),
             n => format!("{kept} of {} kept", plural(n, "page")),
         };
-        let mut header = row![section_title("Pages"), text(summary).color(theme::MUTED).width(Length::Fill)]
+        let mut header = row![section_title("Pages"), text(summary).color(theme::c().muted).width(Length::Fill)]
             .spacing(10)
             .align_y(Alignment::Center)
             .padding(Padding { top: 0.0, right: 10.0, bottom: 0.0, left: 14.0 })
@@ -848,7 +902,7 @@ impl App {
 
 fn divider<'a>() -> Element<'a, Message> {
     container(space()).width(Length::Fill).height(1).style(|_| container::Style {
-        background: Some(theme::BORDER.into()),
+        background: Some(theme::c().border.into()),
         ..Default::default()
     })
     .into()
@@ -868,7 +922,7 @@ fn not_ported<'a>(id: ToolId) -> Element<'a, Message> {
 pub fn drop_zone<'a>(heading: &'a str, hint: &'a str, button: &'a str, on_choose: Option<Message>) -> Element<'a, Message> {
     container(
         column![
-            icon(icons::upload(), 40.0, theme::ACCENT),
+            icon(icons::upload(), 40.0, theme::c().accent),
             text(heading).size(18).font(BOLD),
             muted(hint),
             action(button, Some(icons::plus()), true, on_choose),
@@ -886,8 +940,8 @@ fn file_card<'a>(id: ToolId, single: &'a Single, previews: &'a Previews, busy: b
     match &single.state {
         FileState::Empty => container(
             row![
-                icon(icons::file(), 22.0, theme::MUTED),
-                text("No PDF chosen").color(theme::MUTED).width(Length::Fill),
+                icon(icons::file(), 22.0, theme::c().muted),
+                text("No PDF chosen").color(theme::c().muted).width(Length::Fill),
                 action("Choose…", None, false, (!busy).then_some(Message::PickFile(id))),
             ]
             .spacing(10)
@@ -895,14 +949,14 @@ fn file_card<'a>(id: ToolId, single: &'a Single, previews: &'a Previews, busy: b
         )
         .padding(10)
         .style(|_| container::Style {
-            background: Some(theme::SURFACE_2.into()),
-            border: iced::Border { width: 1.0, color: theme::BORDER, radius: 12.0.into() },
+            background: Some(theme::c().surface_2.into()),
+            border: iced::Border { width: 1.0, color: theme::c().border, radius: 12.0.into() },
             ..Default::default()
         })
         .into(),
         FileState::Loading(path) => card(text(file_name(path)).font(BOLD).into(), muted("Reading…"), None, None, id, busy),
         FileState::Failed { path, message, locked } => {
-            let mut problem = column![text(message.clone()).size(13).color(theme::ERROR)].spacing(8);
+            let mut problem = column![text(message.clone()).size(13).color(theme::c().error)].spacing(8);
             if *locked && id != ToolId::Unlock {
                 problem = problem.push(action("Unlock…", Some(icons::unlock()), false, Some(Message::OpenInUnlock(id))));
             }
@@ -952,8 +1006,8 @@ fn card<'a>(
     container(content)
     .padding(10)
     .style(|_| container::Style {
-        background: Some(theme::SURFACE_2.into()),
-        border: iced::Border { width: 1.0, color: theme::BORDER, radius: 12.0.into() },
+        background: Some(theme::c().surface_2.into()),
+        border: iced::Border { width: 1.0, color: theme::c().border, radius: 12.0.into() },
         ..Default::default()
     })
     .into()
@@ -964,7 +1018,8 @@ pub fn run() -> iced::Result {
     iced::application(
         || {
             let app = App::new(Rc::new(dialogs::NativeDialogs), false);
-            (app, Task::none())
+            app.apply_theme();
+            (app, iced::system::theme().map(Message::SystemTheme))
         },
         App::update,
         App::view,

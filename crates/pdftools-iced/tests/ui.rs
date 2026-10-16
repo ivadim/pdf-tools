@@ -390,3 +390,40 @@ fn tour() {
     h.option(ToolId::Signature, "name", "Ada Lovelace");
     h.screenshot("tour-signature-type");
 }
+
+#[test]
+fn dark_theme() {
+    use pdftools_iced::settings::ThemeChoice;
+    let mut h = Harness::new("dark");
+    assert!(!theme::c().dark);
+    // Following the system: dark only once the system says so.
+    h.send(Message::SystemTheme(iced::theme::Mode::Dark));
+    assert!(theme::c().dark);
+    h.send(Message::Theme(ThemeChoice::Light));
+    assert!(!theme::c().dark);
+    h.send(Message::Theme(ThemeChoice::Dark));
+    assert!(theme::c().dark && h.app.settings.theme == ThemeChoice::Dark);
+    h.screenshot("dark-home");
+    h.click("About");
+    h.screenshot("dark-about");
+    h.click("Merge");
+    h.screenshot("dark-merge-empty");
+    for (tool, file, pages, name) in [
+        (ToolId::Compress, "tracemonkey.pdf", 14, "compress"),
+        (ToolId::Protect, "sizes.pdf", 3, "protect"),
+        (ToolId::Rearrange, "tracemonkey.pdf", 8, "rearrange"),
+        (ToolId::Watermark, "tracemonkey.pdf", 8, "watermark"),
+    ] {
+        h.choose(tool, &fixture(file));
+        h.render_pages(tool, pages);
+        h.screenshot(&format!("dark-{name}"));
+    }
+    h.choose(ToolId::Signature, &fixture("sizes.pdf"));
+    h.option(ToolId::Signature, "source", "type");
+    h.option(ToolId::Signature, "name", "Ada Lovelace");
+    h.screenshot("dark-signature");
+    h.option(ToolId::Signature, "source", "draw");
+    h.screenshot("dark-signature-draw");
+    h.send(Message::Theme(ThemeChoice::System));
+    assert!(theme::c().dark);
+}

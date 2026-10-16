@@ -135,7 +135,7 @@ impl ToolOptions for Split {
             Mode::Each => {}
         }
         if let (Some(summary), true) = (self.summary(), self.mode != Mode::Extract) {
-            content = content.push(text(summary).size(13).color(theme::ACCENT));
+            content = content.push(text(summary).size(13).color(theme::c().accent));
         }
         if self.mode != Mode::Extract {
             content = content.push(column![

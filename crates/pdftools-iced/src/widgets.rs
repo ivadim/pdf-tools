@@ -22,11 +22,11 @@ pub fn icon<'a, M: 'a>(handle: Handle, size: f32, color: Color) -> Element<'a, M
 }
 
 pub fn muted<'a, M: 'a>(content: impl text::IntoFragment<'a>) -> Element<'a, M> {
-    text(content).size(theme::FONT_SMALL).color(theme::MUTED).into()
+    text(content).size(theme::FONT_SMALL).color(theme::c().muted).into()
 }
 
 pub fn section_title<'a, M: 'a>(title: &str) -> Element<'a, M> {
-    text(title.to_uppercase()).size(12).font(BOLD).color(theme::MUTED).into()
+    text(title.to_uppercase()).size(12).font(BOLD).color(theme::c().muted).into()
 }
 
 /// A titled group of options.
@@ -41,7 +41,7 @@ pub fn field<'a, M: 'a>(label: &'a str, control: impl Into<Element<'a, M>>) -> E
 
 /// An icon-only button with a tooltip.
 pub fn icon_button<'a, M: Clone + 'a>(handle: Handle, label: &'a str, size: f32, on_press: Option<M>) -> Element<'a, M> {
-    let tint = if on_press.is_some() { theme::MUTED } else { Color { a: 0.4, ..theme::MUTED } };
+    let tint = if on_press.is_some() { theme::c().muted } else { Color { a: 0.4, ..theme::c().muted } };
     let button = button(center(icon(handle, size * 0.58, tint)))
         .width(size)
         .height(size)
@@ -59,7 +59,7 @@ pub fn action<'a, M: Clone + 'a>(
     primary: bool,
     on_press: Option<M>,
 ) -> Element<'a, M> {
-    let color = if primary { Color::WHITE } else { theme::TEXT };
+    let color = if primary { Color::WHITE } else { theme::c().text };
     let mut content = row![].spacing(7).align_y(Alignment::Center);
     if let Some(handle) = handle {
         content = content.push(icon(handle, 16.0, color));
@@ -74,7 +74,7 @@ pub fn action<'a, M: Clone + 'a>(
 
 /// A compact button with an icon and a label, for headers and toolbars.
 pub fn small_action<'a, M: Clone + 'a>(label: &'a str, handle: Handle, on_press: Option<M>) -> Element<'a, M> {
-    let color = if on_press.is_some() { theme::TEXT } else { Color { a: 0.4, ..theme::TEXT } };
+    let color = if on_press.is_some() { theme::c().text } else { Color { a: 0.4, ..theme::c().text } };
     button(row![icon(handle, 14.0, color), text(label).size(13).color(color)].spacing(5).align_y(Alignment::Center))
         .padding([4, 9])
         .style(theme::secondary)
@@ -132,7 +132,7 @@ pub fn tool_header<'a, M: 'a>(info: &ToolInfo) -> Element<'a, M> {
         chip(info, 46.0),
         column![
             text(info.name).size(theme::FONT_TITLE).font(BOLD),
-            text(info.description).color(theme::MUTED),
+            text(info.description).color(theme::c().muted),
         ]
         .spacing(3)
     ]
@@ -169,9 +169,9 @@ pub fn run_bar<'a, M: Clone + 'a>(
     on_reveal: M,
 ) -> Element<'a, M> {
     let status: Element<'a, M> = match run {
-        Run::Running(message) => text(message.clone()).color(theme::MUTED).into(),
+        Run::Running(message) => text(message.clone()).color(theme::c().muted).into(),
         Run::Done { message, output } => {
-            let mut done = row![icon(icons::check(), 16.0, theme::SUCCESS), text(message.clone()).color(theme::TEXT)]
+            let mut done = row![icon(icons::check(), 16.0, theme::c().success), text(message.clone()).color(theme::c().text)]
                 .spacing(6)
                 .align_y(Alignment::Center);
             if let Some(output) = output {
@@ -180,8 +180,8 @@ pub fn run_bar<'a, M: Clone + 'a>(
             }
             done.into()
         }
-        Run::Failed(message) => text(message.clone()).color(theme::ERROR).into(),
-        Run::Idle => text(hint.clone().unwrap_or_else(|| "Ready.".into())).color(theme::MUTED).into(),
+        Run::Failed(message) => text(message.clone()).color(theme::c().error).into(),
+        Run::Idle => text(hint.clone().unwrap_or_else(|| "Ready.".into())).color(theme::c().muted).into(),
     };
     let enabled = !run.busy() && (hint.is_none() || matches!(run, Run::Done { .. } | Run::Failed(_)));
     let ready = hint.is_none() && !run.busy() && enabled;
@@ -282,9 +282,9 @@ fn tile_view<'a, M: Clone + 'a>(
         let frame = container(layers).width(w).height(h).style(move |t| {
             let mut style = theme::page(t);
             if selected {
-                style.border = iced::Border { width: 3.0, color: theme::ACCENT, radius: 2.0.into() };
+                style.border = iced::Border { width: 3.0, color: theme::c().accent, radius: 2.0.into() };
             } else if blank.is_some() {
-                style.border = iced::Border { width: 1.0, color: theme::BORDER, radius: 0.0.into() };
+                style.border = iced::Border { width: 1.0, color: theme::c().border, radius: 0.0.into() };
             }
             style
         });
@@ -296,7 +296,7 @@ fn tile_view<'a, M: Clone + 'a>(
             container(text("Removed").size(12).font(BOLD).color(Color::WHITE))
                 .padding([3, 10])
                 .style(|_| container::Style {
-                    background: Some(theme::TEXT.into()),
+                    background: Some(theme::c().text.into()),
                     border: iced::border::rounded(11),
                     ..Default::default()
                 }),
@@ -306,7 +306,7 @@ fn tile_view<'a, M: Clone + 'a>(
         base = base.push(
             container(
                 container(icon(icons::check(), 14.0, Color::WHITE)).center(22).style(|_| container::Style {
-                    background: Some(theme::ACCENT.into()),
+                    background: Some(theme::c().accent.into()),
                     border: iced::border::rounded(11),
                     ..Default::default()
                 }),
@@ -317,7 +317,7 @@ fn tile_view<'a, M: Clone + 'a>(
     if tile.dimmed {
         // Fades the page into the grid background.
         base = base.push(container(space()).width(Length::Fill).height(Length::Fill).style(|_| container::Style {
-            background: Some(Color { a: 0.6, ..theme::SURFACE_2 }.into()),
+            background: Some(Color { a: 0.6, ..theme::c().surface_2 }.into()),
             ..Default::default()
         }));
     }
@@ -347,8 +347,8 @@ fn tile_view<'a, M: Clone + 'a>(
             .height(24)
             .padding(0)
             .style(move |_, _| button::Style {
-                background: Some((if checked { theme::ACCENT } else { theme::SURFACE }).into()),
-                border: iced::Border { width: 2.0, color: if checked { theme::ACCENT } else { theme::MUTED }, radius: 6.0.into() },
+                background: Some((if checked { theme::c().accent } else { theme::c().surface }).into()),
+                border: iced::Border { width: 2.0, color: if checked { theme::c().accent } else { theme::c().muted }, radius: 6.0.into() },
                 ..Default::default()
             })
             .on_press_maybe((!busy).then(|| on(index, TileEvent::ToggleInclude)))
@@ -392,7 +392,7 @@ fn tile_view<'a, M: Clone + 'a>(
             ..Default::default()
         }));
     }
-    label = label.push(text(tile.label).size(12).color(theme::MUTED).wrapping(text::Wrapping::None));
+    label = label.push(text(tile.label).size(12).color(theme::c().muted).wrapping(text::Wrapping::None));
 
     let cell = column![
         container(frame).height(Length::FillPortion(13)),

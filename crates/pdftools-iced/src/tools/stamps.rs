@@ -61,7 +61,7 @@ fn anchor_picker<'a>(tool: ToolId, anchor: Anchor, middle_row: bool) -> Element<
                 .width(if chosen { 10 } else { 8 })
                 .height(if chosen { 10 } else { 8 })
                 .style(move |_| container::Style {
-                    background: Some((if chosen { theme::ACCENT } else { theme::BORDER }).into()),
+                    background: Some((if chosen { theme::c().accent } else { theme::c().border }).into()),
                     border: iced::border::rounded(5),
                     ..Default::default()
                 });
@@ -93,7 +93,7 @@ fn swatches<'a>(tool: ToolId, colors: &[[u8; 3]], chosen: [u8; 3]) -> Element<'a
                 background: Some(fill.into()),
                 border: iced::Border {
                     width: if selected { 3.0 } else { 1.0 },
-                    color: if selected { theme::ACCENT } else { theme::BORDER },
+                    color: if selected { theme::c().accent } else { theme::c().border },
                     radius: 12.0.into(),
                 },
                 ..Default::default()
@@ -527,7 +527,7 @@ impl ToolOptions for Watermark {
             };
             stamp = stamp.push(chooser);
             stamp = stamp.push(match &self.image_error {
-                Some(e) => text(e.clone()).size(12).color(theme::ERROR).into(),
+                Some(e) => text(e.clone()).size(12).color(theme::c().error).into(),
                 None => muted("PNG with transparency works best."),
             });
         } else {

@@ -390,7 +390,7 @@ impl Merge {
         let files: Element<'a, Message> = if self.entries.is_empty() {
             container(
                 column![
-                    widgets::icon(icons::upload(), 36.0, theme::MUTED),
+                    widgets::icon(icons::upload(), 36.0, theme::c().muted),
                     text("Drop PDF files here"),
                     muted("or"),
                     action("Add PDF files", Some(icons::plus()), true, Some(wrap(Msg::Add))),
@@ -423,7 +423,7 @@ impl Merge {
             n if kept == n => plural(n, "page"),
             n => format!("{kept} of {} kept", plural(n, "page")),
         };
-        let mut grid_header = row![section_title("Merged result"), text(summary).color(theme::MUTED).width(Length::Fill)]
+        let mut grid_header = row![section_title("Merged result"), text(summary).color(theme::c().muted).width(Length::Fill)]
             .spacing(10)
             .align_y(Alignment::Center)
             .padding(Padding { top: 0.0, right: 10.0, bottom: 0.0, left: 14.0 })
@@ -484,7 +484,7 @@ fn file_row<'a>(index: usize, count: usize, entry: &'a Entry, previews: &'a Prev
     let details: Element<'a, Message> = match &entry.state {
         EntryState::Loading => muted("Reading…"),
         EntryState::Ready(pages) => muted(plural(*pages, "page")),
-        EntryState::Failed { message, .. } => text(format!("Can’t be merged: {message}")).size(12).color(theme::ERROR).into(),
+        EntryState::Failed { message, .. } => text(format!("Can’t be merged: {message}")).size(12).color(theme::c().error).into(),
     };
     let mut row = row![
         number,

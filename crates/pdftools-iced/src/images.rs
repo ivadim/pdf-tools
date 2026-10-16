@@ -376,7 +376,7 @@ impl Images {
         let any = count > 0 && !busy;
         let mut grid_header = row![
             section_title("Pages"),
-            text(if count == 0 { String::new() } else { plural(count, "image") }).color(theme::MUTED).width(Length::Fill),
+            text(if count == 0 { String::new() } else { plural(count, "image") }).color(theme::c().muted).width(Length::Fill),
         ]
         .spacing(10)
         .align_y(Alignment::Center)

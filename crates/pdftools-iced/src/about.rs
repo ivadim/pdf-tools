@@ -26,7 +26,7 @@ pub fn platform() -> String {
 }
 
 fn link<'a>(label: &'a str, url: String) -> Element<'a, Message> {
-    button(row![text(label), icon(icons::external(), 13.0, theme::ACCENT)].spacing(4).align_y(Alignment::Center))
+    button(row![text(label), icon(icons::external(), 13.0, theme::c().accent)].spacing(4).align_y(Alignment::Center))
         .padding(0)
         .style(theme::link)
         .on_press(Message::OpenUrl(url))
@@ -53,7 +53,7 @@ pub fn view<'a>(copied: bool) -> Element<'a, Message> {
             column![
                 text("PDF Tools").size(28).font(BOLD),
                 row![
-                    text(format!("Version {} · {}", env!("CARGO_PKG_VERSION"), platform())).color(theme::MUTED),
+                    text(format!("Version {} · {}", env!("CARGO_PKG_VERSION"), platform())).color(theme::c().muted),
                     button(text(if copied { "Copied" } else { "Copy" }).size(13))
                         .padding(0)
                         .style(theme::link)

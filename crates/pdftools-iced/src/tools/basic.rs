@@ -117,7 +117,7 @@ fn estimate<'a>(file: &Single) -> Element<'a, Message> {
             share * 100.0
         )
     };
-    text(text_of).size(13).color(theme::ACCENT).into()
+    text(text_of).size(13).color(theme::c().accent).into()
 }
 
 // ── Grayscale ────────────────────────────────────────────────────────────
@@ -315,7 +315,7 @@ impl ToolOptions for Protect {
         }
         let mut confirm = column![secret("Password again", &self.confirm, "confirm")].spacing(5);
         if !self.confirm.is_empty() && self.confirm != self.password {
-            confirm = confirm.push(text("The passwords don’t match.").size(12).color(theme::ERROR));
+            confirm = confirm.push(text("The passwords don’t match.").size(12).color(theme::c().error));
         }
         column![
             section(
@@ -402,11 +402,11 @@ fn strength(password: &str) -> Option<(&'static str, iced::Color)> {
     .count();
     let length = password.chars().count();
     Some(if length >= 12 && kinds >= 3 {
-        ("Strong password", theme::SUCCESS)
+        ("Strong password", theme::c().success)
     } else if length >= 8 && kinds >= 2 {
         ("Fair password — longer is stronger", iced::color!(0xc77c12))
     } else {
-        ("Weak password — use 8 or more characters, mixing letters and numbers", theme::ERROR)
+        ("Weak password — use 8 or more characters, mixing letters and numbers", theme::c().error)
     })
 }
 

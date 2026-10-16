@@ -158,7 +158,7 @@ impl ToolOptions for Signature {
         let input: Element<'a, Message> = match self.source {
             Source::Draw => column![
                 container(Canvas::new(Pad { strokes: &self.strokes, ink }).width(Length::Fill).height(150))
-                    .style(theme::drop_zone(false)),
+                    .style(theme::paper),
                 row![muted("Draw with the mouse or a pen."), iced::widget::space::horizontal(), action("Clear", None, false, Some(Message::Option(T, "pad-clear", String::new())))]
                     .align_y(iced::Alignment::Center),
             ]
@@ -198,7 +198,7 @@ impl ToolOptions for Signature {
                     background: Some(fill.into()),
                     border: iced::Border {
                         width: if selected { 3.0 } else { 1.0 },
-                        color: if selected { theme::ACCENT } else { theme::BORDER },
+                        color: if selected { theme::c().accent } else { theme::c().border },
                         radius: 12.0.into(),
                     },
                     ..Default::default()
@@ -220,7 +220,7 @@ impl ToolOptions for Signature {
                         .width(Length::Fill)
                         .center_x(Length::Fill)
                         .padding(10)
-                        .style(theme::drop_zone(false)),
+                        .style(theme::paper),
                 );
             }
         }
@@ -340,7 +340,7 @@ impl ToolOptions for Signature {
         };
         let header = row![
             icon_button(icons::chevron_left(), "Previous page", 30.0, (self.page > 1).then(|| Message::Option(T, "page", "-1".into()))),
-            center(text(label).color(theme::MUTED)).height(30),
+            center(text(label).color(theme::c().muted)).height(30),
             icon_button(icons::chevron_right(), "Next page", 30.0, (self.page < self.pages).then(|| Message::Option(T, "page", "1".into()))),
         ]
         .padding([8, 10])
@@ -442,7 +442,7 @@ impl canvas::Program<Message> for Pad<'_> {
         let baseline = bounds.height * 0.75;
         frame.stroke(
             &Path::line(Point::new(16.0, baseline), Point::new(bounds.width - 16.0, baseline)),
-            Stroke::default().with_color(theme::BORDER).with_width(1.0),
+            Stroke::default().with_color(theme::LIGHT.border).with_width(1.0),
         );
         for stroke in self.strokes {
             let path = Path::new(|p| {
@@ -548,12 +548,12 @@ impl canvas::Program<Message> for Stage {
             let r = Self::rect(b, bounds.size());
             frame.stroke(
                 &Path::rectangle(r.position(), r.size()),
-                Stroke::default().with_color(theme::ACCENT).with_width(1.5),
+                Stroke::default().with_color(theme::c().accent).with_width(1.5),
             );
             let handle = Self::resize_handle(r);
-            frame.fill(&Path::rectangle(handle.position(), handle.size()), theme::ACCENT);
+            frame.fill(&Path::rectangle(handle.position(), handle.size()), theme::c().accent);
             let remove = Self::remove_button(r);
-            frame.fill(&Path::circle(remove.center(), HANDLE / 2.0), theme::ERROR);
+            frame.fill(&Path::circle(remove.center(), HANDLE / 2.0), theme::c().error);
             let c = remove.center();
             let arm = HANDLE / 4.5;
             let cross = Path::new(|p| {
