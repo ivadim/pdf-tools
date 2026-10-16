@@ -545,6 +545,11 @@ fn protect_and_unlock() {
     assert!(h.run(id::PROTECT, Some(&locked)).contains("Password-protected copy saved as locked.pdf"));
     assert!(pdftools_core::inspect(&locked).unwrap().needs_password);
 
+    // Another tool explains what to do with a locked file.
+    h.open("Compress");
+    h.choose(id::COMPRESS, &locked);
+    assert_eq!(h.status(id::COMPRESS), "Unlock the file first — use “Unlock…” above.");
+
     h.open("Unlock");
     h.choose(id::UNLOCK, &fixture("sizes.pdf"));
     assert_eq!(h.status(id::UNLOCK), "This file isn’t protected.");

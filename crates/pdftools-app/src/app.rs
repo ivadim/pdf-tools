@@ -586,7 +586,14 @@ fn refresh_single(tool: &mut dyn Tool, s: &mut Shared) {
         format!("{kept} of {} kept", tools::plural(tiles.len(), "page"))
     };
     let hint = if base.file.is_none() {
-        Some("Choose a PDF to get started.".to_owned())
+        // Say what's wrong with a chosen file rather than asking for one.
+        Some(match &base.state {
+            FileState::Failed { locked: true, .. } => "Unlock the file first — use “Unlock…” above.",
+            FileState::Failed { .. } => "This file can’t be opened. Choose another one.",
+            FileState::Loading(_) => "Reading the file…",
+            _ => "Choose a PDF to get started.",
+        }
+        .to_owned())
     } else if caps.include && base.page_count() > 0 && base.kept_pages().is_empty() {
         Some("Every page is left out — tick at least one to keep it.".to_owned())
     } else {
