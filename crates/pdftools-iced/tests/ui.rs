@@ -161,6 +161,7 @@ fn screens_render() {
     h.screenshot("about");
 
     h.click("Compress");
+    h.screenshot("compress-empty");
     h.dialogs.open(&[&fixture("tracemonkey.pdf")]);
     h.click("Choose a PDF");
     h.render_pages(ToolId::Compress, 14);

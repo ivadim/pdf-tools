@@ -814,6 +814,8 @@ fn file_card<'a>(id: ToolId, single: &'a Single, previews: &'a Previews, busy: b
                 muted("or drop it anywhere on the window"),
             ]
             .spacing(6)
+            // Full width, so the content centres in the box, not just on itself.
+            .width(Length::Fill)
             .align_x(Alignment::Center),
         )
         .width(Length::Fill)
