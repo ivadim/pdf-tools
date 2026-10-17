@@ -4,149 +4,15 @@
 //! checked with the PDF engine. Screenshots of key screens are written to
 //! target/iced-shots.
 
-use std::path::{Path, PathBuf};
-use std::rc::Rc;
+mod common;
 
-use iced::{Settings, Size};
-use iced_test::simulator::Simulator;
-use pdftools_app::app::{App, Message, Screen};
+use common::*;
+use pdftools_app::app::{Message, Screen};
 use pdftools_app::catalog::ToolId;
-use pdftools_app::dialogs::ScriptedDialogs;
 use pdftools_app::theme;
-use pdftools_app::widgets::{Run, TileEvent};
+use pdftools_app::widgets::TileEvent;
 use pdftools_app::{images, merge};
-
-struct Harness {
-    app: App,
-    dialogs: Rc<ScriptedDialogs>,
-    out: PathBuf,
-}
-
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/pdfjs").join(name)
-}
-
-fn page_count(path: &Path) -> usize {
-    pdftools_core::page_count(path).unwrap()
-}
-
-fn rotations(path: &Path) -> Vec<i64> {
-    let doc = lopdf::Document::load(path).unwrap();
-    doc.get_pages()
-        .values()
-        .map(|id| doc.get_dictionary(*id).unwrap().get(b"Rotate").and_then(lopdf::Object::as_i64).unwrap_or(0))
-        .collect()
-}
-
-fn content(path: &Path, page: u32) -> String {
-    let doc = lopdf::Document::load(path).unwrap();
-    let id = doc.get_pages()[&page];
-    String::from_utf8_lossy(&doc.get_page_content(id)).into_owned()
-}
-
-impl Harness {
-    fn new(name: &str) -> Self {
-        let dialogs = Rc::new(ScriptedDialogs::default());
-        let app = App::new(dialogs.clone(), true);
-        let out = std::env::temp_dir().join(format!("pdftools-app-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&out);
-        std::fs::create_dir_all(&out).unwrap();
-        Self { app, dialogs, out }
-    }
-
-    /// Delivers a message, then everything the background work produced.
-    fn send(&mut self, message: Message) {
-        let _ = self.app.update(message);
-        loop {
-            let queued = std::mem::take(&mut self.app.queued);
-            if queued.is_empty() {
-                break;
-            }
-            for message in queued {
-                let _ = self.app.update(message);
-            }
-        }
-    }
-
-    fn simulator(&self) -> Simulator<'_, Message> {
-        let settings = Settings { default_text_size: theme::FONT.into(), ..Settings::default() };
-        Simulator::with_size(settings, Size::new(1180.0, 760.0), self.app.view())
-    }
-
-    /// Clicks the element showing `label`, as a user would.
-    fn click(&mut self, label: &str) {
-        let messages: Vec<Message> = {
-            let mut simulator = self.simulator();
-            simulator.click(label).unwrap_or_else(|e| panic!("no {label:?} to click: {e:?}"));
-            simulator.into_messages().collect()
-        };
-        for message in messages {
-            self.send(message);
-        }
-    }
-
-    fn shows(&self, label: &str) -> bool {
-        self.simulator().find(label).is_ok()
-    }
-
-    /// Renders previews (the grid asks for them as they scroll into view;
-    /// the headless simulator doesn't scroll).
-    fn render_pages(&mut self, tool: ToolId, pages: usize) {
-        for index in 0..pages {
-            self.send(Message::Tile(tool, index, TileEvent::Shown));
-        }
-    }
-
-    fn screenshot(&self, name: &str) {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/iced-shots");
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join(format!("{name}.png"));
-        // iced names the file after the renderer; remove the old one so a
-        // fresh image is written rather than compared.
-        let _ = std::fs::remove_file(dir.join(format!("{name}-tiny-skia.png")));
-        let mut simulator = self.simulator();
-        simulator.snapshot(&theme::theme()).unwrap().matches_image(&path).unwrap();
-    }
-
-    fn out(&self, name: &str) -> PathBuf {
-        self.out.join(name)
-    }
-
-    fn option(&mut self, tool: ToolId, key: &'static str, value: &str) {
-        self.send(Message::Option(tool, key, value.into()));
-    }
-
-    fn choose(&mut self, tool: ToolId, file: &Path) {
-        self.send(Message::Navigate(Screen::Tool(tool)));
-        self.dialogs.open(&[file]);
-        self.send(Message::PickFile(tool));
-    }
-
-    /// Clicks the run button (by its label) and returns what the run bar says.
-    fn run(&mut self, label: &str, save_as: Option<&Path>) -> String {
-        if let Some(path) = save_as {
-            self.dialogs.save(Some(path));
-        }
-        self.click(label);
-        self.status()
-    }
-
-    /// The run bar's state for the current screen.
-    fn status(&self) -> String {
-        let run = match self.app.screen {
-            Screen::Tool(ToolId::Merge) => self.app.merge.run.clone(),
-            Screen::Tool(ToolId::Images) => self.app.images.run.clone(),
-            Screen::Tool(tool) => self.app.run_of(tool),
-            _ => Run::Idle,
-        };
-        match run {
-            Run::Done { message, .. } => message,
-            Run::Failed(message) => format!("failed: {message}"),
-            Run::Running(message) => format!("running: {message}"),
-            Run::Idle => "idle".into(),
-        }
-    }
-}
+use std::path::Path;
 
 #[test]
 fn screens_render() {
