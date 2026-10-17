@@ -2555,7 +2555,7 @@ dependencies = [
 
 [[package]]
 name = "pdftools-app"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "iced",
  "iced_test",
@@ -2570,7 +2570,7 @@ dependencies = [
 
 [[package]]
 name = "pdftools-core"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "aes 0.8.4",
  "getrandom 0.3.4",
@@ -2581,11 +2581,12 @@ dependencies = [
 
 [[package]]
 name = "pdftools-render"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "hayro",
  "image",
  "parley",
+ "pdftools-core",
  "swash",
  "tiny-skia 0.12.0",
 ]

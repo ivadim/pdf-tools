@@ -26,9 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let summary = compress_file(&input, Level::Balanced, &out.join("compressed.pdf"))?;
         Ok(format!("{} images re-encoded", summary.images_recompressed))
     });
-    time("grayscale", &out.join("grayscale.pdf"), || {
-        Ok(format!("{:?}", grayscale_file(&input, true, &out.join("grayscale.pdf"))?))
-    });
+    time("grayscale", &out.join("grayscale.pdf"), || Ok(format!("{:?}", grayscale_file(&input, true, &out.join("grayscale.pdf"))?)));
     time("page numbers", &out.join("numbered.pdf"), || {
         let options = PageNumbers {
             anchor: Anchor::new(HAlign::Center, VAlign::Bottom),

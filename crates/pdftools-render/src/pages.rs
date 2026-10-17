@@ -52,7 +52,15 @@ impl DocCache {
             self.docs.push(entry);
         } else {
             let data = std::fs::read(path).map_err(|e| e.to_string())?;
-            let pdf = Pdf::new(data).map_err(|e| format!("cannot read PDF: {e:?}"))?;
+            // A damaged file is shown as the pages the tools can recover from it.
+            let pdf = match Pdf::new(data) {
+                Ok(pdf) => pdf,
+                Err(e) => std::fs::read(path)
+                    .ok()
+                    .and_then(|data| pdftools_core::repaired_bytes(&data))
+                    .and_then(|repaired| Pdf::new(repaired).ok())
+                    .ok_or_else(|| format!("cannot read PDF: {e:?}"))?,
+            };
             if self.docs.len() >= CACHED_DOCS {
                 self.docs.remove(0);
             }
@@ -71,9 +79,7 @@ impl DocCache {
 pub fn render(request: &PreviewRequest, docs: &mut DocCache) -> Result<Rendered, String> {
     let pdf = docs.get(&request.path)?;
     let pages = pdf.pages();
-    let page = pages
-        .get(request.page.wrapping_sub(1))
-        .ok_or_else(|| format!("page {} does not exist", request.page))?;
+    let page = pages.get(request.page.wrapping_sub(1)).ok_or_else(|| format!("page {} does not exist", request.page))?;
     let (page_w, page_h) = page.render_dimensions();
     // Scale so the displayed width (after extra rotation) matches the request.
     let quarter_turn = request.rotation.rem_euclid(180) == 90;
@@ -194,4 +200,3 @@ mod tests {
         assert_eq!(docs.docs.len(), CACHED_DOCS - 1);
     }
 }
-

@@ -11,10 +11,10 @@ use pdftools_render::ranges::{format_list, parse_groups};
 
 use super::set;
 use crate::app::Message;
-use crate::previews::Thumb;
 use crate::catalog::ToolId;
 use crate::dialogs::Dialogs;
 use crate::icons;
+use crate::previews::Thumb;
 use crate::single::{choose_output, edit, file_name, plural, Job, Single, TileSpec, ToolOptions};
 use crate::theme;
 use crate::widgets::{card_options, field, muted, section, Caps, TileEvent};
@@ -26,8 +26,14 @@ fn input<'a>(placeholder: &'a str, value: &'a str, on_input: impl Fn(String) -> 
 // ── Split ────────────────────────────────────────────────────────────────
 
 const PART_COLORS: [Color; 8] = [
-    color!(0x3b82f6), color!(0xf97316), color!(0x22c55e), color!(0xa855f7),
-    color!(0xec4899), color!(0x14b8a6), color!(0xeab308), color!(0xef4444),
+    color!(0x3b82f6),
+    color!(0xf97316),
+    color!(0x22c55e),
+    color!(0xa855f7),
+    color!(0xec4899),
+    color!(0x14b8a6),
+    color!(0xeab308),
+    color!(0xef4444),
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -122,15 +128,18 @@ impl ToolOptions for Split {
         .spacing(18);
         match self.mode {
             Mode::Ranges => {
-                content = content.push(column![
-                    field("Page ranges", input("e.g. 1-3, 4-8, 9-", &self.ranges, set(t, "ranges"))),
-                    muted("Separate files with commas. “9-” runs to the last page."),
-                ]
-                .spacing(5));
+                content = content.push(
+                    column![
+                        field("Page ranges", input("e.g. 1-3, 4-8, 9-", &self.ranges, set(t, "ranges"))),
+                        muted("Separate files with commas. “9-” runs to the last page."),
+                    ]
+                    .spacing(5),
+                );
             }
             Mode::Every => content = content.push(field("Pages per file", input("e.g. 5", &self.every, set(t, "every")))),
             Mode::Extract => {
-                content = content.push(muted("Click pages in the preview to select them. Shift-click selects a range, Ctrl-click toggles."));
+                content =
+                    content.push(muted("Click pages in the preview to select them. Shift-click selects a range, Ctrl-click toggles."));
             }
             Mode::Each => {}
         }
@@ -138,11 +147,13 @@ impl ToolOptions for Split {
             content = content.push(text(summary).size(13).color(theme::c().accent));
         }
         if self.mode != Mode::Extract {
-            content = content.push(column![
-                field("File names", input("name", &self.base_name, set(t, "base"))),
-                muted("Files are numbered: name-1.pdf, name-2.pdf, …"),
-            ]
-            .spacing(5));
+            content = content.push(
+                column![
+                    field("File names", input("name", &self.base_name, set(t, "base"))),
+                    muted("Files are numbered: name-1.pdf, name-2.pdf, …"),
+                ]
+                .spacing(5),
+            );
         }
         content.into()
     }
@@ -178,11 +189,9 @@ impl ToolOptions for Split {
                     return TileSpec { selected, dimmed: !self.selected.is_empty() && !selected, ..tile };
                 }
                 match parts.iter().position(|p| p.contains(&page)) {
-                    Some(part) => TileSpec {
-                        badge: Some(format!("File {}", part + 1)),
-                        stripe: Some(PART_COLORS[part % PART_COLORS.len()]),
-                        ..tile
-                    },
+                    Some(part) => {
+                        TileSpec { badge: Some(format!("File {}", part + 1)), stripe: Some(PART_COLORS[part % PART_COLORS.len()]), ..tile }
+                    }
                     None => TileSpec { dimmed: true, label: "not included".into(), ..tile },
                 }
             })
@@ -443,13 +452,15 @@ impl ToolOptions for Metadata {
         if file.loaded().is_none() {
             return column![].into();
         }
-        let fields = FIELDS.iter().zip(&self.values).map(|((key, label, placeholder), value)| {
-            field(label, input(placeholder, value, set(ToolId::Metadata, key)))
-        });
-        let clear = iced::widget::button(text("Clear all").size(13))
-            .padding(0)
-            .style(theme::link)
-            .on_press(Message::Option(ToolId::Metadata, "clear", String::new()));
+        let fields = FIELDS
+            .iter()
+            .zip(&self.values)
+            .map(|((key, label, placeholder), value)| field(label, input(placeholder, value, set(ToolId::Metadata, key))));
+        let clear = iced::widget::button(text("Clear all").size(13)).padding(0).style(theme::link).on_press(Message::Option(
+            ToolId::Metadata,
+            "clear",
+            String::new(),
+        ));
         column![
             row![crate::widgets::section_title("Document properties"), iced::widget::space::horizontal(), clear]
                 .align_y(iced::Alignment::Center),
@@ -490,8 +501,7 @@ impl ToolOptions for Metadata {
         let output = choose_output(dialogs, file, "edited")?;
         let v = self.values.clone().map(|v| Some(v.trim().to_owned()).filter(|v| !v.is_empty()));
         let [title, author, subject, keywords, creator, producer] = v;
-        let metadata =
-            pdftools_core::Metadata { title, author, subject, keywords, creator, producer, created: None, modified: None };
+        let metadata = pdftools_core::Metadata { title, author, subject, keywords, creator, producer, created: None, modified: None };
         let (keep, note) = (file.keep(), file.removed_note());
         Some(Box::new(move || {
             edit(&input, keep.as_deref(), &output, |doc| {

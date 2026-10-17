@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -14,14 +14,14 @@ pub enum Error {
     #[error("rotation must be a multiple of 90 degrees, got {0}")]
     InvalidRotation(i64),
 
-    #[error("could not read {}: {source}", path.display())]
+    #[error("couldn’t open {}: {}", file_name(path), load_reason(source))]
     Load {
         path: PathBuf,
         #[source]
         source: lopdf::Error,
     },
 
-    #[error("{} is password-protected", .0.display())]
+    #[error("{} is password-protected", file_name(.0))]
     Encrypted(PathBuf),
 
     #[error("the password is incorrect")]
@@ -30,7 +30,7 @@ pub enum Error {
     #[error("the file is not password-protected")]
     NotEncrypted,
 
-    #[error("could not write {}: {message}", path.display())]
+    #[error("couldn’t save {}: {message}", file_name(path))]
     Save { path: PathBuf, message: String },
 
     #[error("invalid option: {0}")]
@@ -39,9 +39,49 @@ pub enum Error {
     #[error("could not read the image: {0}")]
     Image(String),
 
-    #[error("could not read {}: {message}", path.display())]
+    #[error("couldn’t read {}: {message}", file_name(path))]
     ReadImage { path: PathBuf, message: String },
 
     #[error(transparent)]
     Pdf(#[from] lopdf::Error),
+}
+
+/// Messages name files, not full paths: the person knows where they are.
+fn file_name(path: &Path) -> String {
+    path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned())
+}
+
+/// Why a PDF couldn't be opened, in words a person can act on.
+fn load_reason(error: &lopdf::Error) -> String {
+    match error {
+        lopdf::Error::IO(e) => match e.kind() {
+            std::io::ErrorKind::NotFound => "the file no longer exists".into(),
+            std::io::ErrorKind::PermissionDenied => "access was denied".into(),
+            _ => format!("it couldn’t be read ({e})"),
+        },
+        _ => "it isn’t a PDF, or it’s damaged".into(),
+    }
+}
+
+/// Why a file couldn't be written, in words a person can act on.
+pub(crate) fn io_reason(error: &std::io::Error) -> String {
+    match error.kind() {
+        std::io::ErrorKind::NotFound => "the folder doesn’t exist".into(),
+        std::io::ErrorKind::PermissionDenied => "access was denied — is the file open in another app?".into(),
+        _ => error.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn messages_name_the_file_and_say_why() {
+        let missing = || std::io::Error::from(std::io::ErrorKind::NotFound);
+        let load = Error::Load { path: "/some/where/report.pdf".into(), source: lopdf::Error::IO(missing()) };
+        assert_eq!(load.to_string(), "couldn’t open report.pdf: the file no longer exists");
+        let save = Error::Save { path: "/x/out.pdf".into(), message: io_reason(&missing()) };
+        assert_eq!(save.to_string(), "couldn’t save out.pdf: the folder doesn’t exist");
+    }
 }

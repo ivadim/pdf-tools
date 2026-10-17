@@ -13,10 +13,8 @@ use pdftools_core::compress::{compress_file, Level};
 use pdftools_core::grayscale::grayscale_file;
 use pdftools_core::organize::{organize_file, split_file, SplitPart};
 use pdftools_core::security::{protect_file, unlock_file, Protection};
-use pdftools_core::stamps::{
-    add_image_stamp_file, add_page_numbers_file, add_signature_file, ImageStamp, PageNumbers, Placement,
-};
-use pdftools_core::{metadata, merge_files, Anchor, Error, HAlign, Metadata, PageSpec, VAlign};
+use pdftools_core::stamps::{add_image_stamp_file, add_page_numbers_file, add_signature_file, ImageStamp, PageNumbers, Placement};
+use pdftools_core::{merge_files, metadata, Anchor, Error, HAlign, Metadata, PageSpec, VAlign};
 
 // ── Harness ──────────────────────────────────────────────────────────────
 
@@ -62,11 +60,7 @@ fn for_each_fixture(test: &str, mut check: impl FnMut(&Path, &Path) -> Result<()
 }
 
 fn panic_message(panic: &Box<dyn std::any::Any + Send>) -> String {
-    panic
-        .downcast_ref::<String>()
-        .cloned()
-        .or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string()))
-        .unwrap_or_default()
+    panic.downcast_ref::<String>().cloned().or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default()
 }
 
 trait Context<T> {
@@ -95,15 +89,7 @@ fn load(path: &Path) -> Result<Document, String> {
 /// be extracted (unusual fonts) come back empty, consistently.
 fn page_texts(doc: &Document) -> Vec<String> {
     let count = doc.get_pages().len() as u32;
-    (1..=count)
-        .map(|n| {
-            doc.extract_text(&[n])
-                .unwrap_or_default()
-                .split_whitespace()
-                .collect::<Vec<_>>()
-                .join(" ")
-        })
-        .collect()
+    (1..=count).map(|n| doc.extract_text(&[n]).unwrap_or_default().split_whitespace().collect::<Vec<_>>().join(" ")).collect()
 }
 
 fn rotations(doc: &Document) -> Vec<i64> {
@@ -433,10 +419,13 @@ fn grayscale_leaves_no_device_colour_operators() {
         }
         for (id, stream) in images(&doc) {
             let dict = &stream.dict;
-            let rgb = dict.get(b"ColorSpace").and_then(Object::as_name).ok() == Some(b"DeviceRGB".as_slice());
+            let space = dict.get(b"ColorSpace").and_then(Object::as_name).ok();
+            let device_colour = matches!(space, Some(b"DeviceRGB" | b"DeviceCMYK"));
             let eight_bit = dict.get(b"BitsPerComponent").and_then(Object::as_i64).ok() == Some(8);
             let plain = !dict.has(b"Decode") && !dict.has(b"ImageMask");
-            ensure(!(rgb && eight_bit && plain), || format!("image {id:?} is still DeviceRGB"))?;
+            ensure(!(device_colour && eight_bit && plain), || {
+                format!("image {id:?} is still in colour ({:?})", space.map(String::from_utf8_lossy))
+            })?;
         }
         Ok(())
     });

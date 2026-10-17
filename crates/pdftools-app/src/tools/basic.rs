@@ -9,10 +9,10 @@ use pdftools_core::PageSpec;
 
 use super::{set, toggle};
 use crate::app::Message;
-use crate::previews::Thumb;
 use crate::catalog::ToolId;
-use crate::icons;
 use crate::dialogs::Dialogs;
+use crate::icons;
+use crate::previews::Thumb;
 use crate::single::{choose_output, edit, format_bytes, plural, Job, Single, ToolOptions};
 use crate::theme;
 use crate::widgets::{card_options, field, icon_button, muted, section, Caps, TileEvent};
@@ -42,15 +42,18 @@ impl ToolOptions for Compress {
         };
         section(
             "Compression",
-            [card_options(
-                &[
-                    ("lossless", "Lossless", "Removes unused data. Pages look exactly the same."),
-                    ("balanced", "Balanced", "Images up to 2000 px at good JPEG quality. Recommended."),
-                    ("strong", "Strong", "Images up to 1200 px at lower quality. Smallest files."),
-                ],
-                selected,
-                |v| Message::Option(ToolId::Compress, "level", v.into()),
-            ), estimate(file)],
+            [
+                card_options(
+                    &[
+                        ("lossless", "Lossless", "Removes unused data. Pages look exactly the same."),
+                        ("balanced", "Balanced", "Images up to 2000 px at good JPEG quality. Recommended."),
+                        ("strong", "Strong", "Images up to 1200 px at lower quality. Smallest files."),
+                    ],
+                    selected,
+                    |v| Message::Option(ToolId::Compress, "level", v.into()),
+                ),
+                estimate(file),
+            ],
         )
     }
 
@@ -244,8 +247,7 @@ impl ToolOptions for Rotate {
 
     fn validate(&self, file: &Single) -> Option<String> {
         let rotated = self.rotations.iter().enumerate().any(|(i, r)| *r != 0 && !file.excluded.contains(&(i + 1)));
-        (!rotated && file.excluded.is_empty())
-            .then(|| "Rotate at least one page — use the buttons on each page or above.".into())
+        (!rotated && file.excluded.is_empty()).then(|| "Rotate at least one page — use the buttons on each page or above.".into())
     }
 
     fn run_label(&self) -> &'static str {
@@ -255,8 +257,7 @@ impl ToolOptions for Rotate {
     fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {
         let output = choose_output(dialogs, file, "rotated")?;
         let input = file.path().expect("file loaded").to_path_buf();
-        let pages: Vec<PageSpec> =
-            file.kept_pages().into_iter().map(|p| PageSpec::new(0, p).rotated(self.rotation(p) as i64)).collect();
+        let pages: Vec<PageSpec> = file.kept_pages().into_iter().map(|p| PageSpec::new(0, p).rotated(self.rotation(p) as i64)).collect();
         let note = file.removed_note();
         Some(Box::new(move || {
             pdftools_core::organize::organize_file(&input, &pages, &output).map_err(|e| e.to_string())?;
@@ -301,14 +302,12 @@ impl ToolOptions for Protect {
                 .style(theme::input)
         };
         let (eye, eye_label) = if self.show { (icons::eye_off(), "Hide passwords") } else { (icons::eye(), "Show passwords") };
-        let mut password = column![
-            row![
-                secret("Password", &self.password, "password").width(Length::Fill),
-                icon_button(eye, eye_label, 34.0, Some(Message::Option(t, "show", if self.show { "0" } else { "1" }.into()))),
-            ]
-            .spacing(6)
-            .align_y(Alignment::Center),
+        let mut password = column![row![
+            secret("Password", &self.password, "password").width(Length::Fill),
+            icon_button(eye, eye_label, 34.0, Some(Message::Option(t, "show", if self.show { "0" } else { "1" }.into()))),
         ]
+        .spacing(6)
+        .align_y(Alignment::Center),]
         .spacing(5);
         if let Some((label, color)) = strength(&self.password) {
             password = password.push(text(label).size(12).color(color));
@@ -318,10 +317,7 @@ impl ToolOptions for Protect {
             confirm = confirm.push(text("The passwords don’t match.").size(12).color(theme::c().error));
         }
         column![
-            section(
-                "Password",
-                [field("Password to open the file", password), field("Repeat the password", confirm)]
-            ),
+            section("Password", [field("Password to open the file", password), field("Repeat the password", confirm)]),
             section(
                 "Permissions",
                 [
@@ -441,7 +437,10 @@ impl ToolOptions for Unlock {
                 )],
             )
         } else {
-            section("Restrictions", [text("This file restricts printing, copying or editing. Unlocking removes those restrictions.").into()])
+            section(
+                "Restrictions",
+                [text("This file restricts printing, copying or editing. Unlocking removes those restrictions.").into()],
+            )
         }
     }
 

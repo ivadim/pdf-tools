@@ -91,22 +91,14 @@ pub fn render_text(text: &str, family: Family, bold: bool, color: [u8; 3], size:
             let run = glyph_run.run();
             let font = run.font();
             let Some(font_ref) = FontRef::from_index(font.data.as_ref(), font.index as usize) else { continue };
-            let mut scaler = scale
-                .builder(font_ref)
-                .size(run.font_size())
-                .hint(false)
-                .normalized_coords(run.normalized_coords())
-                .build();
+            let mut scaler = scale.builder(font_ref).size(run.font_size()).hint(false).normalized_coords(run.normalized_coords()).build();
             for glyph in glyph_run.positioned_glyphs() {
                 let (x, y) = (glyph.x + pad, glyph.y + pad);
-                let Some(image) = Render::new(&[
-                    Source::ColorOutline(0),
-                    Source::ColorBitmap(StrikeWith::BestFit),
-                    Source::Outline,
-                ])
-                .format(Format::Alpha)
-                .offset(Vector::new(x.fract(), y.fract()))
-                .render(&mut scaler, glyph.id as u16) else {
+                let Some(image) = Render::new(&[Source::ColorOutline(0), Source::ColorBitmap(StrikeWith::BestFit), Source::Outline])
+                    .format(Format::Alpha)
+                    .offset(Vector::new(x.fract(), y.fract()))
+                    .render(&mut scaler, glyph.id as u16)
+                else {
                     continue;
                 };
                 let left = x.floor() as i32 + image.placement.left;
@@ -288,9 +280,8 @@ pub fn rotate_picture(picture: &Picture, degrees: f32) -> Picture {
         return picture.clone();
     };
     // Screen y points down, so counter-clockwise is a negative angle here.
-    let transform = tiny_skia::Transform::from_translate(out_w as f32 / 2.0, out_h as f32 / 2.0)
-        .pre_rotate(-degrees)
-        .pre_translate(-w / 2.0, -h / 2.0);
+    let transform =
+        tiny_skia::Transform::from_translate(out_w as f32 / 2.0, out_h as f32 / 2.0).pre_rotate(-degrees).pre_translate(-w / 2.0, -h / 2.0);
     let paint = tiny_skia::PixmapPaint { quality: tiny_skia::FilterQuality::Bilinear, ..Default::default() };
     target.draw_pixmap(0, 0, source.as_ref(), &paint, transform, None);
     let pixels = target.pixels().iter().flat_map(|p| {

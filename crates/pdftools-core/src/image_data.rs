@@ -78,9 +78,6 @@ pub(crate) fn decode_image(doc: &Document, stream: &Stream) -> Option<DecodedIma
 
     let filters = filters(stream);
     if filters == [b"DCTDecode".to_vec()] {
-        if components == 4 {
-            return None;
-        }
         let image = image::load_from_memory_with_format(&stream.content, ImageFormat::Jpeg).ok()?;
         if image.width() != width || image.height() != height {
             return None;
@@ -89,7 +86,8 @@ pub(crate) fn decode_image(doc: &Document, stream: &Stream) -> Option<DecodedIma
             1 => DynamicImage::ImageLuma8(image.to_luma8()),
             _ => DynamicImage::ImageRgb8(image.to_rgb8()),
         };
-        return Some(DecodedImage { image, was_jpeg: true, converted_from_cmyk: false });
+        // The decoder turns CMYK JPEGs into RGB.
+        return Some(DecodedImage { image, was_jpeg: true, converted_from_cmyk: components == 4 });
     }
     if !(filters.is_empty() || filters == [b"FlateDecode".to_vec()]) {
         return None;
@@ -212,9 +210,7 @@ pub(crate) fn mask_ids(doc: &Document) -> std::collections::HashSet<ObjectId> {
 }
 
 pub(crate) fn is_image(object: &Object) -> bool {
-    object
-        .as_stream()
-        .is_ok_and(|s| s.dict.get(b"Subtype").and_then(Object::as_name).ok() == Some(b"Image"))
+    object.as_stream().is_ok_and(|s| s.dict.get(b"Subtype").and_then(Object::as_name).ok() == Some(b"Image"))
 }
 
 #[cfg(test)]

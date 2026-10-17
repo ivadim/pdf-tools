@@ -3,20 +3,18 @@
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use iced::widget::{
-    button, center, column, container, image, mouse_area, opaque, row, scrollable, space, stack, text,
-};
+use iced::widget::{button, center, column, container, image, mouse_area, opaque, row, scrollable, space, stack, text};
 use iced::{event, window, Alignment, Color, ContentFit, Element, Event, Length, Padding, Subscription, Task};
 use pdftools_core::PdfInfo;
 use pdftools_render::pages::PreviewRequest;
 
 use crate::catalog::{self, ToolId, TOOLS};
-use crate::settings::{Settings, ThemeChoice};
-use crate::images::{self, Images};
-use crate::merge::{self, Context, Effect, Merge};
 use crate::dialogs::{self, Dialogs};
 use crate::icons;
+use crate::images::{self, Images};
+use crate::merge::{self, Context, Effect, Merge};
 use crate::previews::{self, Previews, Thumb};
+use crate::settings::{Settings, ThemeChoice};
 use crate::single::{file_name, plural, FileState, Loaded, Single, TileSpec, ToolOptions};
 use crate::theme;
 use crate::tools;
@@ -318,13 +316,15 @@ impl App {
 
     fn merge_update(&mut self, msg: merge::Msg) -> Task<Message> {
         let dialogs = self.dialogs.clone();
-        let effect = self.merge.update(msg, &mut Context { dialogs: &*dialogs, previews: &mut self.previews });
+        let shift = self.modifiers.shift();
+        let effect = self.merge.update(msg, &mut Context { dialogs: &*dialogs, previews: &mut self.previews, shift });
         self.multi(ToolId::Merge, effect)
     }
 
     fn images_update(&mut self, msg: images::Msg) -> Task<Message> {
         let dialogs = self.dialogs.clone();
-        let effect = self.images.update(msg, &mut Context { dialogs: &*dialogs, previews: &mut self.previews });
+        let shift = self.modifiers.shift();
+        let effect = self.images.update(msg, &mut Context { dialogs: &*dialogs, previews: &mut self.previews, shift });
         self.multi(ToolId::Images, effect)
     }
 
@@ -492,9 +492,21 @@ impl App {
                         return self.show_viewer();
                     }
                     TileEvent::ToggleInclude => {
-                        if !single.excluded.remove(&spec.page) {
-                            single.excluded.insert(spec.page);
+                        // Shift-click sets every page from the last one clicked
+                        // to this one the same way.
+                        let leave_out = !single.excluded.contains(&spec.page);
+                        let pages = match (modifiers.shift(), single.last_toggled) {
+                            (true, Some(last)) => last.min(spec.page)..=last.max(spec.page),
+                            _ => spec.page..=spec.page,
+                        };
+                        for page in pages {
+                            if leave_out {
+                                single.excluded.insert(page);
+                            } else {
+                                single.excluded.remove(&page);
+                            }
                         }
+                        single.last_toggled = Some(spec.page);
                     }
                     other => tool.tile_event(index, spec.page, other),
                 }
@@ -619,14 +631,13 @@ impl App {
                 _ => "Open a tool first, then drop files",
             };
             layers = layers.push(
-                container(center(text(label).size(18).font(BOLD).color(theme::c().accent)))
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .style(|_| container::Style {
+                container(center(text(label).size(18).font(BOLD).color(theme::c().accent))).width(Length::Fill).height(Length::Fill).style(
+                    |_| container::Style {
                         background: Some(Color { a: 0.12, ..theme::c().accent }.into()),
                         border: iced::Border { width: 3.0, color: theme::c().accent, radius: 0.0.into() },
                         ..Default::default()
-                    }),
+                    },
+                ),
             );
         }
         layers.into()
@@ -635,16 +646,12 @@ impl App {
     fn sidebar(&self) -> Element<'_, Message> {
         let nav = |screen: Screen, name: &'static str, chip: Element<'static, Message>| -> Element<'_, Message> {
             let active = self.screen == screen;
-            button(
-                row![chip, text(name).font(if active { BOLD } else { iced::Font::DEFAULT })]
-                    .spacing(10)
-                    .align_y(Alignment::Center),
-            )
-            .width(Length::Fill)
-            .padding([5, 8])
-            .style(theme::nav(active))
-            .on_press(Message::Navigate(screen))
-            .into()
+            button(row![chip, text(name).font(if active { BOLD } else { iced::Font::DEFAULT })].spacing(10).align_y(Alignment::Center))
+                .width(Length::Fill)
+                .padding([5, 8])
+                .style(theme::nav(active))
+                .on_press(Message::Navigate(screen))
+                .into()
         };
         let plain_chip = |handle| -> Element<'static, Message> {
             container(icon(handle, 15.0, theme::c().muted)).center(26).style(theme::chip(theme::c().muted)).into()
@@ -656,8 +663,13 @@ impl App {
         container(
             column![
                 text("PDF Tools").size(16).font(BOLD),
-                tools,
-                space::vertical(),
+                // The tools scroll in short windows; About and the theme
+                // switch stay in reach at the bottom.
+                scrollable(tools)
+                    .direction(iced::widget::scrollable::Direction::Vertical(
+                        iced::widget::scrollable::Scrollbar::new().width(4).scroller_width(4),
+                    ))
+                    .height(Length::Fill),
                 nav(Screen::About, "About", plain_chip(icons::info())),
                 self.theme_switch(),
             ]
@@ -748,9 +760,7 @@ impl App {
         let tiles = self.tiles(id);
 
         let closeup = self.closeup_request(id).and_then(|r| self.previews.get(&r));
-        let left = column![file_card(id, single, &self.previews, busy), tool.view(single, closeup)]
-            .spacing(18)
-            .padding(14);
+        let left = column![file_card(id, single, &self.previews, busy), tool.view(single, closeup)].spacing(18).padding(14);
         let left = container(scrollable(left)).width(340).height(Length::Fill).style(theme::panel);
 
         let kept = tiles.iter().filter(|t| !t.excluded).count();
@@ -759,30 +769,25 @@ impl App {
             n if kept == n => plural(n, "page"),
             n => format!("{kept} of {} kept", plural(n, "page")),
         };
-        let mut header = row![section_title("Pages"), text(summary).color(theme::c().muted).width(Length::Fill)]
-            .spacing(10)
-            .align_y(Alignment::Center)
-            .padding(Padding { top: 0.0, right: 10.0, bottom: 0.0, left: 14.0 })
-            .height(46);
+        let mut actions = Vec::new();
         if caps.include && !single.excluded.is_empty() {
-            header = header.push(action("Include all", Some(icons::check()), false, Some(Message::IncludeAll(id))));
+            actions.push(("Include all", icons::check(), Some(Message::IncludeAll(id))));
         }
         for (label, handle, act) in tool.grid_actions() {
-            header = header.push(widgets::small_action(label, handle(), (!busy && !tiles.is_empty()).then_some(Message::GridAction(id, act))));
+            actions.push((label, handle(), (!busy && !tiles.is_empty()).then_some(Message::GridAction(id, act))));
         }
+        let header = widgets::grid_header("Pages", summary, actions);
         let empty = tool.empty_text(single).unwrap_or(match &single.state {
             FileState::Ready(f) if f.info.needs_password => "Pages can be previewed once the file is unlocked.",
             FileState::Ready(_) => "This file has no pages to preview.",
+            FileState::Failed { .. } => "This file can’t be previewed.",
             _ => "Pages will appear here once you choose a file.",
         });
         let right: Element<'_, Message> = match (tool.stage_page(), single.path()) {
             // Before there's a file, the big area is where to put one.
-            _ if matches!(single.state, FileState::Empty) => drop_zone(
-                "Drop a PDF here",
-                "or anywhere on the window",
-                "Choose a PDF…",
-                (!busy).then_some(Message::PickFile(id)),
-            ),
+            _ if matches!(single.state, FileState::Empty) => {
+                drop_zone("Drop a PDF here", "or anywhere on the window", "Choose a PDF…", (!busy).then_some(Message::PickFile(id)))
+            }
             (Some(page), Some(path)) => {
                 let request = PreviewRequest { path: path.to_path_buf(), page, width: crate::tools::STAGE_WIDTH, rotation: 0, gray: false };
                 tool.stage(single, self.previews.get(&request))
@@ -855,7 +860,12 @@ impl App {
         let light = |handle, label, msg: Option<Message>| -> Element<'_, Message> {
             let tint = if msg.is_some() { Color { a: 0.8, ..Color::WHITE } } else { Color { a: 0.3, ..Color::WHITE } };
             iced::widget::tooltip(
-                button(center(icon(handle, 24.0, tint))).width(44).height(44).padding(0).style(|_, _| button::Style::default()).on_press_maybe(msg),
+                button(center(icon(handle, 24.0, tint)))
+                    .width(44)
+                    .height(44)
+                    .padding(0)
+                    .style(|_, _| button::Style::default())
+                    .on_press_maybe(msg),
                 container(text(label).size(12)).padding([4, 8]).style(theme::hover_bar),
                 iced::widget::tooltip::Position::Top,
             )
@@ -863,9 +873,11 @@ impl App {
         };
         let mut controls = row![].spacing(8).align_y(Alignment::Center);
         if can_rotate {
-            controls = controls
-                .push(light(icons::rotate_ccw(), "Rotate left", Some(Message::ViewerRotate(-90))))
-                .push(light(icons::rotate_cw(), "Rotate right", Some(Message::ViewerRotate(90))));
+            controls = controls.push(light(icons::rotate_ccw(), "Rotate left", Some(Message::ViewerRotate(-90)))).push(light(
+                icons::rotate_cw(),
+                "Rotate right",
+                Some(Message::ViewerRotate(90)),
+            ));
         }
         if let Some(excluded) = excluded {
             let (label, handle) = if excluded { ("Put this page back", icons::check()) } else { ("Leave this page out", icons::eye_off()) };
@@ -873,7 +885,9 @@ impl App {
                 button(row![icon(handle, 18.0, Color::WHITE), text(label).color(Color::WHITE)].spacing(6).align_y(Alignment::Center))
                     .padding([8, 12])
                     .style(|_, status| button::Style {
-                        background: Some(Color { a: if matches!(status, button::Status::Hovered) { 0.22 } else { 0.12 }, ..Color::WHITE }.into()),
+                        background: Some(
+                            Color { a: if matches!(status, button::Status::Hovered) { 0.22 } else { 0.12 }, ..Color::WHITE }.into(),
+                        ),
                         border: iced::border::rounded(9),
                         ..Default::default()
                     })
@@ -894,28 +908,23 @@ impl App {
             center(controls).height(48),
         ]
         .padding(12);
-        let backdrop = mouse_area(container(body).width(Length::Fill).height(Length::Fill).style(theme::overlay))
-            .on_press(Message::CloseViewer);
+        let backdrop =
+            mouse_area(container(body).width(Length::Fill).height(Length::Fill).style(theme::overlay)).on_press(Message::CloseViewer);
         Some(opaque(backdrop))
     }
 }
 
 fn divider<'a>() -> Element<'a, Message> {
-    container(space()).width(Length::Fill).height(1).style(|_| container::Style {
-        background: Some(theme::c().border.into()),
-        ..Default::default()
-    })
-    .into()
+    container(space())
+        .width(Length::Fill)
+        .height(1)
+        .style(|_| container::Style { background: Some(theme::c().border.into()), ..Default::default() })
+        .into()
 }
 
 fn not_ported<'a>(id: ToolId) -> Element<'a, Message> {
     let info = catalog::info(id);
-    column![
-        widgets::tool_header(info),
-        center(muted("This tool hasn’t been ported to the iced version yet.")),
-    ]
-    .padding(24)
-    .into()
+    column![widgets::tool_header(info), center(muted("This tool hasn’t been ported to the iced version yet.")),].padding(24).into()
 }
 
 /// A large place to choose or drop files.
@@ -966,11 +975,17 @@ fn file_card<'a>(id: ToolId, single: &'a Single, previews: &'a Previews, busy: b
             let pages = file.info.pages.map_or_else(|| "Locked".to_owned(), |p| plural(p, "page"));
             let request = PreviewRequest { path: file.path.clone(), page: 1, width: THUMB_WIDTH, rotation: 0, gray: false };
             let thumb = previews.get(&request).map(|t| t.handle.clone());
+            let damaged = file.info.repaired.then(|| {
+                text("This file is damaged. These are the pages that could be recovered; only they will be saved.")
+                    .size(13)
+                    .color(theme::c().warning)
+                    .into()
+            });
             card(
                 text(file.name.clone()).font(BOLD).into(),
                 muted(format!("{pages} · {}", crate::single::format_bytes(file.info.file_size))),
                 thumb,
-                None,
+                damaged,
                 id,
                 busy,
             )
@@ -1004,13 +1019,13 @@ fn card<'a>(
         content = content.push(below);
     }
     container(content)
-    .padding(10)
-    .style(|_| container::Style {
-        background: Some(theme::c().surface_2.into()),
-        border: iced::Border { width: 1.0, color: theme::c().border, radius: 12.0.into() },
-        ..Default::default()
-    })
-    .into()
+        .padding(10)
+        .style(|_| container::Style {
+            background: Some(theme::c().surface_2.into()),
+            border: iced::Border { width: 1.0, color: theme::c().border, radius: 12.0.into() },
+            ..Default::default()
+        })
+        .into()
 }
 
 /// Starts the app with native dialogs.

@@ -19,10 +19,7 @@ pub fn organize_document(doc: &mut Document, pages: &[PageSpec]) -> Result<(), E
         return Err(Error::NoPages);
     }
     let originals = flattened_pages(doc)?;
-    let root_id = doc
-        .catalog()?
-        .get(b"Pages")
-        .and_then(Object::as_reference)?;
+    let root_id = doc.catalog()?.get(b"Pages").and_then(Object::as_reference)?;
 
     // Validate before touching anything.
     for spec in pages {
@@ -35,12 +32,8 @@ pub fn organize_document(doc: &mut Document, pages: &[PageSpec]) -> Result<(), E
     }
 
     // The page tree is rebuilt flat under the existing root node.
-    let tree_nodes: Vec<ObjectId> = doc
-        .objects
-        .iter()
-        .filter(|(_, object)| type_name(object) == Some(b"Pages"))
-        .map(|(id, _)| *id)
-        .collect();
+    let tree_nodes: Vec<ObjectId> =
+        doc.objects.iter().filter(|(_, object)| type_name(object) == Some(b"Pages")).map(|(id, _)| *id).collect();
     for id in tree_nodes {
         doc.objects.remove(&id);
     }
@@ -90,11 +83,7 @@ pub struct SplitPart {
 
 /// Writes each part of `input` to its own file. `progress` receives the
 /// index of the part about to be written.
-pub fn split_file(
-    input: &Path,
-    parts: &[SplitPart],
-    mut progress: impl FnMut(usize),
-) -> Result<usize, Error> {
+pub fn split_file(input: &Path, parts: &[SplitPart], mut progress: impl FnMut(usize)) -> Result<usize, Error> {
     if parts.is_empty() {
         return Err(Error::NoPages);
     }

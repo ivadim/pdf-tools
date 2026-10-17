@@ -123,12 +123,7 @@ fn pdf_date_now() -> String {
     let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
     let (days, rem) = (secs / 86_400, secs % 86_400);
     let (year, month, day) = civil_from_days(days as i64);
-    format!(
-        "D:{year:04}{month:02}{day:02}{:02}{:02}{:02}Z",
-        rem / 3600,
-        rem % 3600 / 60,
-        rem % 60
-    )
+    format!("D:{year:04}{month:02}{day:02}{:02}{:02}{:02}Z", rem / 3600, rem % 3600 / 60, rem % 60)
 }
 
 /// Days since 1970-01-01 to (year, month, day); Howard Hinnant's algorithm.
@@ -153,12 +148,10 @@ mod tests {
     #[test]
     fn writes_and_reads_back_unicode_fields() {
         let mut doc = sample("a", 1);
-        let metadata = Metadata {
-            title: Some("Отчёт 2026".into()),
-            author: Some("Ada".into()),
-            keywords: Some("  ".into()),
-            ..Default::default()
-        };
+        let metadata =
+            Metadata {
+                title: Some("Отчёт 2026".into()), author: Some("Ada".into()), keywords: Some("  ".into()), ..Default::default()
+            };
         write(&mut doc, &metadata).unwrap();
         let read_back = read(&round_trip(doc));
         assert_eq!(read_back.title.as_deref(), Some("Отчёт 2026"));

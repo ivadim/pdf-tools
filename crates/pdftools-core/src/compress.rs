@@ -52,12 +52,8 @@ pub fn compress_document(doc: &mut Document, level: Level) -> usize {
     let mut recompressed = 0;
     if let Some((max_side, quality)) = level.image_settings() {
         let masks = mask_ids(doc);
-        let images: Vec<ObjectId> = doc
-            .objects
-            .iter()
-            .filter(|(id, object)| !masks.contains(id) && is_image(object))
-            .map(|(id, _)| *id)
-            .collect();
+        let images: Vec<ObjectId> =
+            doc.objects.iter().filter(|(id, object)| !masks.contains(id) && is_image(object)).map(|(id, _)| *id).collect();
         for id in images {
             if let Some(stream) = recompress_image(doc, id, max_side, quality) {
                 doc.objects.insert(id, Object::Stream(stream));
@@ -78,11 +74,7 @@ fn recompress_image(doc: &Document, id: ObjectId, max_side: u32, quality: u8) ->
     if image.width().max(image.height()) < MIN_IMAGE_SIDE {
         return None;
     }
-    let image = if image.width().max(image.height()) > max_side {
-        image.resize(max_side, max_side, FilterType::CatmullRom)
-    } else {
-        image
-    };
+    let image = if image.width().max(image.height()) > max_side { image.resize(max_side, max_side, FilterType::CatmullRom) } else { image };
     let bytes = jpeg_bytes(&image, quality)?;
     // Only keep the result if it is meaningfully smaller.
     if bytes.len() as f64 >= stream.content.len() as f64 * 0.9 {

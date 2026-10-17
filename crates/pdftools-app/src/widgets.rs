@@ -4,8 +4,7 @@
 use iced::widget::grid::Sizing;
 use iced::widget::svg::Handle;
 use iced::widget::{
-    button, center, column, container, grid, hover, image, mouse_area, responsive, row, scrollable, sensor, space,
-    svg, text, tooltip,
+    button, center, column, container, grid, hover, image, mouse_area, responsive, row, scrollable, sensor, space, svg, text, tooltip,
 };
 use iced::{Alignment, Color, ContentFit, Element, Font, Length, Padding};
 
@@ -48,8 +47,7 @@ pub fn icon_button<'a, M: Clone + 'a>(handle: Handle, label: &'a str, size: f32,
         .padding(0)
         .style(theme::icon_button)
         .on_press_maybe(on_press);
-    tooltip(button, container(text(label).size(12)).padding([4, 8]).style(theme::hover_bar), tooltip::Position::Bottom)
-        .into()
+    tooltip(button, container(text(label).size(12)).padding([4, 8]).style(theme::hover_bar), tooltip::Position::Bottom).into()
 }
 
 /// A button with an optional icon; `primary` for the main action.
@@ -65,11 +63,7 @@ pub fn action<'a, M: Clone + 'a>(
         content = content.push(icon(handle, 16.0, color));
     }
     content = content.push(text(label).font(if primary { BOLD } else { Font::DEFAULT }));
-    button(content)
-        .padding([7, 13])
-        .style(if primary { theme::primary } else { theme::secondary })
-        .on_press_maybe(on_press)
-        .into()
+    button(content).padding([7, 13]).style(if primary { theme::primary } else { theme::secondary }).on_press_maybe(on_press).into()
 }
 
 /// A compact button with an icon and a label, for headers and toolbars.
@@ -80,6 +74,39 @@ pub fn small_action<'a, M: Clone + 'a>(label: &'a str, handle: Handle, on_press:
         .style(theme::secondary)
         .on_press_maybe(on_press)
         .into()
+}
+
+/// The bar above a page grid: a title, a count and actions. When the panel
+/// is too narrow for the labels, the actions become icons with tooltips.
+pub fn grid_header<'a, M: Clone + 'a>(
+    title: &'static str,
+    summary: String,
+    actions: Vec<(&'static str, Handle, Option<M>)>,
+) -> Element<'a, M> {
+    // Rough widths at the small text size: enough to decide, not to lay out.
+    let label_width = |s: &str| s.chars().count() as f32 * 7.0;
+    let base = label_width(title) + label_width(&summary) + 60.0;
+    let wanted = base + actions.iter().map(|(label, _, _)| label_width(label) + 50.0).sum::<f32>();
+    // With icons only; below this the count goes too.
+    let compact_wanted = base + actions.len() as f32 * 40.0;
+    responsive(move |size| {
+        let compact = size.width < wanted;
+        let mut header = row![section_title(title)].spacing(10).align_y(Alignment::Center);
+        if size.width >= compact_wanted {
+            header = header.push(text(summary.clone()).color(theme::c().muted));
+        }
+        header = header.push(space::horizontal());
+        for (label, handle, on_press) in &actions {
+            header = header.push(if compact {
+                icon_button(handle.clone(), label, 30.0, on_press.clone())
+            } else {
+                small_action(label, handle.clone(), on_press.clone())
+            });
+        }
+        container(header).padding(Padding { top: 0.0, right: 10.0, bottom: 0.0, left: 14.0 }).center_y(46).into()
+    })
+    .height(46)
+    .into()
 }
 
 /// Mutually exclusive options side by side.
@@ -119,25 +146,42 @@ pub fn card_options<'a, M: Clone + 'a>(
 
 /// A tool's coloured icon on a tinted square.
 pub fn chip<'a, M: 'a>(info: &ToolInfo, size: f32) -> Element<'a, M> {
-    container(icon((info.icon)(), size * 0.55, info.tint))
-        .width(size)
-        .height(size)
-        .center(size)
-        .style(theme::chip(info.tint))
-        .into()
+    container(icon((info.icon)(), size * 0.55, info.tint)).width(size).height(size).center(size).style(theme::chip(info.tint)).into()
 }
 
 pub fn tool_header<'a, M: 'a>(info: &ToolInfo) -> Element<'a, M> {
     row![
         chip(info, 46.0),
-        column![
-            text(info.name).size(theme::FONT_TITLE).font(BOLD),
-            text(info.description).color(theme::c().muted),
-        ]
-        .spacing(3)
+        column![text(info.name).size(theme::FONT_TITLE).font(BOLD), text(info.description).color(theme::c().muted),].spacing(3)
     ]
     .spacing(14)
     .align_y(Alignment::Center)
+    .into()
+}
+
+/// A tool's header with actions on the right. In a narrow window the
+/// secondary actions become icons (with tooltips), so the description keeps
+/// room to read.
+pub fn tool_header_with<'a, M: Clone + 'a>(
+    info: &'static ToolInfo,
+    actions: Vec<(&'static str, Handle, bool, Option<M>)>,
+) -> Element<'a, M> {
+    // Room for the chip and a description wrapped to two or three lines,
+    // plus each action at its full width (roughly).
+    let wanted = 300.0 + actions.iter().map(|(label, ..)| label.chars().count() as f32 * 7.0 + 50.0).sum::<f32>();
+    responsive(move |size| {
+        let compact = size.width < wanted;
+        let mut header = row![container(tool_header(info)).width(Length::Fill)].spacing(8).align_y(Alignment::Center);
+        for (label, handle, primary, on_press) in &actions {
+            header = header.push(if compact && !primary {
+                icon_button(handle.clone(), label, 36.0, on_press.clone())
+            } else {
+                action(*label, Some(handle.clone()), *primary, on_press.clone())
+            });
+        }
+        header.into()
+    })
+    .height(56)
     .into()
 }
 
@@ -148,7 +192,10 @@ pub enum Run {
     #[default]
     Idle,
     Running(String),
-    Done { message: String, output: Option<std::path::PathBuf> },
+    Done {
+        message: String,
+        output: Option<std::path::PathBuf>,
+    },
     Failed(String),
 }
 
@@ -292,34 +339,28 @@ fn tile_view<'a, M: Clone + 'a>(
     });
     let mut base = iced::widget::stack![page];
     if excluded {
-        base = base.push(center(
-            container(text("Removed").size(12).font(BOLD).color(Color::WHITE))
-                .padding([3, 10])
-                .style(|_| container::Style {
-                    background: Some(theme::c().text.into()),
-                    border: iced::border::rounded(11),
-                    ..Default::default()
-                }),
-        ));
+        base = base.push(center(container(text("Removed").size(12).font(BOLD).color(Color::WHITE)).padding([3, 10]).style(|_| {
+            container::Style { background: Some(theme::c().text.into()), border: iced::border::rounded(11), ..Default::default() }
+        })));
     }
     if tile.selected {
         base = base.push(
-            container(
-                container(icon(icons::check(), 14.0, Color::WHITE)).center(22).style(|_| container::Style {
-                    background: Some(theme::c().accent.into()),
-                    border: iced::border::rounded(11),
-                    ..Default::default()
-                }),
-            )
+            container(container(icon(icons::check(), 14.0, Color::WHITE)).center(22).style(|_| container::Style {
+                background: Some(theme::c().accent.into()),
+                border: iced::border::rounded(11),
+                ..Default::default()
+            }))
             .padding(6),
         );
     }
     if tile.dimmed {
         // Fades the page into the grid background.
-        base = base.push(container(space()).width(Length::Fill).height(Length::Fill).style(|_| container::Style {
-            background: Some(Color { a: 0.6, ..theme::c().surface_2 }.into()),
-            ..Default::default()
-        }));
+        base = base.push(
+            container(space())
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(|_| container::Style { background: Some(Color { a: 0.6, ..theme::c().surface_2 }.into()), ..Default::default() }),
+        );
     }
     let base = mouse_area(container(base).height(Length::Fill)).on_press(on(index, TileEvent::View));
 
@@ -327,7 +368,12 @@ fn tile_view<'a, M: Clone + 'a>(
     if caps.reorder {
         actions = actions
             .push(icon_button(icons::chevron_left(), "Move earlier", 26.0, (!busy && index > 0).then(|| on(index, TileEvent::MoveEarlier))))
-            .push(icon_button(icons::chevron_right(), "Move later", 26.0, (!busy && index + 1 < count).then(|| on(index, TileEvent::MoveLater))));
+            .push(icon_button(
+                icons::chevron_right(),
+                "Move later",
+                26.0,
+                (!busy && index + 1 < count).then(|| on(index, TileEvent::MoveLater)),
+            ));
     }
     if caps.rotate {
         actions = actions
@@ -360,11 +406,8 @@ fn tile_view<'a, M: Clone + 'a>(
     }
     top = top.push(space::horizontal()).push(container(actions).padding(2).style(theme::hover_bar));
     // Left-out pages always show their (empty) box, so they can be put back.
-    let base: Element<'a, M> = if caps.include && excluded {
-        iced::widget::stack![base, container(include(false)).padding(6)].into()
-    } else {
-        base.into()
-    };
+    let base: Element<'a, M> =
+        if caps.include && excluded { iced::widget::stack![base, container(include(false)).padding(6)].into() } else { base.into() };
     let frame = hover(base, top);
 
     let mut number = row![text(index + 1).size(12).font(BOLD)].spacing(6).align_y(Alignment::Center);
@@ -394,11 +437,9 @@ fn tile_view<'a, M: Clone + 'a>(
     }
     label = label.push(text(tile.label).size(12).color(theme::c().muted).wrapping(text::Wrapping::None));
 
-    let cell = column![
-        container(frame).height(Length::FillPortion(13)),
-        column![number, container(label).clip(true)].spacing(2).height(36),
-    ]
-    .spacing(6);
+    let cell =
+        column![container(frame).height(Length::FillPortion(13)), column![number, container(label).clip(true)].spacing(2).height(36),]
+            .spacing(6);
     let shown = on(index, TileEvent::Shown);
     sensor(cell).key(tile.key).anticipate(300).on_show(move |_| shown.clone()).into()
 }

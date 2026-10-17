@@ -75,10 +75,7 @@ pub(crate) fn page_frame(doc: &Document, page_id: ObjectId) -> PageFrame {
         .unwrap_or([0.0, 0.0, 612.0, 792.0]);
     let [x0, y0, x1, y1] = rect;
     let (w, h) = (x1 - x0, y1 - y0);
-    let rotation = inherited_attribute(doc, page_id, b"Rotate")
-        .and_then(|r| r.as_i64().ok())
-        .unwrap_or(0)
-        .rem_euclid(360);
+    let rotation = inherited_attribute(doc, page_id, b"Rotate").and_then(|r| r.as_i64().ok()).unwrap_or(0).rem_euclid(360);
     match rotation {
         90 => PageFrame { width: h, height: w, matrix: [0.0, 1.0, -1.0, 0.0, x1, y0] },
         180 => PageFrame { width: w, height: h, matrix: [-1.0, 0.0, 0.0, -1.0, x1, y1] },
@@ -125,15 +122,9 @@ pub(crate) fn add_overlay(
 
     let mut names = Vec::with_capacity(resources.len());
     for resource in resources {
-        let mut category: Dictionary = page_resources
-            .get(resource.category)
-            .ok()
-            .and_then(|c| doc.dereference(c).ok()?.1.as_dict().ok().cloned())
-            .unwrap_or_default();
-        let name = (0..)
-            .map(|n| format!("{}{n}", resource.prefix).into_bytes())
-            .find(|name| !category.has(name))
-            .expect("unbounded range");
+        let mut category: Dictionary =
+            page_resources.get(resource.category).ok().and_then(|c| doc.dereference(c).ok()?.1.as_dict().ok().cloned()).unwrap_or_default();
+        let name = (0..).map(|n| format!("{}{n}", resource.prefix).into_bytes()).find(|name| !category.has(name)).expect("unbounded range");
         category.set(name.clone(), resource.object.clone());
         page_resources.set(resource.category, Object::Dictionary(category));
         names.push(name);
@@ -189,14 +180,9 @@ pub(crate) fn selected_pages(doc: &Document, pages: Option<&[usize]>) -> Result<
     let all = doc.get_pages();
     match pages {
         None => Ok(all.into_iter().map(|(n, id)| (n as usize, id)).collect()),
-        Some(pages) => pages
-            .iter()
-            .map(|&n| {
-                all.get(&(n as u32))
-                    .map(|&id| (n, id))
-                    .ok_or(Error::InvalidPage { input: 0, page: n })
-            })
-            .collect(),
+        Some(pages) => {
+            pages.iter().map(|&n| all.get(&(n as u32)).map(|&id| (n, id)).ok_or(Error::InvalidPage { input: 0, page: n })).collect()
+        }
     }
 }
 

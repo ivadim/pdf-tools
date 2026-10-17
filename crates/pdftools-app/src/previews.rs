@@ -22,14 +22,7 @@ pub struct Thumb {
 }
 
 pub fn key(request: &PreviewRequest) -> String {
-    format!(
-        "{}|{}|{}|{}|{}",
-        request.path.display(),
-        request.page,
-        request.width,
-        request.rotation,
-        request.gray
-    )
+    format!("{}|{}|{}|{}|{}", request.path.display(), request.page, request.width, request.rotation, request.gray)
 }
 
 #[derive(Default)]

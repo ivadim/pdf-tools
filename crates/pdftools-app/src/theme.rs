@@ -2,7 +2,7 @@
 
 use iced::border::Radius;
 use iced::widget::{button, container, svg, text_input};
-use iced::{color, Background, Border, Color, Shadow, Theme, Vector};
+use iced::{color, Background, Border, Color, Theme};
 
 /// The colours of one theme.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -24,8 +24,6 @@ pub struct Colors {
     pub error: Color,
     pub success: Color,
     pub warning: Color,
-    /// How dark shadows are.
-    pub shadow: f32,
 }
 
 /// The light theme.
@@ -46,7 +44,6 @@ pub const LIGHT: Colors = Colors {
     error: color!(0xc43d3d),
     success: color!(0x23885a),
     warning: color!(0xc77c12),
-    shadow: 1.0,
 };
 
 /// The dark theme.
@@ -67,7 +64,6 @@ pub const DARK: Colors = Colors {
     error: color!(0xef6b6b),
     success: color!(0x4cc28a),
     warning: color!(0xe0a03a),
-    shadow: 2.5,
 };
 
 thread_local! {
@@ -95,14 +91,7 @@ pub fn theme() -> Theme {
     let c = c();
     Theme::custom(
         if c.dark { "PDF Tools Dark" } else { "PDF Tools" },
-        iced::theme::Palette {
-            background: c.bg,
-            text: c.text,
-            primary: c.accent,
-            success: c.success,
-            warning: c.warning,
-            danger: c.error,
-        },
+        iced::theme::Palette { background: c.bg, text: c.text, primary: c.accent, success: c.success, warning: c.warning, danger: c.error },
     )
 }
 
@@ -110,20 +99,18 @@ fn border(width: f32, color: Color, radius: f32) -> Border {
     Border { width, color, radius: Radius::from(radius) }
 }
 
-/// A shadow, stronger in the dark theme so it still shows.
-fn shadow(alpha: f32, blur: f32, y: f32) -> Shadow {
-    Shadow { color: Color { a: (alpha * c().shadow).min(1.0), ..Color::BLACK }, offset: Vector::new(0.0, y), blur_radius: blur }
+/// The thin edge that lifts a page or a selected item off its background.
+/// (Borders rather than shadows: the renderer doesn't clip shadows to
+/// scrolling areas, so they'd show through over other content.)
+fn hairline() -> Color {
+    Color { a: if c().dark { 0.45 } else { 0.12 }, ..Color::BLACK }
 }
 
 // ── Containers ───────────────────────────────────────────────────────────
 
 /// A card with a border.
 pub fn panel(_: &Theme) -> container::Style {
-    container::Style {
-        background: Some(Background::Color(c().surface)),
-        border: border(1.0, c().border, RADIUS),
-        ..Default::default()
-    }
+    container::Style { background: Some(Background::Color(c().surface)), border: border(1.0, c().border, RADIUS), ..Default::default() }
 }
 
 pub fn sidebar(_: &Theme) -> container::Style {
@@ -147,11 +134,11 @@ pub fn chip(tint: Color) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
-/// A page thumbnail: white with a soft shadow, so its real shape shows.
+/// A page thumbnail: white with a thin edge, so its real shape shows.
 pub fn page(_: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(Color::WHITE)),
-        shadow: shadow(0.23, 3.0, 1.0),
+        border: border(1.0, Color { a: if c().dark { 0.0 } else { 0.18 }, ..Color::BLACK }, 0.0),
         ..Default::default()
     }
 }
@@ -161,12 +148,7 @@ pub fn notice(_: &Theme) -> container::Style {
 }
 
 pub fn hover_bar(_: &Theme) -> container::Style {
-    container::Style {
-        background: Some(Background::Color(c().surface)),
-        border: border(0.0, Color::TRANSPARENT, 8.0),
-        shadow: shadow(0.2, 4.0, 1.0),
-        ..Default::default()
-    }
+    container::Style { background: Some(Background::Color(c().surface)), border: border(1.0, c().border, 8.0), ..Default::default() }
 }
 
 pub fn drop_zone(hovered: bool) -> impl Fn(&Theme) -> container::Style {
@@ -180,11 +162,7 @@ pub fn drop_zone(hovered: bool) -> impl Fn(&Theme) -> container::Style {
 /// Where a signature is drawn or previewed: always white, like the page
 /// it will be placed on, so every ink shows as it will print.
 pub fn paper(_: &Theme) -> container::Style {
-    container::Style {
-        background: Some(Background::Color(Color::WHITE)),
-        border: border(1.5, c().border, 12.0),
-        ..Default::default()
-    }
+    container::Style { background: Some(Background::Color(Color::WHITE)), border: border(1.5, c().border, 12.0), ..Default::default() }
 }
 
 pub fn overlay(_: &Theme) -> container::Style {
@@ -256,8 +234,7 @@ pub fn nav(active: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
         button::Style {
             background,
             text_color: c().text,
-            border: border(0.0, Color::TRANSPARENT, 9.0),
-            shadow: if active { shadow(0.08, 2.0, 0.0) } else { Shadow::default() },
+            border: border(1.0, if active { hairline() } else { Color::TRANSPARENT }, 9.0),
             ..Default::default()
         }
     }
@@ -276,8 +253,7 @@ pub fn segment(selected: bool) -> impl Fn(&Theme, button::Status) -> button::Sty
         button::Style {
             background,
             text_color: if selected { c().text } else { c().muted },
-            border: border(0.0, Color::TRANSPARENT, 7.0),
-            shadow: if selected { shadow(0.12, 2.0, 0.0) } else { Shadow::default() },
+            border: border(1.0, if selected { hairline() } else { Color::TRANSPARENT }, 7.0),
             ..Default::default()
         }
     }
@@ -295,11 +271,7 @@ pub fn card_option(selected: bool) -> impl Fn(&Theme, button::Status) -> button:
     move |_, status| button::Style {
         background: Some(Background::Color(if selected { c().accent_soft } else { c().surface })),
         text_color: c().text,
-        border: border(
-            1.0,
-            if selected || matches!(status, button::Status::Hovered) { c().accent } else { c().border },
-            10.0,
-        ),
+        border: border(1.0, if selected || matches!(status, button::Status::Hovered) { c().accent } else { c().border }, 10.0),
         ..Default::default()
     }
 }
@@ -311,11 +283,7 @@ pub fn tool_card(_: &Theme, status: button::Status) -> button::Style {
         text_color: c().text,
         border: border(
             1.0,
-            if matches!(status, button::Status::Hovered | button::Status::Pressed) {
-                Color { a: 0.5, ..c().accent }
-            } else {
-                c().border
-            },
+            if matches!(status, button::Status::Hovered | button::Status::Pressed) { Color { a: 0.5, ..c().accent } } else { c().border },
             16.0,
         ),
         ..Default::default()

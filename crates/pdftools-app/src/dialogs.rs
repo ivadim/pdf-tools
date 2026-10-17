@@ -41,10 +41,7 @@ impl Dialogs for NativeDialogs {
     }
 
     fn pick_image(&self) -> Option<PathBuf> {
-        rfd::FileDialog::new()
-            .set_title("Choose an image")
-            .add_filter(IMAGES.0, IMAGES.1)
-            .pick_file()
+        rfd::FileDialog::new().set_title("Choose an image").add_filter(IMAGES.0, IMAGES.1).pick_file()
     }
 
     fn pick_images(&self) -> Vec<PathBuf> {

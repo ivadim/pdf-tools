@@ -330,3 +330,25 @@ fn readme_screenshots() {
     h.click("All tools");
     h.screenshot("readme-home-dark");
 }
+
+#[test]
+fn shift_click_leaves_out_a_range() {
+    let mut h = Harness::new("range");
+    h.choose(ToolId::Compress, &fixture("tracemonkey.pdf"));
+    h.send(Message::Tile(ToolId::Compress, 1, TileEvent::ToggleInclude));
+    h.send(Message::Modifiers(iced::keyboard::Modifiers::SHIFT));
+    h.send(Message::Tile(ToolId::Compress, 4, TileEvent::ToggleInclude));
+    assert!(h.shows("10 of 14 pages kept"));
+    // And back in again, the same way.
+    h.send(Message::Tile(ToolId::Compress, 2, TileEvent::ToggleInclude));
+    assert!(h.shows("13 of 14 pages kept"));
+
+    h.send(Message::Modifiers(iced::keyboard::Modifiers::default()));
+    h.click("Merge");
+    h.dialogs.open(&[&fixture("tracemonkey.pdf"), &fixture("sizes.pdf")]);
+    h.click("Add PDF files…");
+    h.send(Message::Merge(merge::Msg::Tile(12, TileEvent::ToggleInclude)));
+    h.send(Message::Modifiers(iced::keyboard::Modifiers::SHIFT));
+    h.send(Message::Merge(merge::Msg::Tile(15, TileEvent::ToggleInclude)));
+    assert!(h.shows("13 of 17 pages kept"));
+}

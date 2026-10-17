@@ -14,7 +14,6 @@ use pdftools_app::dialogs::ScriptedDialogs;
 use pdftools_app::theme;
 use pdftools_app::widgets::{Run, TileEvent};
 
-
 pub struct Harness {
     pub app: App,
     pub dialogs: Rc<ScriptedDialogs>,
@@ -160,4 +159,3 @@ impl Harness {
         }
     }
 }
-

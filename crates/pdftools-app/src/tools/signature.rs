@@ -157,10 +157,13 @@ impl ToolOptions for Signature {
         let ink = Color::from_rgb8(self.ink[0], self.ink[1], self.ink[2]);
         let input: Element<'a, Message> = match self.source {
             Source::Draw => column![
-                container(Canvas::new(Pad { strokes: &self.strokes, ink }).width(Length::Fill).height(150))
-                    .style(theme::paper),
-                row![muted("Draw with the mouse or a pen."), iced::widget::space::horizontal(), action("Clear", None, false, Some(Message::Option(T, "pad-clear", String::new())))]
-                    .align_y(iced::Alignment::Center),
+                container(Canvas::new(Pad { strokes: &self.strokes, ink }).width(Length::Fill).height(150)).style(theme::paper),
+                row![
+                    muted("Draw with the mouse or a pen."),
+                    iced::widget::space::horizontal(),
+                    action("Clear", None, false, Some(Message::Option(T, "pad-clear", String::new())))
+                ]
+                .align_y(iced::Alignment::Center),
             ]
             .spacing(6)
             .into(),
@@ -173,7 +176,11 @@ impl ToolOptions for Signature {
                 };
                 column![
                     field("Your name", text_input("Your name", &self.name).on_input(set(T, "name")).padding(8).style(theme::input)),
-                    segmented(&[("script", "Handwriting"), ("serif", "Serif"), ("sans", "Sans")], family, |v| Message::Option(T, "font", v.into())),
+                    segmented(&[("script", "Handwriting"), ("serif", "Serif"), ("sans", "Sans")], family, |v| Message::Option(
+                        T,
+                        "font",
+                        v.into()
+                    )),
                 ]
                 .spacing(10)
                 .into()
@@ -181,7 +188,12 @@ impl ToolOptions for Signature {
             Source::Upload => {
                 let name = self.upload.as_ref().map(|(p, _, _)| file_name(p));
                 column![
-                    action(name.unwrap_or_else(|| "Choose image…".into()), Some(icons::image()), false, Some(Message::Option(T, "choose-image", String::new()))),
+                    action(
+                        name.unwrap_or_else(|| "Choose image…".into()),
+                        Some(icons::image()),
+                        false,
+                        Some(Message::Option(T, "choose-image", String::new()))
+                    ),
                     muted("A PNG with a transparent background works best."),
                 ]
                 .spacing(6)
@@ -216,11 +228,7 @@ impl ToolOptions for Signature {
         if self.source != Source::Draw {
             if let Some((_, _, handle)) = &self.signature {
                 signature = signature.push(
-                    container(image(handle.clone()).height(64))
-                        .width(Length::Fill)
-                        .center_x(Length::Fill)
-                        .padding(10)
-                        .style(theme::paper),
+                    container(image(handle.clone()).height(64)).width(Length::Fill).center_x(Length::Fill).padding(10).style(theme::paper),
                 );
             }
         }
@@ -340,8 +348,13 @@ impl ToolOptions for Signature {
         };
         let header = row![
             icon_button(icons::chevron_left(), "Previous page", 30.0, (self.page > 1).then(|| Message::Option(T, "page", "-1".into()))),
-            center(text(label).color(theme::c().muted)).height(30),
-            icon_button(icons::chevron_right(), "Next page", 30.0, (self.page < self.pages).then(|| Message::Option(T, "page", "1".into()))),
+            center(text(label).color(theme::c().muted).wrapping(iced::widget::text::Wrapping::None)).height(30).clip(true),
+            icon_button(
+                icons::chevron_right(),
+                "Next page",
+                30.0,
+                (self.page < self.pages).then(|| Message::Option(T, "page", "1".into()))
+            ),
         ]
         .padding([8, 10])
         .align_y(iced::Alignment::Center);
@@ -456,13 +469,24 @@ impl canvas::Program<Message> for Pad<'_> {
                     }
                 }
             });
-            frame.stroke(&path, Stroke::default().with_color(self.ink).with_width(3.0).with_line_cap(canvas::LineCap::Round).with_line_join(canvas::LineJoin::Round));
+            frame.stroke(
+                &path,
+                Stroke::default()
+                    .with_color(self.ink)
+                    .with_width(3.0)
+                    .with_line_cap(canvas::LineCap::Round)
+                    .with_line_join(canvas::LineJoin::Round),
+            );
         }
         vec![frame.into_geometry()]
     }
 
     fn mouse_interaction(&self, _: &bool, bounds: Rectangle, cursor: Cursor) -> mouse::Interaction {
-        if cursor.is_over(bounds) { mouse::Interaction::Crosshair } else { mouse::Interaction::default() }
+        if cursor.is_over(bounds) {
+            mouse::Interaction::Crosshair
+        } else {
+            mouse::Interaction::default()
+        }
     }
 }
 
@@ -546,10 +570,7 @@ impl canvas::Program<Message> for Stage {
         let mut frame = Frame::new(renderer, bounds.size());
         for b in &self.boxes {
             let r = Self::rect(b, bounds.size());
-            frame.stroke(
-                &Path::rectangle(r.position(), r.size()),
-                Stroke::default().with_color(theme::c().accent).with_width(1.5),
-            );
+            frame.stroke(&Path::rectangle(r.position(), r.size()), Stroke::default().with_color(theme::c().accent).with_width(1.5));
             let handle = Self::resize_handle(r);
             frame.fill(&Path::rectangle(handle.position(), handle.size()), theme::c().accent);
             let remove = Self::remove_button(r);

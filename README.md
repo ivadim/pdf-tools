@@ -46,7 +46,7 @@ Builds of the latest `main` are attached to each [CI run](https://github.com/iva
 
 | Tool | What it does |
 | --- | --- |
-| **Merge** | Combine PDFs. You can reorder files and individual pages (drag, or Alt+←/→) and rotate pages. |
+| **Merge** | Combine PDFs. You can reorder files and individual pages (with the arrows that appear on each) and rotate pages. |
 | **Split** | Split by ranges (`1-3, 4-`), every N pages or each page, or extract selected pages into one file. The preview colours pages by output file. |
 | **Compress** | *Lossless* drops unused data. *Balanced* and *Strong* also downscale and re-encode large images as JPEG. |
 | **Protect** | AES-256 password, plus optional print, copy, edit and annotate restrictions. |
@@ -57,7 +57,7 @@ Builds of the latest `main` are attached to each [CI run](https://github.com/iva
 | **Watermark** | Text in any installed font and script, or an image. Set size, angle, opacity, position, and draw above or behind the content. |
 | **Metadata** | Edit title, author, subject, keywords, creator and producer. |
 | **Signature** | Draw, type or upload a signature, then drag and resize it on one or more pages. |
-| **Grayscale** | Converts colours in page content, forms, annotations, palettes and images. Text stays real text. Gradients and spot colours are left as they are. |
+| **Grayscale** | Converts colours in page content, forms, annotations, palettes and images. Text stays real text. Gradients and spot colours are left as they are, and calibrated colours are converted as plain RGB. |
 | **Images to PDF** | Turn JPEG and PNG images into a PDF, one per page. Reorder and rotate them, and choose the page size (A4, Letter or the image's own size), orientation and margin. JPEGs are embedded without re-compression, camera rotation (EXIF) is honoured and PNG transparency is kept. |
 
 | | |
@@ -67,7 +67,7 @@ Builds of the latest `main` are attached to each [CI run](https://github.com/iva
 | ![A watermark previewed on every page](docs/screenshots/watermark.png) | ![Photos turned into PDF pages](docs/screenshots/images.png) |
 | **Watermark**: see the result on every page before saving | **Images to PDF**: each photo on a page of the right shape |
 
-**Leaving pages out:** in Merge, Rotate, Compress, Protect, Metadata, Grayscale, Page numbers and Watermark, untick a page's checkbox (Shift-click for a range, or press X) to drop it from the result. Removed pages stay in the preview, dimmed, so you can include them again. They're removed before the tool runs, so page numbers and "{total}" count only the pages that remain.
+**Leaving pages out:** in Merge, Rotate, Compress, Protect, Metadata, Grayscale, Page numbers and Watermark, untick a page's checkbox (Shift-click for a range) to drop it from the result. Removed pages stay in the preview, dimmed, so you can include them again. They're removed before the tool runs, so page numbers and "{total}" count only the pages that remain.
 
 Every tool previews pages live, including overlays for page numbers and watermarks. Click a page to see it full size. You can drop files anywhere on the window, and a locked file can be handed to Unlock in one click.
 
@@ -146,6 +146,7 @@ The tag's run attaches all four packages to a new GitHub release.
 
 - Outputs go through a temporary `.part` file and are then renamed, so overwriting an input is safe.
 - Merge and Split rebuild the page tree. Merge drops document-level extras (outlines, forms). Rotate, Rearrange and the other single-file tools keep them.
+- Damaged files, such as ones cut short by an interrupted download, open with the pages that can be recovered; the app says so, and outputs contain only those pages.
 - Files that only restrict permissions open without a password, and outputs from any tool are saved without those restrictions.
 
 ## Licence

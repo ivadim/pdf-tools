@@ -301,11 +301,7 @@ mod tests {
         let first = doc.get_pages()[&1];
         doc.get_object_mut(first).unwrap().as_dict_mut().unwrap().set("Rotate", 90);
 
-        let order = [
-            PageSpec::new(0, 1).rotated(90),
-            PageSpec::new(0, 2).rotated(-90),
-            PageSpec::new(0, 3).rotated(450),
-        ];
+        let order = [PageSpec::new(0, 1).rotated(90), PageSpec::new(0, 2).rotated(-90), PageSpec::new(0, 3).rotated(450)];
         let merged = round_trip(merge_documents(vec![doc], Some(&order)).unwrap());
         assert_eq!(rotations(&merged), [180, 270, 90]);
     }
@@ -313,10 +309,7 @@ mod tests {
     #[test]
     fn rejects_invalid_page_specs() {
         let missing = [PageSpec::new(0, 4)];
-        assert!(matches!(
-            merge_documents(vec![sample("a", 3)], Some(&missing)),
-            Err(Error::InvalidPage { input: 0, page: 4 })
-        ));
+        assert!(matches!(merge_documents(vec![sample("a", 3)], Some(&missing)), Err(Error::InvalidPage { input: 0, page: 4 })));
         let zero = [PageSpec::new(0, 0)];
         assert!(matches!(merge_documents(vec![sample("a", 1)], Some(&zero)), Err(Error::InvalidPage { .. })));
         let no_source = [PageSpec::new(2, 1)];

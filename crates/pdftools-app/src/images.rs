@@ -7,8 +7,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use iced::widget::image::Handle;
-use iced::widget::{column, container, row, text};
-use iced::{Alignment, Element, Length, Padding};
+use iced::widget::{column, container, row};
+use iced::{Element, Length, Padding};
 use image::imageops::FilterType;
 use image::RgbaImage;
 use pdftools_core::images::{ImageInfo, ImageLayout, ImagePage, PageOrientation, PageSize};
@@ -20,7 +20,7 @@ use crate::merge::{natural_key, Context, Effect};
 use crate::single::{file_name, plural, Overlay};
 use crate::theme;
 use crate::tools::move_item;
-use crate::widgets::{self, action, muted, run_bar, section, section_title, segmented, Caps, Run, Tile, TileEvent};
+use crate::widgets::{self, muted, run_bar, section, segmented, Caps, Run, Tile, TileEvent};
 
 /// Longest side of preview thumbnails, in pixels.
 const THUMB_SIZE: u32 = 360;
@@ -286,13 +286,8 @@ impl Images {
                 let (id, rotation) = (self.entries[i].id, self.entries[i].rotation);
                 let handle = self.thumb(id, rotation);
                 let entry = &self.entries[i];
-                let mut tile = Tile {
-                    key: format!("img{id}|{rotation}"),
-                    page: i + 1,
-                    label: entry.name.clone(),
-                    rotation,
-                    ..Default::default()
-                };
+                let mut tile =
+                    Tile { key: format!("img{id}|{rotation}"), page: i + 1, label: entry.name.clone(), rotation, ..Default::default() };
                 match &entry.state {
                     ImageState::Loading => {}
                     ImageState::Failed(_) => tile.failed = true,
@@ -323,17 +318,15 @@ impl Images {
         let tiles = self.tiles();
         let busy = self.run.busy();
         let wrap = Message::Images;
-        let mut header = row![container(widgets::tool_header(catalog::info(ToolId::Images))).width(Length::Fill)]
-            .spacing(8)
-            .align_y(Alignment::Center);
+        let mut actions = Vec::new();
         if self.entries.len() > 1 {
-            header = header.push(action("Sort by name", Some(icons::sort()), false, (!busy).then_some(wrap(Msg::Sort))));
+            actions.push(("Sort by name", icons::sort(), false, (!busy).then_some(wrap(Msg::Sort))));
         }
         if !self.entries.is_empty() {
-            header = header
-                .push(action("Clear", Some(icons::trash()), false, (!busy).then_some(wrap(Msg::Clear))))
-                .push(action("Add images…", Some(icons::plus()), true, (!busy).then_some(wrap(Msg::Add))));
+            actions.push(("Clear", icons::trash(), false, (!busy).then_some(wrap(Msg::Clear))));
+            actions.push(("Add images…", icons::plus(), true, (!busy).then_some(wrap(Msg::Add))));
         }
+        let header = widgets::tool_header_with(catalog::info(ToolId::Images), actions);
 
         let size = match self.layout.page_size {
             PageSize::A4 => "a4",
@@ -369,24 +362,20 @@ impl Images {
                 "Margin",
                 [segmented(&[("none", "None"), ("small", "Small"), ("large", "Large")], margin, move |v| wrap(Msg::Option("margin", v)))],
             ))
-            .push(muted("Images are scaled to fit the page and centred. JPEGs are added without re-compressing, so photos keep their quality."));
+            .push(muted(
+                "Images are scaled to fit the page and centred. JPEGs are added without re-compressing, so photos keep their quality.",
+            ));
         let left = container(options.padding(14)).width(340).height(Length::Fill).style(theme::panel);
 
         let count = tiles.len();
         let any = count > 0 && !busy;
-        let mut grid_header = row![
-            section_title("Pages"),
-            text(if count == 0 { String::new() } else { plural(count, "image") }).color(theme::c().muted).width(Length::Fill),
-        ]
-        .spacing(10)
-        .align_y(Alignment::Center)
-        .padding(Padding { top: 0.0, right: 10.0, bottom: 0.0, left: 14.0 })
-        .height(46);
+        let mut actions = Vec::new();
         if count > 0 {
-            grid_header = grid_header
-                .push(widgets::small_action("Rotate all left", icons::rotate_ccw(), any.then_some(wrap(Msg::RotateAll(-90)))))
-                .push(widgets::small_action("Rotate all right", icons::rotate_cw(), any.then_some(wrap(Msg::RotateAll(90)))));
+            actions.push(("Rotate all left", icons::rotate_ccw(), any.then_some(wrap(Msg::RotateAll(-90)))));
+            actions.push(("Rotate all right", icons::rotate_cw(), any.then_some(wrap(Msg::RotateAll(90)))));
         }
+        let summary = if count == 0 { String::new() } else { plural(count, "image") };
+        let grid_header = widgets::grid_header("Pages", summary, actions);
         let body: Element<'_, Message> = if tiles.is_empty() {
             crate::app::drop_zone("Drop JPEG or PNG images here", "or anywhere on the window", "Add images…", Some(wrap(Msg::Add)))
         } else {

@@ -92,10 +92,7 @@ fn protect_with_key(doc: &mut Document, protection: &Protection, file_key: &[u8;
 
     // AES-256 is declared through Adobe's extension level 8 to PDF 1.7.
     doc.version = "1.7".into();
-    doc.catalog_mut()?.set(
-        "Extensions",
-        dictionary! { "ADBE" => dictionary! { "BaseVersion" => "1.7", "ExtensionLevel" => 8 } },
-    );
+    doc.catalog_mut()?.set("Extensions", dictionary! { "ADBE" => dictionary! { "BaseVersion" => "1.7", "ExtensionLevel" => 8 } });
     // Streams must be compressed before encryption, never after.
     doc.compress();
     doc.encrypt(&state)?;
@@ -131,9 +128,7 @@ pub fn unlock_file(input: &Path, password: &str, output: &Path) -> Result<(), Er
 pub fn load_with_password(path: &Path, password: &str) -> Result<Document, Error> {
     match Document::load_with_password(path, password) {
         Ok(doc) => Ok(doc),
-        Err(lopdf::Error::InvalidPassword | lopdf::Error::Decryption(DecryptionError::IncorrectPassword)) => {
-            Err(Error::WrongPassword)
-        }
+        Err(lopdf::Error::InvalidPassword | lopdf::Error::Decryption(DecryptionError::IncorrectPassword)) => Err(Error::WrongPassword),
         Err(source) => Err(Error::Load { path: path.to_path_buf(), source }),
     }
 }

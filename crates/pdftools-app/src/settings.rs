@@ -75,10 +75,7 @@ impl Settings {
     }
 
     pub fn load() -> Self {
-        dir()
-            .and_then(|d| std::fs::read_to_string(d.join("settings.txt")).ok())
-            .map(|text| Self::parse(&text))
-            .unwrap_or_default()
+        dir().and_then(|d| std::fs::read_to_string(d.join("settings.txt")).ok()).map(|text| Self::parse(&text)).unwrap_or_default()
     }
 
     /// Saves quietly: preferences are a convenience, never worth an error.

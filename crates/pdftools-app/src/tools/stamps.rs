@@ -13,10 +13,10 @@ use pdftools_render::raster::{load_picture, render_text, rotate_picture, Family,
 
 use super::{set, toggle};
 use crate::app::Message;
-use crate::previews::Thumb;
 use crate::catalog::ToolId;
 use crate::dialogs::Dialogs;
 use crate::icons;
+use crate::previews::Thumb;
 use crate::single::{choose_output, edit, file_name, Job, Overlay, Single, TileSpec, ToolOptions};
 use crate::theme;
 use crate::widgets::{action, field, muted, section, segmented, BOLD};
@@ -57,23 +57,26 @@ fn anchor_picker<'a>(tool: ToolId, anchor: Anchor, middle_row: bool) -> Element<
     let grid = column(rows.iter().map(|(v, vname)| {
         row(cols.iter().map(|(h, hname)| {
             let chosen = anchor.v == *v && anchor.h == *h;
-            let dot = container(iced::widget::space())
-                .width(if chosen { 10 } else { 8 })
-                .height(if chosen { 10 } else { 8 })
-                .style(move |_| container::Style {
-                    background: Some((if chosen { theme::c().accent } else { theme::c().border }).into()),
-                    border: iced::border::rounded(5),
-                    ..Default::default()
+            let dot =
+                container(iced::widget::space()).width(if chosen { 10 } else { 8 }).height(if chosen { 10 } else { 8 }).style(move |_| {
+                    container::Style {
+                        background: Some((if chosen { theme::c().accent } else { theme::c().border }).into()),
+                        border: iced::border::rounded(5),
+                        ..Default::default()
+                    }
                 });
             let name = format!("{}{} {hname}", vname[..1].to_uppercase(), &vname[1..]);
-            let spot = button(center(dot))
-                .width(40)
-                .height(30)
-                .padding(0)
-                .style(theme::segment(chosen))
-                .on_press(Message::Option(tool, "anchor", format!("{vname} {hname}")));
-            iced::widget::tooltip(spot, container(text(name).size(12)).padding([4, 8]).style(theme::hover_bar), iced::widget::tooltip::Position::Top)
-                .into()
+            let spot = button(center(dot)).width(40).height(30).padding(0).style(theme::segment(chosen)).on_press(Message::Option(
+                tool,
+                "anchor",
+                format!("{vname} {hname}"),
+            ));
+            iced::widget::tooltip(
+                spot,
+                container(text(name).size(12)).padding([4, 8]).style(theme::hover_bar),
+                iced::widget::tooltip::Position::Top,
+            )
+            .into()
         }))
         .spacing(2)
         .into()
@@ -196,15 +199,7 @@ impl PageNumbers {
         let top = (ay - ch / 2.0).clamp(0.0, (image_h - ch).max(0.0));
 
         // The same overlay, in the close-up's coordinates.
-        let overlay = Overlay::Text {
-            text,
-            x: (ax - left) / cw,
-            y: (ay - top) / ch,
-            align_x,
-            align_y,
-            size: size * image_w / cw,
-            color,
-        };
+        let overlay = Overlay::Text { text, x: (ax - left) / cw, y: (ay - top) / ch, align_x, align_y, size: size * image_w / cw, color };
         // The whole page at full size, shifted so the number is in view, in
         // a frame that clips the rest.
         container(
@@ -232,22 +227,24 @@ impl ToolOptions for PageNumbers {
         let t = ToolId::PageNumbers;
         let presets = ["{n}", "Page {n}", "Page {n} of {total}", "{n} / {total}"];
         let preset_buttons = presets.chunks(2).map(|pair| {
-            row(pair.iter().map(|p| action(*p, None, false, Some(Message::Option(t, "format", (*p).into())))))
-                .spacing(6)
-                .into()
+            row(pair.iter().map(|p| action(*p, None, false, Some(Message::Option(t, "format", (*p).into()))))).spacing(6).into()
         });
-        let mut pages = column![segmented(
-            &[("all", "All pages"), ("custom", "Some pages")],
-            if self.custom { "custom" } else { "all" },
-            move |v| Message::Option(t, "which", v.into()),
-        )]
-        .spacing(10);
+        let mut pages =
+            column![segmented(&[("all", "All pages"), ("custom", "Some pages")], if self.custom { "custom" } else { "all" }, move |v| {
+                Message::Option(t, "which", v.into())
+            },)]
+            .spacing(10);
         if self.custom {
-            pages = pages.push(column![
-                field("Pages to number", text_input("e.g. 2-", &self.pages_text).on_input(set(t, "pages")).padding(8).style(theme::input)),
-                muted("“2-” skips the cover page."),
-            ]
-            .spacing(5));
+            pages = pages.push(
+                column![
+                    field(
+                        "Pages to number",
+                        text_input("e.g. 2-", &self.pages_text).on_input(set(t, "pages")).padding(8).style(theme::input)
+                    ),
+                    muted("“2-” skips the cover page."),
+                ]
+                .spacing(5),
+            );
         }
         let position = row![
             anchor_picker(t, self.anchor, false),
@@ -276,11 +273,14 @@ impl ToolOptions for PageNumbers {
                     column(preset_buttons).spacing(6).into(),
                     row![
                         field("Colour", swatches(t, &TEXT_COLORS, self.color)),
-                        field("First number", text_input("1", &self.start_at).on_input(set(t, "start")).padding(8).width(70).style(theme::input)),
+                        field(
+                            "First number",
+                            text_input("1", &self.start_at).on_input(set(t, "start")).padding(8).width(70).style(theme::input)
+                        ),
                     ]
                     .spacing(16)
                     .into(),
-                ]
+                ],
             ))
             .push(section("Position", [position.into()]))
             .push(section("Pages", [pages.into()]))
@@ -312,12 +312,7 @@ impl ToolOptions for PageNumbers {
         (1..=file.page_count())
             .map(|page| {
                 let excluded = file.excluded.contains(&page);
-                TileSpec {
-                    page,
-                    excluded,
-                    dimmed: !excluded && !numbered.contains(&page),
-                    ..Default::default()
-                }
+                TileSpec { page, excluded, dimmed: !excluded && !numbered.contains(&page), ..Default::default() }
             })
             .collect()
     }
@@ -499,12 +494,11 @@ impl ToolOptions for Watermark {
 
     fn view<'a>(&'a self, _file: &'a Single, _closeup: Option<&'a Thumb>) -> Element<'a, Message> {
         let t = ToolId::Watermark;
-        let mut stamp = column![segmented(
-            &[("text", "Text"), ("image", "Image")],
-            if self.image_mode { "image" } else { "text" },
-            move |v| Message::Option(t, "kind", v.into()),
-        )]
-        .spacing(10);
+        let mut stamp =
+            column![segmented(&[("text", "Text"), ("image", "Image")], if self.image_mode { "image" } else { "text" }, move |v| {
+                Message::Option(t, "kind", v.into())
+            },)]
+            .spacing(10);
         if self.image_mode {
             // Choosing the image is the main step: a full-width button until
             // there is one, then the name with a way to change it.
@@ -541,24 +535,24 @@ impl ToolOptions for Watermark {
                 .push(field("Text", text_input("e.g. DRAFT", &self.text).on_input(set(t, "text")).padding(8).style(theme::input)))
                 .push(field(
                     "Font",
-                    segmented(
-                        &[("sans", "Sans"), ("serif", "Serif"), ("mono", "Mono"), ("script", "Script")],
-                        family,
-                        move |v| Message::Option(t, "font", v.into()),
-                    ),
+                    segmented(&[("sans", "Sans"), ("serif", "Serif"), ("mono", "Mono"), ("script", "Script")], family, move |v| {
+                        Message::Option(t, "font", v.into())
+                    }),
                 ))
                 .push(
-                    row![field("Colour", swatches(t, &STAMP_COLORS, self.color)), checkbox(self.bold).label("Bold").on_toggle(toggle(t, "bold"))]
-                        .spacing(16)
-                        .align_y(iced::Alignment::End),
+                    row![
+                        field("Colour", swatches(t, &STAMP_COLORS, self.color)),
+                        checkbox(self.bold).label("Bold").on_toggle(toggle(t, "bold"))
+                    ]
+                    .spacing(16)
+                    .align_y(iced::Alignment::End),
                 );
         }
-        let mut pages = column![segmented(
-            &[("all", "All pages"), ("custom", "Some pages")],
-            if self.custom { "custom" } else { "all" },
-            move |v| Message::Option(t, "which", v.into()),
-        )]
-        .spacing(10);
+        let mut pages =
+            column![segmented(&[("all", "All pages"), ("custom", "Some pages")], if self.custom { "custom" } else { "all" }, move |v| {
+                Message::Option(t, "which", v.into())
+            },)]
+            .spacing(10);
         if self.custom {
             pages = pages.push(text_input("e.g. 1, 3-5", &self.pages_text).on_input(set(t, "pages")).padding(8).style(theme::input));
         }
@@ -567,7 +561,11 @@ impl ToolOptions for Watermark {
             column![
                 labelled_slider("Size", self.width * 100.0, 5.0..=100.0, 1.0, "%", move |v| Message::Option(t, "width", v.to_string())),
                 labelled_slider("Angle", self.angle, -90.0..=90.0, 5.0, "°", move |v| Message::Option(t, "angle", v.to_string())),
-                labelled_slider("Opacity", self.opacity * 100.0, 5.0..=100.0, 5.0, "%", move |v| Message::Option(t, "opacity", v.to_string())),
+                labelled_slider("Opacity", self.opacity * 100.0, 5.0..=100.0, 5.0, "%", move |v| Message::Option(
+                    t,
+                    "opacity",
+                    v.to_string()
+                )),
             ]
             .spacing(8)
             .width(Length::Fill),
@@ -624,12 +622,7 @@ impl ToolOptions for Watermark {
         (1..=file.page_count())
             .map(|page| {
                 let excluded = file.excluded.contains(&page);
-                TileSpec {
-                    page,
-                    excluded,
-                    dimmed: !excluded && stamped.as_ref().is_some_and(|s| !s.contains(&page)),
-                    ..Default::default()
-                }
+                TileSpec { page, excluded, dimmed: !excluded && stamped.as_ref().is_some_and(|s| !s.contains(&page)), ..Default::default() }
             })
             .collect()
     }
@@ -657,9 +650,7 @@ impl ToolOptions for Watermark {
         if self.custom {
             match parse_list(&self.pages_text, file.page_count()) {
                 Err(e) => return Some(e),
-                Ok(pages) if pages.iter().all(|p| file.excluded.contains(p)) => {
-                    return Some("None of the chosen pages are kept.".into())
-                }
+                Ok(pages) if pages.iter().all(|p| file.excluded.contains(p)) => return Some("None of the chosen pages are kept.".into()),
                 Ok(_) => {}
             }
         }

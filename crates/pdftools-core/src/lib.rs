@@ -6,11 +6,12 @@
 pub mod compress;
 mod error;
 pub mod grayscale;
-pub mod images;
 mod image_data;
+pub mod images;
 pub mod merge;
 pub mod metadata;
 pub mod organize;
+mod repair;
 pub mod security;
 mod stamp;
 pub mod stamps;
@@ -39,10 +40,31 @@ pub fn load(path: &Path) -> Result<Document, Error> {
 /// Loads a PDF without requiring it to be readable; the caller checks
 /// [`Document::is_encrypted`].
 pub(crate) fn load_unchecked(path: &Path) -> Result<Document, Error> {
-    Document::load(path).map_err(|source| Error::Load {
-        path: path.to_path_buf(),
-        source,
-    })
+    load_or_repair(path).map(|(doc, _)| doc)
+}
+
+/// Loads a PDF, recovering what it can from a damaged one; the flag says
+/// whether it had to.
+fn load_or_repair(path: &Path) -> Result<(Document, bool), Error> {
+    match Document::load(path) {
+        Ok(doc) => Ok((doc, false)),
+        // Missing files, passwords and the like aren't damage.
+        Err(source @ (lopdf::Error::IO(_) | lopdf::Error::Decryption(_))) => Err(Error::Load { path: path.to_path_buf(), source }),
+        Err(source) => std::fs::read(path)
+            .ok()
+            .and_then(|bytes| repair::load(&bytes))
+            .map(|doc| (doc, true))
+            .ok_or(Error::Load { path: path.to_path_buf(), source }),
+    }
+}
+
+/// A damaged PDF's recoverable pages as a fresh, readable file (for viewers
+/// that can't repair it themselves); `None` if nothing can be saved.
+pub fn repaired_bytes(bytes: &[u8]) -> Option<Vec<u8>> {
+    let mut doc = repair::load(bytes)?;
+    let mut out = Vec::new();
+    doc.save_to(&mut out).ok()?;
+    Some(out)
 }
 
 /// Loads a PDF keeping only the given 1-based pages (in their original
@@ -78,6 +100,8 @@ pub struct PdfInfo {
     pub encrypted: bool,
     pub file_size: u64,
     pub metadata: Metadata,
+    /// The file was damaged and only what could be recovered was read.
+    pub repaired: bool,
     /// Images in the file and their stored size, which is what lossy
     /// compression can shrink.
     pub images: usize,
@@ -86,12 +110,13 @@ pub struct PdfInfo {
 
 pub fn inspect(path: &Path) -> Result<PdfInfo, Error> {
     let file_size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
-    let doc = load_unchecked(path)?;
+    let (doc, repaired) = load_or_repair(path)?;
     if doc.is_encrypted() {
         return Ok(PdfInfo { needs_password: true, encrypted: true, file_size, ..Default::default() });
     }
     Ok(PdfInfo {
         pages: Some(doc.get_pages().len()),
+        repaired,
         needs_password: false,
         // Loading transparently decrypts files that have no user password.
         encrypted: doc.encryption_state.is_some(),
@@ -119,12 +144,10 @@ pub fn save(doc: &mut Document, output: &Path) -> Result<(), Error> {
     let mut temp_name = output.as_os_str().to_owned();
     temp_name.push(".part");
     let temp = PathBuf::from(temp_name);
-    std::fs::write(&temp, &bytes)
-        .and_then(|()| std::fs::rename(&temp, output))
-        .map_err(|e| {
-            let _ = std::fs::remove_file(&temp);
-            save_error(e.to_string())
-        })
+    std::fs::write(&temp, &bytes).and_then(|()| std::fs::rename(&temp, output)).map_err(|e| {
+        let _ = std::fs::remove_file(&temp);
+        save_error(error::io_reason(&e))
+    })
 }
 
 /// Size of the file at `path`, or 0 if it can't be read.

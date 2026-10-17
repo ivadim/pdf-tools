@@ -48,12 +48,8 @@ pub fn grayscale_document(doc: &mut Document, convert_images: bool) -> Grayscale
 
     if convert_images {
         let masks = mask_ids(doc);
-        let images: Vec<ObjectId> = doc
-            .objects
-            .iter()
-            .filter(|(id, object)| !masks.contains(id) && is_image(object))
-            .map(|(id, _)| *id)
-            .collect();
+        let images: Vec<ObjectId> =
+            doc.objects.iter().filter(|(id, object)| !masks.contains(id) && is_image(object)).map(|(id, _)| *id).collect();
         for id in images {
             if let Some(stream) = gray_image(doc, id) {
                 doc.objects.insert(id, Object::Stream(stream));
@@ -75,9 +71,7 @@ pub fn grayscale_file(input: &Path, convert_images: bool, output: &Path) -> Resu
 
 /// Every content stream with the resources its names refer to.
 fn content_streams(doc: &Document) -> Vec<(ObjectId, Option<Dictionary>)> {
-    let resolve = |object: Option<&Object>| {
-        object.and_then(|r| doc.dereference(r).ok()?.1.as_dict().ok().cloned())
-    };
+    let resolve = |object: Option<&Object>| object.and_then(|r| doc.dereference(r).ok()?.1.as_dict().ok().cloned());
     let mut seen = HashSet::new();
     let mut jobs = Vec::new();
 
@@ -102,10 +96,7 @@ fn content_streams(doc: &Document) -> Vec<(ObjectId, Option<Dictionary>)> {
 
 /// Kinds of the colour spaces named in a resource dictionary.
 fn named_spaces(doc: &Document, resources: Option<&Dictionary>) -> HashMap<Vec<u8>, Space> {
-    let Some(spaces) = resources
-        .and_then(|r| r.get(b"ColorSpace").ok())
-        .and_then(|c| doc.dereference(c).ok()?.1.as_dict().ok())
-    else {
+    let Some(spaces) = resources.and_then(|r| r.get(b"ColorSpace").ok()).and_then(|c| doc.dereference(c).ok()?.1.as_dict().ok()) else {
         return HashMap::new();
     };
     spaces
@@ -221,9 +212,8 @@ fn scan_content(data: &[u8]) -> Option<ScannedContent> {
                 }
                 let token = &data[start..i];
                 let names_a_value = start > 0 && data[start - 1] == b'/';
-                let is_operand = names_a_value
-                    || matches!(token, b"true" | b"false" | b"null")
-                    || matches!(token[0], b'0'..=b'9' | b'+' | b'-' | b'.');
+                let is_operand =
+                    names_a_value || matches!(token, b"true" | b"false" | b"null") || matches!(token[0], b'0'..=b'9' | b'+' | b'-' | b'.');
                 if !is_operand && nesting == 0 {
                     if token == b"BI" {
                         return None;
@@ -357,9 +347,7 @@ fn visit_indexed(doc: &Document, object: &mut Object) -> bool {
             items.iter_mut().fold(false, |changed, item| visit_indexed(doc, item) | changed)
         }
         Object::Dictionary(dict) => dict.iter_mut().fold(false, |changed, (_, v)| visit_indexed(doc, v) | changed),
-        Object::Stream(stream) => {
-            stream.dict.iter_mut().fold(false, |changed, (_, v)| visit_indexed(doc, v) | changed)
-        }
+        Object::Stream(stream) => stream.dict.iter_mut().fold(false, |changed, (_, v)| visit_indexed(doc, v) | changed),
         _ => false,
     }
 }

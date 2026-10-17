@@ -33,7 +33,11 @@ pub enum FileState {
     Empty,
     Loading(PathBuf),
     Ready(Loaded),
-    Failed { path: PathBuf, message: String, locked: bool },
+    Failed {
+        path: PathBuf,
+        message: String,
+        locked: bool,
+    },
 }
 
 /// Work done off the UI thread: a message for the run bar and the file
@@ -88,12 +92,7 @@ pub trait ToolOptions {
     /// The pages shown, in order. By default every page, as it is.
     fn tiles(&self, file: &Single) -> Vec<TileSpec> {
         (1..=file.page_count())
-            .map(|page| TileSpec {
-                page,
-                rotation: self.rotation(page),
-                excluded: file.excluded.contains(&page),
-                ..Default::default()
-            })
+            .map(|page| TileSpec { page, rotation: self.rotation(page), excluded: file.excluded.contains(&page), ..Default::default() })
             .collect()
     }
 
@@ -176,6 +175,8 @@ pub struct Single {
     pub state: FileState,
     /// Original page numbers left out of the result.
     pub excluded: BTreeSet<usize>,
+    /// The page whose checkbox was last clicked, for Shift-click ranges.
+    pub last_toggled: Option<usize>,
     pub run: Run,
 }
 

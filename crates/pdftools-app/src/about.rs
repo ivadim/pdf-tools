@@ -34,11 +34,7 @@ fn link<'a>(label: &'a str, url: String) -> Element<'a, Message> {
 }
 
 fn panel<'a>(title: &str, content: impl IntoIterator<Item = Element<'a, Message>>) -> Element<'a, Message> {
-    container(column![section_title(title)].extend(content).spacing(10))
-        .width(Length::Fill)
-        .padding(18)
-        .style(theme::panel)
-        .into()
+    container(column![section_title(title)].extend(content).spacing(10)).width(Length::Fill).padding(18).style(theme::panel).into()
 }
 
 fn credit<'a>(name: &'a str, purpose: &'a str, url: &str) -> Element<'a, Message> {

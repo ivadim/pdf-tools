@@ -149,11 +149,7 @@ pub fn load_image(path: &Path, rotation: i32) -> Result<DynamicImage, Error> {
 
 /// Builds a document with one page per image, in order. `progress` is called
 /// with the index of each image before it is read.
-pub fn images_to_pdf(
-    images: &[ImagePage],
-    layout: &ImageLayout,
-    mut progress: impl FnMut(usize),
-) -> Result<Document, Error> {
+pub fn images_to_pdf(images: &[ImagePage], layout: &ImageLayout, mut progress: impl FnMut(usize)) -> Result<Document, Error> {
     if images.is_empty() {
         return Err(Error::NoInput);
     }
@@ -178,12 +174,7 @@ pub fn images_to_pdf(
 }
 
 /// [`images_to_pdf`], saved to `output`. Returns the number of pages.
-pub fn images_to_pdf_file(
-    images: &[ImagePage],
-    layout: &ImageLayout,
-    output: &Path,
-    progress: impl FnMut(usize),
-) -> Result<usize, Error> {
+pub fn images_to_pdf_file(images: &[ImagePage], layout: &ImageLayout, output: &Path, progress: impl FnMut(usize)) -> Result<usize, Error> {
     let mut doc = images_to_pdf(images, layout, progress)?;
     crate::save(&mut doc, output)?;
     Ok(images.len())
@@ -200,8 +191,7 @@ fn add_image_page(doc: &mut Document, parent: ObjectId, page: &ImagePage, layout
     // Rotations are applied while drawing, so JPEGs are embedded untouched.
     // Mirrored orientations are rare: those images are decoded and flipped.
     let (image_id, width, height, turns) = if is_mirrored(orientation) {
-        let mut decoded = DynamicImage::from_decoder(decoder(&bytes).map_err(read_error)?)
-            .map_err(|e| read_error(e.to_string()))?;
+        let mut decoded = DynamicImage::from_decoder(decoder(&bytes).map_err(read_error)?).map_err(|e| read_error(e.to_string()))?;
         decoded.apply_orientation(orientation);
         let (id, w, h) = embed_pixels(doc, &decoded);
         (id, w, h, 0)

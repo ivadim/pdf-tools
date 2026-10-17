@@ -8,6 +8,7 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+pdftools-core.workspace = true
 hayro = { version = "0.8", default-features = false, features = ["embed-fonts", "simd"] }
 parley = "0.11"
 swash = "0.2"

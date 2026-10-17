@@ -31,10 +31,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
       - uses: Swatinem/rust-cache@v2
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y $LINUX_DEPS
+      - name: Formatting
+        if: runner.os == 'Linux'
+        run: cargo fmt --all --check
       - name: Unit, integration and UI tests
         run: cargo test --workspace --locked
 

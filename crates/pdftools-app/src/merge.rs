@@ -19,8 +19,14 @@ use crate::tools::move_item;
 use crate::widgets::{self, action, icon_button, muted, run_bar, section_title, Caps, Run, Tile, TileEvent, BOLD};
 
 const SOURCE_COLORS: [Color; 8] = [
-    color!(0x3b6fe0), color!(0xd9534f), color!(0x2e9d6a), color!(0xc77c12),
-    color!(0x8b55d6), color!(0x1597a8), color!(0xc2448f), color!(0x6b7a8f),
+    color!(0x3b6fe0),
+    color!(0xd9534f),
+    color!(0x2e9d6a),
+    color!(0xc77c12),
+    color!(0x8b55d6),
+    color!(0x1597a8),
+    color!(0xc2448f),
+    color!(0x6b7a8f),
 ];
 
 #[derive(Debug, Clone)]
@@ -56,6 +62,8 @@ pub struct Entry {
     pub name: String,
     pub color: Color,
     pub state: EntryState,
+    /// The file was damaged; only its recoverable pages are used.
+    pub repaired: bool,
 }
 
 /// A page of a source file: (entry id, 1-based page).
@@ -77,6 +85,8 @@ pub struct Merge {
     pub custom_order: Option<Vec<PageKey>>,
     rotations: HashMap<PageKey, i32>,
     excluded: HashSet<PageKey>,
+    /// Where the last include checkbox was clicked, for Shift-click ranges.
+    last_toggled: Option<usize>,
     pub run: Run,
 }
 
@@ -114,6 +124,7 @@ impl Merge {
                 color: SOURCE_COLORS[(id as usize - 1) % SOURCE_COLORS.len()],
                 path,
                 state: EntryState::Loading,
+                repaired: false,
             });
         }
         if !self.run.busy() {
@@ -124,6 +135,7 @@ impl Merge {
 
     pub fn file_read(&mut self, id: u32, result: Result<PdfInfo, String>) {
         let Some(entry) = self.entries.iter_mut().find(|e| e.id == id) else { return };
+        entry.repaired = result.as_ref().is_ok_and(|info| info.repaired);
         entry.state = match result {
             Ok(info) => match info.pages {
                 Some(pages) => EntryState::Ready(pages),
@@ -280,9 +292,20 @@ impl Merge {
                     TileEvent::RotateLeft => self.rotate(vec![key], -90),
                     TileEvent::RotateRight => self.rotate(vec![key], 90),
                     TileEvent::ToggleInclude => {
-                        if !self.excluded.remove(&key) {
-                            self.excluded.insert(key);
+                        let leave_out = !self.excluded.contains(&key);
+                        let range = match (ctx.shift, self.last_toggled) {
+                            (true, Some(last)) if last < ordered.len() => last.min(index)..=last.max(index),
+                            _ => index..=index,
+                        };
+                        for page in &ordered[range] {
+                            let key = self.key_of(page);
+                            if leave_out {
+                                self.excluded.insert(key);
+                            } else {
+                                self.excluded.remove(&key);
+                            }
                         }
+                        self.last_toggled = Some(index);
                     }
                     TileEvent::MoveEarlier if index > 0 => self.move_page(index, index - 1),
                     TileEvent::MoveLater => self.move_page(index, index + 2),
@@ -314,7 +337,10 @@ impl Merge {
                     let summary =
                         pdftools_core::merge_files(&inputs, Some(&pages), &output, |_: MergeProgress| {}).map_err(|e| e.to_string())?;
                     let removed = if left_out > 0 { format!(" ({} left out)", plural(left_out, "page")) } else { String::new() };
-                    Ok((format!("Saved {} from {}{removed} to", plural(summary.pages, "page"), plural(summary.files, "file")), Some(output)))
+                    Ok((
+                        format!("Saved {} from {}{removed} to", plural(summary.pages, "page"), plural(summary.files, "file")),
+                        Some(output),
+                    ))
                 })));
             }
             Msg::Finished(result) => {
@@ -364,23 +390,23 @@ impl Merge {
         let locked = self.custom_order.is_some() || busy;
         let wrap = Message::Merge;
         // Actions that don't apply yet stay hidden rather than disabled.
-        let mut header = row![container(widgets::tool_header(catalog::info(ToolId::Merge))).width(Length::Fill)]
-            .spacing(8)
-            .align_y(Alignment::Center);
+        let mut actions = Vec::new();
         if self.entries.len() > 1 {
-            header = header.push(action("Sort by name", Some(icons::sort()), false, (!locked).then_some(wrap(Msg::Sort))));
+            actions.push(("Sort by name", icons::sort(), false, (!locked).then_some(wrap(Msg::Sort))));
         }
         if !self.entries.is_empty() {
-            header = header
-                .push(action("Clear", Some(icons::trash()), false, (!busy).then_some(wrap(Msg::Clear))))
-                .push(action("Add files…", Some(icons::plus()), true, (!busy).then_some(wrap(Msg::Add))));
+            actions.push(("Clear", icons::trash(), false, (!busy).then_some(wrap(Msg::Clear))));
+            actions.push(("Add files…", icons::plus(), true, (!busy).then_some(wrap(Msg::Add))));
         }
+        let header = widgets::tool_header_with(catalog::info(ToolId::Merge), actions);
         if self.entries.is_empty() {
             // One place to start: a single drop zone across both panels.
             let zone = crate::app::drop_zone("Drop PDF files here", "or anywhere on the window", "Add PDF files…", Some(wrap(Msg::Add)));
             return column![
                 container(header).padding(Padding { top: 20.0, right: 24.0, bottom: 0.0, left: 24.0 }),
-                container(container(zone).style(theme::panel)).padding(Padding { top: 0.0, right: 24.0, bottom: 0.0, left: 24.0 }).height(Length::Fill),
+                container(container(zone).style(theme::panel))
+                    .padding(Padding { top: 0.0, right: 24.0, bottom: 0.0, left: 24.0 })
+                    .height(Length::Fill),
                 run_bar(&self.run, self.validate(), "Merge PDFs…", icons::merge(), wrap(Msg::Run), wrap(Msg::Reveal)),
             ]
             .spacing(16)
@@ -402,14 +428,20 @@ impl Merge {
             .into()
         } else {
             let count = self.entries.len();
-            scrollable(column(self.entries.iter().enumerate().map(|(i, e)| file_row(i, count, e, previews, locked, busy))).spacing(4).padding(8))
-                .height(Length::Fill)
-                .into()
+            scrollable(
+                column(self.entries.iter().enumerate().map(|(i, e)| file_row(i, count, e, previews, locked, busy))).spacing(4).padding(8),
+            )
+            .height(Length::Fill)
+            .into()
         };
         let left = container(column![
-            row![section_title("Files"), space::horizontal(), muted(if self.entries.is_empty() { String::new() } else { plural(self.entries.len(), "file") })]
-                .padding([14, 14])
-                .align_y(Alignment::Center),
+            row![
+                section_title("Files"),
+                space::horizontal(),
+                muted(if self.entries.is_empty() { String::new() } else { plural(self.entries.len(), "file") })
+            ]
+            .padding([14, 14])
+            .align_y(Alignment::Center),
             files,
         ])
         .width(360)
@@ -423,19 +455,14 @@ impl Merge {
             n if kept == n => plural(n, "page"),
             n => format!("{kept} of {} kept", plural(n, "page")),
         };
-        let mut grid_header = row![section_title("Merged result"), text(summary).color(theme::c().muted).width(Length::Fill)]
-            .spacing(10)
-            .align_y(Alignment::Center)
-            .padding(Padding { top: 0.0, right: 10.0, bottom: 0.0, left: 14.0 })
-            .height(46);
+        let mut actions = Vec::new();
         if !self.excluded.is_empty() {
-            grid_header = grid_header.push(action("Include all", Some(icons::check()), false, Some(wrap(Msg::IncludeAll))));
+            actions.push(("Include all", icons::check(), Some(wrap(Msg::IncludeAll))));
         }
         let any = !tiles.is_empty() && !busy;
-        grid_header = grid_header
-            .push(widgets::small_action("Rotate all left", icons::rotate_ccw(), any.then_some(wrap(Msg::RotateAll(-90)))))
-            .push(widgets::small_action("Rotate all right", icons::rotate_cw(), any.then_some(wrap(Msg::RotateAll(90)))));
-        let mut right = column![grid_header];
+        actions.push(("Rotate all left", icons::rotate_ccw(), any.then_some(wrap(Msg::RotateAll(-90)))));
+        actions.push(("Rotate all right", icons::rotate_cw(), any.then_some(wrap(Msg::RotateAll(90)))));
+        let mut right = column![widgets::grid_header("Merged result", summary, actions)];
         if self.custom_order.is_some() {
             right = right.push(
                 container(
@@ -483,6 +510,9 @@ fn file_row<'a>(index: usize, count: usize, entry: &'a Entry, previews: &'a Prev
     });
     let details: Element<'a, Message> = match &entry.state {
         EntryState::Loading => muted("Reading…"),
+        EntryState::Ready(pages) if entry.repaired => {
+            text(format!("{} recovered from a damaged file", plural(*pages, "page"))).size(13).color(theme::c().warning).into()
+        }
         EntryState::Ready(pages) => muted(plural(*pages, "page")),
         EntryState::Failed { message, .. } => text(format!("Can’t be merged: {message}")).size(12).color(theme::c().error).into(),
     };
@@ -511,6 +541,8 @@ fn file_row<'a>(index: usize, count: usize, entry: &'a Entry, previews: &'a Prev
 pub struct Context<'a> {
     pub dialogs: &'a dyn crate::dialogs::Dialogs,
     pub previews: &'a mut Previews,
+    /// Shift is held (for Shift-click ranges).
+    pub shift: bool,
 }
 
 /// Work a multi-file tool asks the app to start.

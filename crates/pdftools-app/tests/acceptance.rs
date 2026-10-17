@@ -82,12 +82,19 @@ fn media_box(path: &Path, page: u32) -> (f32, f32) {
 fn max_chroma(path: &Path, page: usize) -> u8 {
     let request = pdftools_render::pages::PreviewRequest { path: path.into(), page, width: 400, rotation: 0, gray: false };
     let rendered = pdftools_render::pages::render(&request, &mut Default::default()).unwrap();
-    rendered
-        .pixels
-        .chunks_exact(4)
-        .map(|p| p[0].max(p[1]).max(p[2]) - p[0].min(p[1]).min(p[2]))
-        .max()
-        .unwrap_or(0)
+    rendered.pixels.chunks_exact(4).map(|p| p[0].max(p[1]).max(p[2]) - p[0].min(p[1]).min(p[2])).max().unwrap_or(0)
+}
+
+/// Mean absolute difference between two pages rendered in grey (0–255).
+fn luma_difference(a: &Path, b: &Path, page: usize) -> f64 {
+    let gray = |path: &Path| {
+        let request = pdftools_render::pages::PreviewRequest { path: path.into(), page, width: 300, rotation: 0, gray: true };
+        pdftools_render::pages::render(&request, &mut Default::default()).unwrap()
+    };
+    let (a, b) = (gray(a), gray(b));
+    assert_eq!((a.width, a.height), (b.width, b.height));
+    let sum: u64 = a.pixels.chunks_exact(4).zip(b.pixels.chunks_exact(4)).map(|(p, q)| p[0].abs_diff(q[0]) as u64).sum();
+    sum as f64 / (a.pixels.len() / 4) as f64
 }
 
 fn ok(status: &str, expected: &str) {
@@ -531,7 +538,13 @@ fn metadata_and_grayscale() {
         ok(&h.run("Convert to grayscale…", Some(&out)), "Grayscale copy");
         let before = max_chroma(&fixture(file), 1);
         let after = max_chroma(&out, 1);
-        println!("GRY {file}: chroma {before} -> {after}");
+        // The grey copy should look like the original seen in grey.
+        let difference = luma_difference(&fixture(file), &out, 1);
+        println!("GRY {file}: chroma {before} -> {after}, mean luma difference {difference:.1}");
+        // calrgb.pdf is a test of exotic calibrated spaces, which are converted as plain RGB.
+        if file != "calrgb.pdf" {
+            assert!(difference < 12.0, "{file} looks different in grey (mean difference {difference:.1})");
+        }
         // Documented: spot colours (devicen) and gradients (alphatrans) are kept.
         if after > 8 && !matches!(file, "devicen.pdf" | "alphatrans.pdf") {
             coloured.push(format!("{file} (chroma {after})"));
@@ -660,7 +673,7 @@ fn awkward_files() {
             let h = &mut s.h;
             h.choose(tool, &path);
             h.render_pages(tool, 3);
-            let shot = format!("X-2 {name} {tool:?}");
+            let shot = format!("X-2 {} {tool:?}", name.replace('.', "-"));
             h.screenshot_at("acceptance/awkward", &shot, Size::new(1180.0, 760.0));
         }
         let h = &mut s.h;
@@ -670,11 +683,18 @@ fn awkward_files() {
         h.send(Message::Merge(merge::Msg::Add));
         println!("X-2 merge {name}: {:?}", h.app.merge.entries.last().map(|e| &e.state));
     }
-    // A truncated file can often still be repaired: try saving it.
+    // X-2b: a truncated file opens with the pages that survive, says so,
+    // and saves them as a sound file.
     let h = &mut s.h;
     h.choose(ToolId::Compress, &s.dir.join("truncated.pdf"));
+    assert!(h.shows("This file is damaged. These are the pages that could be recovered; only they will be saved."));
     let out = s.dir.join("X-2 truncated saved.pdf");
-    println!("X-2 truncated compress: {}", h.run("Compress PDF…", Some(&out)));
+    ok(&h.run("Compress PDF…", Some(&out)), "Saved as");
+    let recovered = page_count(&out);
+    println!("X-2 truncated: recovered {recovered} of 14 pages");
+    assert!(recovered >= 8, "only {recovered} pages recovered");
+    // (Text isn't checked: the fonts were in the part that was cut off.)
+    s.expect(&out, &format!("pages {recovered}"));
 
     // X-3: cancelling the save dialog does nothing.
     let h = &mut s.h;
@@ -808,14 +828,19 @@ fn screens() {
             all.push((
                 format!("{tool:?}"),
                 Box::new(move |h: &mut Harness| {
-                    h.choose(tool, &fixture(if tool == ToolId::Unlock { "../encrypted/aes256-password-test.pdf" } else { "tracemonkey.pdf" }));
+                    h.choose(
+                        tool,
+                        &fixture(if tool == ToolId::Unlock { "../encrypted/aes256-password-test.pdf" } else { "tracemonkey.pdf" }),
+                    );
                     h.render_pages(tool, 14);
                 }),
             ));
         }
         for (name, setup) in &all {
             setup(&mut s.h);
-            for (label, size) in [("small", Size::new(760.0, 500.0)), ("normal", Size::new(1180.0, 760.0)), ("large", Size::new(1920.0, 1080.0))] {
+            for (label, size) in
+                [("small", Size::new(760.0, 500.0)), ("normal", Size::new(1180.0, 760.0)), ("large", Size::new(1920.0, 1080.0))]
+            {
                 s.h.screenshot_at("acceptance/screens", &format!("{theme}-{label}-{name}"), size);
             }
         }
@@ -864,10 +889,8 @@ fn contact_sheets() {
     let _ = std::fs::remove_dir_all(&out);
     std::fs::create_dir_all(&out).unwrap();
     for group in ["light-small", "dark-small", "light-normal", "dark-normal", "light-large", "dark-large"] {
-        let shots: Vec<_> = files_in(&dir)
-            .into_iter()
-            .filter(|p| p.file_name().unwrap().to_string_lossy().starts_with(&format!("{group}-")))
-            .collect();
+        let shots: Vec<_> =
+            files_in(&dir).into_iter().filter(|p| p.file_name().unwrap().to_string_lossy().starts_with(&format!("{group}-"))).collect();
         for (n, chunk) in shots.chunks(9).enumerate() {
             let (tw, th) = (760, 500);
             let mut sheet = image::RgbaImage::from_pixel(tw * 3 + 8, th * 3 + 8, image::Rgba([255, 0, 255, 255]));
@@ -876,7 +899,10 @@ fn contact_sheets() {
                 image::imageops::overlay(&mut sheet, &img, ((i as u32 % 3) * (tw + 2) + 2) as i64, ((i as u32 / 3) * (th + 2) + 2) as i64);
             }
             sheet.save(out.join(format!("{group}-{n}.png"))).unwrap();
-            let names: Vec<_> = chunk.iter().map(|p| p.file_name().unwrap().to_string_lossy().replace(&format!("{group}-"), "").replace("-tiny-skia.png", "")).collect();
+            let names: Vec<_> = chunk
+                .iter()
+                .map(|p| p.file_name().unwrap().to_string_lossy().replace(&format!("{group}-"), "").replace("-tiny-skia.png", ""))
+                .collect();
             println!("{group}-{n}: {}", names.join(", "));
         }
     }

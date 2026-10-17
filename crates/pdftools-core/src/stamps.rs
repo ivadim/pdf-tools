@@ -183,11 +183,7 @@ pub fn add_signature(doc: &mut Document, image: &[u8], placements: &[Placement])
         let y = frame.height - (placement.y + placement.height) * frame.height;
         let resources = [Resource { category: b"XObject", prefix: "PdfToolsSig", object: Object::Reference(image_id) }];
         add_overlay(doc, page_id, &resources, false, |names| {
-            vec![
-                frame.cm(),
-                cm([w, 0.0, 0.0, h, x, y]),
-                Operation::new("Do", vec![Object::Name(names[0].clone())]),
-            ]
+            vec![frame.cm(), cm([w, 0.0, 0.0, h, x, y]), Operation::new("Do", vec![Object::Name(names[0].clone())])]
         })?;
     }
     Ok(placements.len())
@@ -211,19 +207,41 @@ fn win_ansi(text: &str) -> Result<Vec<u8>, Error> {
         })
         .collect::<Option<Vec<u8>>>()
         .ok_or_else(|| {
-            let bad = text.chars().find(|&c| !(' '..='~').contains(&c) && !('\u{a0}'..='\u{ff}').contains(&c) && !CP1252_EXTRAS.iter().any(|(ch, _)| *ch == c));
-            Error::InvalidOption(format!(
-                "“{}” can’t be drawn with the built-in font; use Latin characters",
-                bad.unwrap_or('?')
-            ))
+            let bad = text.chars().find(|&c| {
+                !(' '..='~').contains(&c) && !('\u{a0}'..='\u{ff}').contains(&c) && !CP1252_EXTRAS.iter().any(|(ch, _)| *ch == c)
+            });
+            Error::InvalidOption(format!("“{}” can’t be drawn with the built-in font; use Latin characters", bad.unwrap_or('?')))
         })
 }
 
 const CP1252_EXTRAS: [(char, u8); 27] = [
-    ('€', 0x80), ('‚', 0x82), ('ƒ', 0x83), ('„', 0x84), ('…', 0x85), ('†', 0x86), ('‡', 0x87),
-    ('ˆ', 0x88), ('‰', 0x89), ('Š', 0x8A), ('‹', 0x8B), ('Œ', 0x8C), ('Ž', 0x8E), ('‘', 0x91),
-    ('’', 0x92), ('“', 0x93), ('”', 0x94), ('•', 0x95), ('–', 0x96), ('—', 0x97), ('˜', 0x98),
-    ('™', 0x99), ('š', 0x9A), ('›', 0x9B), ('œ', 0x9C), ('ž', 0x9E), ('Ÿ', 0x9F),
+    ('€', 0x80),
+    ('‚', 0x82),
+    ('ƒ', 0x83),
+    ('„', 0x84),
+    ('…', 0x85),
+    ('†', 0x86),
+    ('‡', 0x87),
+    ('ˆ', 0x88),
+    ('‰', 0x89),
+    ('Š', 0x8A),
+    ('‹', 0x8B),
+    ('Œ', 0x8C),
+    ('Ž', 0x8E),
+    ('‘', 0x91),
+    ('’', 0x92),
+    ('“', 0x93),
+    ('”', 0x94),
+    ('•', 0x95),
+    ('–', 0x96),
+    ('—', 0x97),
+    ('˜', 0x98),
+    ('™', 0x99),
+    ('š', 0x9A),
+    ('›', 0x9B),
+    ('œ', 0x9C),
+    ('ž', 0x9E),
+    ('Ÿ', 0x9F),
 ];
 
 /// Helvetica advance widths (1/1000 em) for characters 32..=126.
@@ -329,12 +347,7 @@ mod tests {
             assert!(content.contains("/PdfToolsWm0 Do"), "{content}");
             assert!(content.contains("/PdfToolsGs0 gs"));
         }
-        let image = doc
-            .objects
-            .values()
-            .filter_map(|o| o.as_stream().ok())
-            .find(|s| s.dict.has(b"SMask"))
-            .expect("image with a soft mask");
+        let image = doc.objects.values().filter_map(|o| o.as_stream().ok()).find(|s| s.dict.has(b"SMask")).expect("image with a soft mask");
         assert_eq!(image.dict.get(b"Width").unwrap().as_i64().unwrap(), 40);
         assert_eq!(page_labels(&doc), ["a-1", "a-2"]);
     }
