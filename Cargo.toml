@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/pdftools-core", "crates/pdftools-render", "crates/pdftools-app", "crates/pdftools-iced"]
+members = ["crates/pdftools-core", "crates/pdftools-render", "crates/pdftools-app"]
 
 [workspace.package]
 version = "0.2.1"
@@ -47,5 +47,5 @@ opt-level = 3
 opt-level = 3
 [profile.release.package.miniz_oxide]
 opt-level = 3
-[profile.release.package.i-slint-renderer-software]
+[profile.release.package.tiny-skia]
 opt-level = 3

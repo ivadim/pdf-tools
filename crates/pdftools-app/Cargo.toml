@@ -1,6 +1,6 @@
 [package]
 name = "pdftools-app"
-description = "PDF Tools desktop app (Slint)"
+description = "PDF Tools desktop app"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -18,31 +18,27 @@ path = "src/main.rs"
 pdftools-core.workspace = true
 pdftools-render.workspace = true
 lopdf.workspace = true
-slint = { version = "~1.18", default-features = false, features = [
-    "std",
-    "backend-winit",
-    "renderer-software",
-    "accessibility",
-    "compat-1-2",
-    "unstable-winit-030",
+# Software rendering only (no GPU stack), raw-pixel images (pages and photos
+# are decoded by us), SVG icons and a canvas for the signature pad.
+iced = { version = "0.14", default-features = false, features = [
+    "tiny-skia",
+    "image-without-codecs",
+    "svg",
+    "canvas",
+    "thread-pool",
+    "crisp",
+    "x11",
+    "wayland",
 ] }
-hayro = { version = "0.8", default-features = false, features = ["embed-fonts", "simd"] }
 rfd = "0.17"
-# Already linked by Slint (text) and hayro (images): no extra size.
-parley = "0.11"
-swash = "0.2"
-tiny-skia = "0.12"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
-
-[build-dependencies]
-slint-build = "~1.18"
 
 # Embeds the icon and version details in pdftools.exe.
 [target.'cfg(windows)'.build-dependencies]
 winresource = "0.1"
 
 [dev-dependencies]
-i-slint-backend-testing = "~1.18"
-# For examples/render_icons.rs (resvg is already built for Slint).
-resvg = "0.48"
+iced_test = "0.14"
+# For examples/render_icons.rs (resvg is already built for iced's SVG icons).
+resvg = "0.45"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "ico"] }

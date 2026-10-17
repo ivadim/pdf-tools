@@ -1,832 +1,1044 @@
-//! The application: owns the tools and services, and turns UI callbacks
-//! into tool actions.
+//! The application: state, messages, `update` and `view`.
 
-use std::cell::RefCell;
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::rc::{Rc, Weak};
-use std::time::Duration;
+use std::rc::Rc;
 
-use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
+use iced::widget::{
+    button, center, column, container, image, mouse_area, opaque, row, scrollable, space, stack, text,
+};
+use iced::{event, window, Alignment, Color, ContentFit, Element, Event, Length, Padding, Subscription, Task};
+use pdftools_core::PdfInfo;
+use pdftools_render::pages::PreviewRequest;
 
-use crate::ToImage;
-use crate::dialogs::Dialogs;
-use crate::jobs;
-use crate::previews::{PreviewRequest, Previews};
-use crate::tools::images::ImagesTool;
-use crate::tools::merge::MergeTool;
-use crate::tools::signature::SignatureTool;
-use crate::tools::{self, id, preview_request, run_state, FileState, Loaded, Outcome, Shared, Tool};
-use crate::{About, AppWindow, Merge, PageTile, Sign, ToolView, Tools, Viewer};
+use crate::catalog::{self, ToolId, TOOLS};
+use crate::settings::{Settings, ThemeChoice};
+use crate::images::{self, Images};
+use crate::merge::{self, Context, Effect, Merge};
+use crate::dialogs::{self, Dialogs};
+use crate::icons;
+use crate::previews::{self, Previews, Thumb};
+use crate::single::{file_name, plural, FileState, Loaded, Single, TileSpec, ToolOptions};
+use crate::theme;
+use crate::tools;
+use crate::widgets::{self, action, icon, icon_button, muted, run_bar, section_title, Run, Tile, TileEvent, BOLD};
 
-pub struct App {
-    pub s: Shared,
-    tools: Vec<Option<Box<dyn Tool>>>,
-    /// Preview renders requested but not yet delivered.
-    in_flight: HashSet<String>,
-    viewer: Option<(usize, usize)>,
-}
-
-/// The large viewer renders this many pixels wide.
+/// Thumbnails are rendered this wide (sharp on high-DPI screens).
+pub const THUMB_WIDTH: u32 = 300;
+/// The viewer renders this many pixels wide.
 const VIEWER_WIDTH: u32 = 1400;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Screen {
+    Home,
+    About,
+    Tool(ToolId),
+}
+
+#[derive(Debug, Clone)]
+pub enum Message {
+    Navigate(Screen),
+    CopyVersion,
+    /// The user picked a theme.
+    Theme(ThemeChoice),
+    /// The system switched between light and dark.
+    SystemTheme(iced::theme::Mode),
+    // Files.
+    PickFile(ToolId),
+    ClearFile(ToolId),
+    OpenInUnlock(ToolId),
+    FileLoaded(ToolId, PathBuf, Result<PdfInfo, String>),
+    Hovering(bool),
+    Dropped(PathBuf),
+    // Pages.
+    Tile(ToolId, usize, TileEvent),
+    GridAction(ToolId, &'static str),
+    IncludeAll(ToolId),
+    Thumb(String, Result<Thumb, String>),
+    // Options and running.
+    Option(ToolId, &'static str, String),
+    Run(ToolId),
+    Finished(ToolId, Result<(String, Option<PathBuf>), String>),
+    Reveal(ToolId),
+    // Viewer.
+    ViewerStep(i32),
+    ViewerRotate(i32),
+    /// Leave the viewed page out of the result, or put it back.
+    ViewerToggleInclude,
+    CloseViewer,
+    // About.
+    OpenUrl(String),
+    Modifiers(iced::keyboard::Modifiers),
+    // Multi-file tools.
+    Merge(merge::Msg),
+    Images(images::Msg),
+    /// A sharper image for the viewer (Images to PDF).
+    ViewerImage(usize, Option<image::Handle>),
+}
+
+/// The large page view.
+struct Viewer {
+    tool: ToolId,
+    index: usize,
+}
+
+pub struct App {
+    pub screen: Screen,
+    dialogs: Rc<dyn Dialogs>,
+    previews: Previews,
+    singles: Vec<(Single, Box<dyn ToolOptions>)>,
+    pub merge: Merge,
+    pub images: Images,
+    viewer: Option<Viewer>,
+    viewer_image: Option<(usize, image::Handle)>,
+    hovering: bool,
+    /// The version was just copied (About).
+    pub copied: bool,
+    pub settings: Settings,
+    system_dark: bool,
+    modifiers: iced::keyboard::Modifiers,
+    /// Run background work immediately and queue its messages (for tests).
+    inline: bool,
+    pub queued: Vec<Message>,
+}
+
 impl App {
-    /// Builds the app for `ui` and connects every callback.
-    pub fn new(ui: &AppWindow, dialogs: Rc<dyn Dialogs>) -> Rc<RefCell<App>> {
-        let views = Rc::new(VecModel::from(vec![ToolView::default(); id::COUNT]));
-        ui.global::<Tools>().set_views(ModelRc::from(views.clone()));
-        let tools: Vec<Option<Box<dyn Tool>>> = vec![
-            Some(Box::new(MergeTool::new())),
-            Some(Box::new(tools::split::SplitTool::new())),
-            Some(Box::new(tools::compress::CompressTool::new())),
-            Some(Box::new(tools::protect::ProtectTool::new())),
-            Some(Box::new(tools::unlock::UnlockTool::new())),
-            Some(Box::new(tools::rotate::RotateTool::new())),
-            Some(Box::new(tools::rearrange::RearrangeTool::new())),
-            Some(Box::new(tools::page_numbers::PageNumbersTool::new())),
-            Some(Box::new(tools::watermark::WatermarkTool::new())),
-            Some(Box::new(tools::metadata::MetadataTool::new())),
-            Some(Box::new(SignatureTool::new())),
-            Some(Box::new(tools::grayscale::GrayscaleTool::new())),
-            Some(Box::new(ImagesTool::new())),
+    pub fn new(dialogs: Rc<dyn Dialogs>, inline: bool) -> Self {
+        let tools: Vec<Box<dyn ToolOptions>> = vec![
+            Box::new(tools::Split::default()),
+            Box::new(tools::Compress::default()),
+            Box::new(tools::Protect::default()),
+            Box::new(tools::Unlock::default()),
+            Box::new(tools::Rotate::default()),
+            Box::new(tools::Rearrange::default()),
+            Box::new(tools::PageNumbers::default()),
+            Box::new(tools::Watermark::default()),
+            Box::new(tools::Metadata::default()),
+            Box::new(tools::Signature::default()),
+            Box::new(tools::Grayscale::default()),
         ];
-        let app = Rc::new(RefCell::new(App {
-            s: Shared { ui: ui.clone_strong(), dialogs, previews: Previews::new(), views },
-            tools,
-            in_flight: HashSet::new(),
+        Self {
+            screen: Screen::Home,
+            dialogs,
+            previews: Previews::default(),
+            singles: tools.into_iter().map(|t| (Single::default(), t)).collect(),
+            merge: Merge::default(),
+            images: Images::default(),
             viewer: None,
-        }));
-        let about = ui.global::<About>();
-        about.set_version(env!("CARGO_PKG_VERSION").into());
-        about.set_platform(platform().into());
-        about.set_repository(env!("CARGO_PKG_REPOSITORY").into());
-        jobs::register(&app);
-        {
-            let mut a = app.borrow_mut();
-            for i in 0..id::COUNT {
-                a.refresh(i);
-            }
+            viewer_image: None,
+            hovering: false,
+            copied: false,
+            // Tests start from the defaults and never touch the real file.
+            settings: if inline { Settings::default() } else { Settings::load() },
+            system_dark: false,
+            modifiers: iced::keyboard::Modifiers::default(),
+            inline,
+            queued: Vec::new(),
         }
-        connect(ui, &app);
-        app
     }
 
-    /// Runs `f` with a tool taken out of the list, so it can use `Shared`.
-    pub fn with_tool<R>(&mut self, index: usize, f: impl FnOnce(&mut dyn Tool, &mut Shared) -> R) -> R {
-        let mut tool = self.tools[index].take().expect("tool is not re-entered");
-        let result = f(tool.as_mut(), &mut self.s);
-        self.tools[index] = Some(tool);
-        result
+    /// Switches the colours to the theme chosen (or the system's).
+    pub fn apply_theme(&self) {
+        theme::set_dark(self.settings.theme.is_dark(self.system_dark));
     }
 
-    pub fn tool<T: 'static>(&mut self, index: usize) -> &mut T {
-        self.tools[index].as_mut().expect("tool present").as_any().downcast_mut::<T>().expect("tool type")
+    pub fn title(&self) -> String {
+        match self.screen {
+            Screen::Tool(id) => format!("{} — PDF Tools", catalog::info(id).name),
+            _ => "PDF Tools".into(),
+        }
     }
 
-    // ── Views ─────────────────────────────────────────────────────────────
+    fn single(&self, id: ToolId) -> Option<&(Single, Box<dyn ToolOptions>)> {
+        self.singles.iter().find(|(_, t)| t.id() == id)
+    }
 
-    /// Rebuilds a tool's view from its state and requests missing previews.
-    pub fn refresh(&mut self, index: usize) {
-        if index == id::MERGE {
-            let tool = self.tools[index].take().expect("merge");
-            let mut merge = tool;
-            merge.as_any().downcast_mut::<MergeTool>().expect("merge").refresh(&mut self.s);
-            self.tools[index] = Some(merge);
-        } else if index == id::IMAGES {
-            self.with_tool(index, |tool, s| {
-                (tool as &mut dyn std::any::Any).downcast_mut::<ImagesTool>().expect("images").refresh(s)
-            });
-            self.read_images();
+    /// The last run of a single-file tool.
+    pub fn run_of(&self, id: ToolId) -> Run {
+        self.single(id).map(|(s, _)| s.run.clone()).unwrap_or_default()
+    }
+
+    fn single_mut(&mut self, id: ToolId) -> Option<&mut (Single, Box<dyn ToolOptions>)> {
+        self.singles.iter_mut().find(|(_, t)| t.id() == id)
+    }
+
+    /// Runs `work` off the UI thread (or right away in inline mode).
+    fn spawn<T: Send + 'static>(
+        &mut self,
+        work: impl FnOnce() -> T + Send + 'static,
+        then: impl FnOnce(T) -> Message + Send + 'static,
+    ) -> Task<Message> {
+        if self.inline {
+            self.queued.push(then(work()));
+            Task::none()
         } else {
-            self.with_tool(index, |tool, s| refresh_single(tool, s));
-        }
-        self.request_previews(index, None);
-        if index == id::SIGNATURE {
-            self.with_tool(index, |tool, s| {
-                if let Some(sig) = (tool as &mut dyn std::any::Any).downcast_mut::<SignatureTool>() {
-                    sig.refresh_page(s);
-                }
-            });
+            Task::perform(async move { work() }, then)
         }
     }
 
-    /// Asks for previews of tiles that have none; `urgent` ones first.
-    pub fn request_previews(&mut self, index: usize, urgent: Option<(usize, usize)>) {
-        let tiles: Vec<PageTile> = self.s.view(index).pages.iter().collect();
-        let gray = self.with_tool(index, |tool, _| tool.gray_previews());
-        let order: Vec<usize> = match urgent {
-            Some((first, last)) => (first..=last.min(tiles.len().saturating_sub(1))).collect(),
-            None => (0..tiles.len()).collect(),
-        };
-        for i in order {
-            let tile = &tiles[i];
-            if tile.loaded || tile.failed {
-                continue;
-            }
-            let Some(request) = tile_request(tile, gray) else { continue };
-            let key = format!("{}|{gray}", tile.key);
-            if !self.in_flight.insert(key.clone()) && urgent.is_none() {
-                continue;
-            }
-            let tile_key = tile.key.clone();
-            self.s.previews.request(request, urgent.is_some(), move |app: &mut App, result| {
-                app.in_flight.remove(&key);
-                app.apply_preview(index, &tile_key, result);
-            });
+    // ── Pages ────────────────────────────────────────────────────────────
+
+    /// The tool's tiles (what each shows, in order).
+    fn specs(&self, id: ToolId) -> Vec<TileSpec> {
+        self.single(id).map(|(single, tool)| tool.tiles(single)).unwrap_or_default()
+    }
+
+    fn request(&self, id: ToolId, spec: &TileSpec, width: u32) -> Option<PreviewRequest> {
+        let (single, tool) = self.single(id)?;
+        let path = single.path()?.to_path_buf();
+        Some(PreviewRequest { path, page: spec.page, width, rotation: spec.rotation, gray: tool.gray() })
+    }
+
+    fn tiles(&self, id: ToolId) -> Vec<Tile> {
+        let Some((single, tool)) = self.single(id) else { return Vec::new() };
+        tool.tiles(single)
+            .into_iter()
+            .map(|spec| {
+                let request = self.request(id, &spec, THUMB_WIDTH).expect("file loaded");
+                let thumb = self.previews.get(&request).cloned();
+                let overlay = thumb.as_ref().and_then(|t| tool.overlay(single, &spec, t.page_size));
+                Tile {
+                    key: previews::key(&request),
+                    page: spec.page,
+                    label: spec.label,
+                    rotation: spec.rotation,
+                    excluded: spec.excluded,
+                    failed: self.previews.failed(&request),
+                    thumb,
+                    badge: spec.badge,
+                    stripe: spec.stripe,
+                    dimmed: spec.dimmed,
+                    selected: spec.selected,
+                    overlay,
+                    blank: None,
+                }
+            })
+            .collect()
+    }
+
+    fn render(&mut self, request: PreviewRequest) -> Task<Message> {
+        match self.previews.start(request) {
+            Some(work) => self.spawn(work, |(key, result)| Message::Thumb(key, result)),
+            None => Task::none(),
         }
     }
 
-    fn apply_preview(&mut self, index: usize, key: &SharedString, result: Result<(slint::Image, f32, (f32, f32)), String>) {
-        let pages = self.s.view(index).pages;
-        self.with_tool(index, |tool, _| {
-            for row in 0..pages.row_count() {
-                let Some(mut tile) = pages.row_data(row) else { continue };
-                if &tile.key != key {
-                    continue;
-                }
-                match &result {
-                    Ok((image, aspect, size)) => {
-                        tile.image = image.clone();
-                        tile.aspect = *aspect;
-                        tile.loaded = true;
-                        if let Some(base) = tool.base() {
-                            base.sizes.insert(tile.page as usize, *size);
-                        }
-                        tool.decorate(&mut tile, *size);
-                    }
-                    Err(_) => tile.failed = true,
-                }
-                pages.set_row_data(row, tile);
-            }
-        });
-    }
+    // ── Files ────────────────────────────────────────────────────────────
 
-    // ── Files ─────────────────────────────────────────────────────────────
-
-    /// Opens `path` in a single-file tool, or adds it to Merge or Images.
-    pub fn load_file(&mut self, index: usize, path: PathBuf) {
-        if index == id::MERGE {
-            self.tool::<MergeTool>(index).add_files(vec![path]);
-            self.refresh(index);
-            self.inspect_merge_files();
-            return;
-        }
-        if index == id::IMAGES {
-            self.tool::<ImagesTool>(index).add_files(vec![path]);
-            self.refresh(index);
-            return;
-        }
-        self.with_tool(index, |tool, s| {
-            let base = tool.base().expect("single-file tool");
-            if let Some(old) = &base.file {
-                s.previews.forget(&old.path);
-            }
-            base.state = FileState::Loading(path.clone());
-            base.file = None;
-            base.thumb = None;
-            base.run = Default::default();
-        });
-        self.refresh(index);
+    pub fn load(&mut self, id: ToolId, path: PathBuf) -> Task<Message> {
+        let Some((single, _)) = self.single_mut(id) else { return Task::none() };
+        single.state = FileState::Loading(path.clone());
+        single.excluded.clear();
+        single.run = Run::Idle;
         let work_path = path.clone();
-        jobs::spawn(
+        self.spawn(
             move || pdftools_core::inspect(&work_path).map_err(|e| e.to_string()),
-            move |app: &mut App, result| app.file_loaded(index, path, result),
-        );
+            move |result| Message::FileLoaded(id, path, result),
+        )
     }
 
-    fn file_loaded(&mut self, index: usize, path: PathBuf, result: Result<pdftools_core::PdfInfo, String>) {
-        let still_wanted = self.with_tool(index, |tool, _| {
-            matches!(&tool.base().expect("single").state, FileState::Loading(p) if *p == path)
-        });
-        if !still_wanted {
+    fn file_loaded(&mut self, id: ToolId, path: PathBuf, result: Result<PdfInfo, String>) {
+        let Some((single, tool)) = self.single_mut(id) else { return };
+        if !matches!(&single.state, FileState::Loading(p) if *p == path) {
             return;
         }
-        self.with_tool(index, |tool, s| {
-            let base = tool.base().expect("single-file tool");
-            base.excluded.clear();
-            base.sizes.clear();
-            match result {
-                Ok(info) if info.needs_password && !base.allow_locked => {
-                    base.state = FileState::Failed { path: path.clone(), message: "This file is password-protected.".into(), locked: true };
-                }
-                Ok(info) => {
-                    let loaded = Loaded { name: tools::file_name(&path), path: path.clone(), info };
-                    base.state = FileState::Loaded(loaded.clone());
-                    base.file = Some(loaded);
-                }
-                Err(message) => {
-                    base.state = FileState::Failed { path: path.clone(), message, locked: false };
-                }
+        single.state = match result {
+            Ok(info) if info.needs_password && !tool.allow_locked() => {
+                FileState::Failed { path, message: "This file is password-protected.".into(), locked: true }
             }
-            tool.file_changed(s);
-        });
-        self.refresh(index);
-        // A small render of page 1 for the file card.
-        let has_pages = self.with_tool(index, |tool, _| tool.base_ref().is_some_and(|b| b.page_count() > 0));
-        if has_pages {
-            let request = PreviewRequest { path: path.clone(), page: 1, width: 120, rotation: 0, gray: false };
-            self.s.previews.request(request, true, move |app: &mut App, result| {
-                if let Ok((image, _, _)) = result {
-                    app.with_tool(index, |tool, _| {
-                        if let Some(base) = tool.base() {
-                            if base.path() == Some(path.as_path()) {
-                                base.thumb = Some(image);
-                            }
-                        }
-                    });
-                    app.refresh(index);
-                }
-            });
-        }
-    }
-
-    pub fn clear_file(&mut self, index: usize) {
-        self.with_tool(index, |tool, s| {
-            let base = tool.base().expect("single-file tool");
-            if let Some(file) = &base.file {
-                s.previews.forget(&file.path);
-            }
-            base.state = FileState::Empty;
-            base.file = None;
-            base.thumb = None;
-            base.excluded.clear();
-            base.run = Default::default();
-            tool.file_changed(s);
-        });
-        self.refresh(index);
-    }
-
-    /// Reads page counts of Merge's files that are still loading.
-    pub fn inspect_merge_files(&mut self) {
-        for (entry, path) in self.tool::<MergeTool>(id::MERGE).take_unread() {
-            let path_for_thumb = path.clone();
-            jobs::spawn(
-                move || pdftools_core::inspect(&path).map_err(|e| e.to_string()),
-                move |app: &mut App, result| {
-                    let readable = matches!(&result, Ok(info) if info.pages.is_some_and(|p| p > 0));
-                    app.tool::<MergeTool>(id::MERGE).file_read(entry, result);
-                    app.refresh(id::MERGE);
-                    // Page 1 doubles as the file's thumbnail in the list.
-                    if readable {
-                        let request = preview_request(&path_for_thumb, 1, 0, false);
-                        app.s.previews.request(request, true, |app: &mut App, _| app.refresh(id::MERGE));
-                    }
-                },
-            );
-        }
-    }
-
-    /// Reads sizes and thumbnails of new images, one at a time in a single
-    /// background job, so large photos are never decoded all at once.
-    fn read_images(&mut self) {
-        let unread = self.tool::<ImagesTool>(id::IMAGES).take_unread();
-        if unread.is_empty() {
-            return;
-        }
-        let listener = jobs::listener(|app: &mut App, (entry, result): (u32, tools::images::ReadResult)| {
-            app.tool::<ImagesTool>(id::IMAGES).image_read(entry, result);
-            app.refresh(id::IMAGES);
-        });
-        jobs::spawn(
-            move || {
-                for (entry, path) in unread {
-                    jobs::post(listener, Box::new((entry, tools::images::read_image(&path))));
-                }
-            },
-            move |_: &mut App, ()| jobs::forget(listener),
-        );
-    }
-
-    /// Files dropped onto the window.
-    pub fn files_dropped(&mut self, paths: Vec<PathBuf>) {
-        let active = self.s.ui.global::<Tools>().get_active().to_string();
-        let Some(index) = id::NAMES.iter().position(|n| *n == active) else { return };
-        if index == id::IMAGES {
-            if !self.busy(index) {
-                self.tool::<ImagesTool>(index).add_files(paths);
-                self.refresh(index);
-            }
-            return;
-        }
-        let pdfs: Vec<PathBuf> = paths.into_iter().filter(|p| tools::is_pdf(p)).collect();
-        if pdfs.is_empty() || self.busy(index) {
-            return;
-        }
-        if index == id::MERGE {
-            self.tool::<MergeTool>(index).add_files(pdfs);
-            self.refresh(index);
-            self.inspect_merge_files();
-        } else {
-            self.load_file(index, pdfs[0].clone());
-        }
-    }
-
-    fn busy(&mut self, index: usize) -> bool {
-        self.with_tool(index, |tool, _| tool.run_ref().kind == 1)
-    }
-
-    // ── Running ───────────────────────────────────────────────────────────
-
-    pub fn run(&mut self, index: usize) {
-        let ready = self.with_tool(index, |tool, _| tool.validate().is_none() && tool.run_ref().kind != 1);
-        if !ready {
-            return;
-        }
-        let Some(job) = self.with_tool(index, |tool, s| tool.start(s)) else {
-            return;
+            Ok(info) => FileState::Ready(Loaded { name: file_name(&path), path, info }),
+            Err(message) => FileState::Failed { path, message, locked: false },
         };
-        self.with_tool(index, |tool, _| {
-            *tool.run_mut() = tools::Run { kind: 1, progress: -1.0, message: "Working…".into(), output: None };
-        });
-        self.refresh(index);
-
-        let listener = jobs::listener(move |app: &mut App, (message, fraction): (String, f32)| {
-            app.with_tool(index, |tool, _| {
-                let run = tool.run_mut();
-                if run.kind == 1 {
-                    run.message = message;
-                    run.progress = fraction;
-                }
-            });
-            app.refresh(index);
-        });
-        let reporter: tools::Reporter = Box::new(move |message, fraction| jobs::post(listener, Box::new((message, fraction))));
-        jobs::spawn(move || job(reporter), move |app: &mut App, result: Result<Outcome, String>| {
-            jobs::forget(listener);
-            app.finished(index, result);
-        });
+        tool.file_changed(single);
     }
 
-    fn finished(&mut self, index: usize, result: Result<Outcome, String>) {
-        let overwritten = self.with_tool(index, |tool, _| {
-            let input = tool.base_ref().and_then(|b| b.path().map(Path::to_path_buf));
-            let run = tool.run_mut();
-            match result {
-                Ok(outcome) => {
-                    *run = tools::Run { kind: 2, progress: 1.0, message: outcome.message, output: outcome.output.clone() };
-                    input.filter(|i| outcome.output.as_deref() == Some(i.as_path()))
-                }
-                Err(message) => {
-                    *run = tools::Run { kind: 3, progress: 0.0, message, output: None };
-                    None
+    fn run(&mut self, id: ToolId) -> Task<Message> {
+        let dialogs = self.dialogs.clone();
+        let Some((single, tool)) = self.single_mut(id) else { return Task::none() };
+        if single.run.busy() || single.hint(tool.caps()).is_some() || tool.validate(single).is_some() {
+            return Task::none();
+        }
+        let Some(job) = tool.start(single, &*dialogs) else { return Task::none() };
+        single.run = Run::Running("Working…".into());
+        self.spawn(job, move |result| Message::Finished(id, result))
+    }
+
+    fn finished(&mut self, id: ToolId, result: Result<(String, Option<PathBuf>), String>) -> Task<Message> {
+        let Some((single, _)) = self.single_mut(id) else { return Task::none() };
+        let input = single.path().map(Path::to_path_buf);
+        match result {
+            Ok((message, output)) => {
+                single.run = Run::Done { message, output: output.clone() };
+                // The input was overwritten: show its new state.
+                if let (Some(input), Some(output)) = (input, output) {
+                    if input == output {
+                        self.previews.forget(&input);
+                        let run = self.single(id).map(|(s, _)| s.run.clone()).unwrap_or_default();
+                        let task = self.load(id, input);
+                        if let Some((single, _)) = self.single_mut(id) {
+                            single.run = run;
+                        }
+                        return task;
+                    }
                 }
             }
-        });
-        self.refresh(index);
-        // If the input was overwritten, show its new state.
-        if let Some(path) = overwritten {
-            self.s.previews.forget(&path);
-            let run = self.with_tool(index, |tool, _| tool.run_ref().clone());
-            self.load_file(index, path);
-            self.with_tool(index, |tool, _| *tool.run_mut() = run);
+            Err(message) => single.run = Run::Failed(message),
+        }
+        Task::none()
+    }
+
+    // ── Multi-file tools ─────────────────────────────────────────────────
+
+    fn multi(&mut self, tool: ToolId, effect: Option<Effect>) -> Task<Message> {
+        let Some(effect) = effect else { return Task::none() };
+        match effect {
+            Effect::Read(files) => Task::batch(files.into_iter().map(|(id, path)| {
+                self.spawn(
+                    move || pdftools_core::inspect(&path).map_err(|e| e.to_string()),
+                    move |result| Message::Merge(merge::Msg::Read(id, result)),
+                )
+            })),
+            Effect::ReadImage(id, path) => {
+                self.spawn(move || images::read_image(&path), move |result| Message::Images(images::Msg::Read(id, result)))
+            }
+            Effect::Render(request) => self.render(request),
+            Effect::View(index) => {
+                self.viewer = Some(Viewer { tool, index });
+                self.show_viewer()
+            }
+            Effect::Unlock(path) => {
+                self.screen = Screen::Tool(ToolId::Unlock);
+                self.load(ToolId::Unlock, path)
+            }
+            Effect::Job(job) => self.spawn(job, move |result| match tool {
+                ToolId::Images => Message::Images(images::Msg::Finished(result)),
+                _ => Message::Merge(merge::Msg::Finished(result)),
+            }),
         }
     }
 
-    // ── Viewer ────────────────────────────────────────────────────────────
-
-    pub fn open_viewer(&mut self, index: usize, page: usize) {
-        let count = self.s.view(index).pages.row_count();
-        if page >= count {
-            return;
-        }
-        self.viewer = Some((index, page));
-        self.show_viewer();
+    fn merge_update(&mut self, msg: merge::Msg) -> Task<Message> {
+        let dialogs = self.dialogs.clone();
+        let effect = self.merge.update(msg, &mut Context { dialogs: &*dialogs, previews: &mut self.previews });
+        self.multi(ToolId::Merge, effect)
     }
 
-    fn show_viewer(&mut self) {
-        let Some((index, page)) = self.viewer else { return };
-        let view = self.s.view(index);
-        let count = view.pages.row_count();
-        let Some(tile) = view.pages.row_data(page) else { return };
-        let viewer = self.s.ui.global::<Viewer>();
-        viewer.set_caption(format!("{}{}", tile.caption, if tile.rotation != 0 { format!(" · rotated {}°", tile.rotation) } else { String::new() }).into());
-        viewer.set_can_prev(page > 0);
-        viewer.set_can_next(page + 1 < count);
-        viewer.set_can_rotate(view.caps.rotate);
-        viewer.set_open(true);
-        if index == id::IMAGES {
-            // The tile already shows the thumbnail; swap in a sharper image.
-            viewer.set_tile(tile);
-            let Some((path, rotation)) = self.tool::<ImagesTool>(index).source(page) else { return };
-            jobs::spawn(
+    fn images_update(&mut self, msg: images::Msg) -> Task<Message> {
+        let dialogs = self.dialogs.clone();
+        let effect = self.images.update(msg, &mut Context { dialogs: &*dialogs, previews: &mut self.previews });
+        self.multi(ToolId::Images, effect)
+    }
+
+    // ── Viewer ───────────────────────────────────────────────────────────
+
+    fn viewer_request(&self) -> Option<PreviewRequest> {
+        let viewer = self.viewer.as_ref()?;
+        match viewer.tool {
+            ToolId::Merge => return self.merge.ordered().get(viewer.index).map(|p| self.merge.request(p, VIEWER_WIDTH)),
+            ToolId::Images => return None,
+            _ => {}
+        }
+        let spec = self.specs(viewer.tool).into_iter().nth(viewer.index)?;
+        self.request(viewer.tool, &spec, VIEWER_WIDTH)
+    }
+
+    fn viewer_count(&self) -> usize {
+        match self.viewer.as_ref().map(|v| v.tool) {
+            Some(ToolId::Merge) => self.merge.ordered().len(),
+            Some(ToolId::Images) => self.images.entries.len(),
+            Some(tool) => self.specs(tool).len(),
+            None => 0,
+        }
+    }
+
+    fn show_viewer(&mut self) -> Task<Message> {
+        if let Some(Viewer { tool: ToolId::Images, index }) = self.viewer {
+            // Photos are shown from the file itself, decoded at viewer size.
+            let Some((path, rotation)) = self.images.source(index) else { return Task::none() };
+            return self.spawn(
                 move || {
                     let image = pdftools_core::images::load_image(&path, rotation).ok()?;
-                    let image = image.resize(VIEWER_WIDTH, VIEWER_WIDTH, image::imageops::FilterType::Triangle).to_rgba8();
-                    Some(crate::raster::Picture { width: image.width(), height: image.height(), pixels: image.into_raw() })
+                    let image = image.resize(VIEWER_WIDTH, VIEWER_WIDTH, ::image::imageops::FilterType::Triangle).to_rgba8();
+                    Some(image::Handle::from_rgba(image.width(), image.height(), image.into_raw()))
                 },
-                move |app: &mut App, picture: Option<crate::raster::Picture>| {
-                    if let (Some(picture), true) = (picture, app.viewer == Some((index, page))) {
-                        let viewer = app.s.ui.global::<Viewer>();
-                        let mut shown = viewer.get_tile();
-                        shown.overlay_image = picture.to_image();
-                        viewer.set_tile(shown);
-                    }
-                },
+                move |handle| Message::ViewerImage(index, handle),
             );
-            return;
         }
-        viewer.set_tile(PageTile { loaded: false, ..tile.clone() });
-        let gray = self.with_tool(index, |tool, _| tool.gray_previews());
-        let Some(mut request) = tile_request(&tile, gray) else { return };
-        request.width = VIEWER_WIDTH;
-        self.s.previews.request(request, true, move |app: &mut App, result| {
-            if app.viewer != Some((index, page)) {
-                return;
-            }
-            let viewer = app.s.ui.global::<Viewer>();
-            let mut shown = viewer.get_tile();
-            match result {
-                Ok((image, aspect, _)) => {
-                    shown.image = image;
-                    shown.aspect = aspect;
-                    shown.loaded = true;
+        match self.viewer_request() {
+            Some(request) => self.render(request),
+            None => Task::none(),
+        }
+    }
+
+    // ── Update ───────────────────────────────────────────────────────────
+
+    pub fn update(&mut self, message: Message) -> Task<Message> {
+        let task = self.handle(message);
+        match self.screen {
+            Screen::Tool(id) => Task::batch([task, self.sync_stage(id)]),
+            _ => task,
+        }
+    }
+
+    /// For tools that show one page at a time: render it, and tell the tool
+    /// its proportions once known.
+    fn sync_stage(&mut self, id: ToolId) -> Task<Message> {
+        let closeup = self.closeup_request(id).filter(|r| self.previews.get(r).is_none());
+        let closeup = match closeup {
+            Some(request) => self.render(request),
+            None => Task::none(),
+        };
+        Task::batch([closeup, self.sync_page(id)])
+    }
+
+    /// The close-up a tool asks for, if any.
+    fn closeup_request(&self, id: ToolId) -> Option<PreviewRequest> {
+        let (single, tool) = self.single(id)?;
+        let page = tool.closeup(single)?;
+        Some(PreviewRequest { path: single.path()?.to_path_buf(), page, width: crate::single::CLOSEUP_WIDTH, rotation: 0, gray: false })
+    }
+
+    fn sync_page(&mut self, id: ToolId) -> Task<Message> {
+        let Some((single, tool)) = self.single(id) else { return Task::none() };
+        let (Some(page), Some(path)) = (tool.stage_page(), single.path()) else { return Task::none() };
+        let request = PreviewRequest { path: path.to_path_buf(), page, width: crate::tools::STAGE_WIDTH, rotation: 0, gray: false };
+        match self.previews.get(&request).map(|t| t.aspect) {
+            Some(aspect) => {
+                let dialogs = self.dialogs.clone();
+                if let Some((single, tool)) = self.single_mut(id) {
+                    tool.set("page-aspect", aspect.to_string(), single, &*dialogs);
                 }
-                Err(_) => shown.failed = true,
+                Task::none()
             }
-            viewer.set_tile(shown);
-        });
-    }
-
-    pub fn viewer_step(&mut self, delta: i32) {
-        if let Some((index, page)) = self.viewer {
-            let count = self.s.view(index).pages.row_count() as i32;
-            let target = page as i32 + delta;
-            if (0..count).contains(&target) {
-                self.viewer = Some((index, target as usize));
-                self.show_viewer();
-            }
+            None => self.render(request),
         }
     }
 
-    pub fn viewer_rotate(&mut self, delta: i32) {
-        if let Some((index, page)) = self.viewer {
-            let action = if delta < 0 { "rotate-left" } else { "rotate-right" };
-            self.tile_action(index, action, page);
-            self.show_viewer();
-        }
-    }
-
-    pub fn close_viewer(&mut self) {
-        self.viewer = None;
-        self.s.ui.global::<Viewer>().set_open(false);
-    }
-
-    // ── Page actions shared by all tools ──────────────────────────────────
-
-    pub fn tile_action(&mut self, index: usize, action: &str, tile: usize) {
-        match action {
-            "view" => return self.open_viewer(index, tile),
-            "toggle-include" if is_single(index) => {
-                self.with_tool(index, |tool, _| {
-                    let page = tool.tiles().get(tile).map(|t| t.page as usize);
-                    if let (Some(page), Some(base)) = (page, tool.base()) {
-                        if !base.excluded.remove(&page) {
-                            base.excluded.insert(page);
+    fn handle(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::Navigate(screen) => {
+                self.screen = screen;
+                self.copied = false;
+                self.viewer = None;
+            }
+            Message::Theme(choice) => {
+                self.settings.theme = choice;
+                self.apply_theme();
+                if !self.inline {
+                    self.settings.save();
+                }
+            }
+            Message::SystemTheme(mode) => {
+                self.system_dark = mode == iced::theme::Mode::Dark;
+                self.apply_theme();
+            }
+            Message::CopyVersion => {
+                self.copied = true;
+                return iced::clipboard::write(format!("PDF Tools {} ({})", env!("CARGO_PKG_VERSION"), crate::about::platform()));
+            }
+            Message::PickFile(id) => {
+                if let Some(path) = self.dialogs.pick_pdf() {
+                    return self.load(id, path);
+                }
+            }
+            Message::ClearFile(id) => {
+                if let Some((single, tool)) = self.single_mut(id) {
+                    *single = Single::default();
+                    tool.file_changed(single);
+                }
+            }
+            Message::OpenInUnlock(id) => {
+                let path = match self.single(id).map(|(s, _)| &s.state) {
+                    Some(FileState::Failed { path, .. }) => path.clone(),
+                    _ => return Task::none(),
+                };
+                self.screen = Screen::Tool(ToolId::Unlock);
+                return self.load(ToolId::Unlock, path);
+            }
+            Message::FileLoaded(id, path, result) => self.file_loaded(id, path, result),
+            Message::Hovering(on) => self.hovering = on,
+            Message::Dropped(path) => {
+                self.hovering = false;
+                if self.screen == Screen::Tool(ToolId::Merge) && !self.merge.run.busy() {
+                    let unread = self.merge.add_files(vec![path]);
+                    return self.multi(ToolId::Merge, Some(Effect::Read(unread)));
+                }
+                if self.screen == Screen::Tool(ToolId::Images) && !self.images.run.busy() {
+                    let effect = self.images.add_files(vec![path]);
+                    return self.multi(ToolId::Images, effect);
+                }
+                if let Screen::Tool(id) = self.screen {
+                    let busy = self.single(id).is_some_and(|(s, _)| s.run.busy());
+                    if !busy && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf")) {
+                        return self.load(id, path);
+                    }
+                }
+            }
+            Message::Tile(id, index, event) => {
+                let Some(spec) = self.specs(id).into_iter().nth(index) else { return Task::none() };
+                if event == TileEvent::Shown {
+                    return match self.request(id, &spec, THUMB_WIDTH) {
+                        Some(request) => self.render(request),
+                        None => Task::none(),
+                    };
+                }
+                let modifiers = self.modifiers;
+                let Some((single, tool)) = self.single_mut(id) else { return Task::none() };
+                match event {
+                    TileEvent::View => {
+                        if tool.clicked(index, spec.page, modifiers) {
+                            return Task::none();
+                        }
+                        self.viewer = Some(Viewer { tool: id, index });
+                        return self.show_viewer();
+                    }
+                    TileEvent::ToggleInclude => {
+                        if !single.excluded.remove(&spec.page) {
+                            single.excluded.insert(spec.page);
                         }
                     }
-                });
+                    other => tool.tile_event(index, spec.page, other),
+                }
+                if !single.run.busy() {
+                    single.run = Run::Idle;
+                }
             }
-            _ => self.with_tool(index, |tool, s| tool.tile_action(s, action, tile)),
-        }
-        self.refresh(index);
-    }
-
-    pub fn include_range(&mut self, index: usize, from: usize, to: usize, include: bool) {
-        if index == id::MERGE {
-            self.tool::<MergeTool>(index).include_range(from, to, include);
-        } else if is_single(index) {
-            self.with_tool(index, |tool, _| {
-                let pages: Vec<usize> = tool.tiles().iter().map(|t| t.page as usize).collect();
-                if let Some(base) = tool.base() {
-                    for page in pages.iter().skip(from).take(to + 1 - from.min(to + 1)) {
-                        if include {
-                            base.excluded.remove(page);
-                        } else {
-                            base.excluded.insert(*page);
-                        }
+            Message::GridAction(id, action) => {
+                if let Some((single, tool)) = self.single_mut(id) {
+                    tool.grid_action(action, single);
+                    single.run = Run::Idle;
+                }
+            }
+            Message::IncludeAll(id) => {
+                if let Some((single, _)) = self.single_mut(id) {
+                    single.excluded.clear();
+                }
+            }
+            Message::Thumb(key, result) => self.previews.finished(key, result),
+            Message::Option(id, key, value) => {
+                let dialogs = self.dialogs.clone();
+                if let Some((single, tool)) = self.single_mut(id) {
+                    tool.set(key, value, single, &*dialogs);
+                    // The last result described other settings.
+                    if matches!(single.run, Run::Done { .. } | Run::Failed(_)) {
+                        single.run = Run::Idle;
                     }
                 }
-            });
-        }
-        self.refresh(index);
-    }
-
-    pub fn grid_action(&mut self, index: usize, action: &str) {
-        if action == "include-all" && is_single(index) {
-            self.with_tool(index, |tool, _| tool.base().expect("single").excluded.clear());
-        } else {
-            self.with_tool(index, |tool, s| tool.grid_action(s, action));
-        }
-        self.refresh(index);
-    }
-}
-
-/// The system and processor, as people know them: "macOS arm64".
-pub fn platform() -> String {
-    let os = match std::env::consts::OS {
-        "windows" => "Windows",
-        "macos" => "macOS",
-        "linux" => "Linux",
-        other => other,
-    };
-    let arch = match std::env::consts::ARCH {
-        "aarch64" => "arm64",
-        other => other,
-    };
-    format!("{os} {arch}")
-}
-
-/// Tools that work on one PDF (everything but Merge and Images).
-fn is_single(index: usize) -> bool {
-    index != id::MERGE && index != id::IMAGES
-}
-
-/// The preview request for a tile (its key encodes path, page and rotation).
-fn tile_request(tile: &PageTile, gray: bool) -> Option<PreviewRequest> {
-    // Merge prefixes the key with its file id: "3#path|page|rotation".
-    let key = match tile.key.split_once('#') {
-        Some((id, rest)) if !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()) => rest,
-        _ => tile.key.as_str(),
-    };
-    let mut parts = key.rsplitn(3, '|');
-    let rotation: i32 = parts.next()?.parse().ok()?;
-    let page: usize = parts.next()?.parse().ok()?;
-    let path = PathBuf::from(parts.next()?);
-    Some(preview_request(&path, page, rotation, gray))
-}
-
-/// Builds a single-file tool's view; previews already rendered are reused.
-fn refresh_single(tool: &mut dyn Tool, s: &mut Shared) {
-    let index = tool.index();
-    // A new requirement matters more than the previous run's result.
-    if matches!(tool.run_ref().kind, 2 | 3) && tool.base_ref().is_some_and(|b| b.file.is_some()) && tool.validate().is_some() {
-        *tool.run_mut() = tools::Run::default();
-    }
-    let gray = tool.gray_previews();
-    let mut tiles = tool.tiles();
-    let caps = tool.caps();
-    let base = tool.base_ref().expect("single-file tool");
-    for tile in &mut tiles {
-        if let Some(request) = tile_request(tile, gray) {
-            if let Some((image, aspect, size)) = s.previews.cached(&request) {
-                tile.image = image;
-                tile.aspect = aspect;
-                tile.loaded = true;
-                tool.decorate(tile, size);
-            } else if let Some(size) = base.sizes.get(&(tile.page as usize)) {
-                tool.decorate(tile, *size);
+            }
+            Message::Run(id) => return self.run(id),
+            Message::Finished(id, result) => return self.finished(id, result),
+            Message::Reveal(id) => {
+                if let Some((Single { run: Run::Done { output: Some(output), .. }, .. }, _)) = self.single(id) {
+                    dialogs::reveal(output);
+                }
+            }
+            Message::ViewerStep(delta) => {
+                let count = self.viewer_count();
+                if let Some(viewer) = &mut self.viewer {
+                    let target = viewer.index as i64 + delta as i64;
+                    if (0..count as i64).contains(&target) {
+                        viewer.index = target as usize;
+                        return self.show_viewer();
+                    }
+                }
+            }
+            Message::ViewerRotate(delta) => {
+                if let Some(Viewer { tool, index }) = self.viewer {
+                    let event = if delta < 0 { TileEvent::RotateLeft } else { TileEvent::RotateRight };
+                    if tool == ToolId::Merge {
+                        let _ = self.merge_update(merge::Msg::Tile(index, event));
+                        return self.show_viewer();
+                    }
+                    if tool == ToolId::Images {
+                        let _ = self.images_update(images::Msg::Tile(index, event));
+                        return self.show_viewer();
+                    }
+                    let page = self.specs(tool).get(index).map_or(index + 1, |s| s.page);
+                    if let Some((_, options)) = self.single_mut(tool) {
+                        options.tile_event(index, page, event);
+                    }
+                    return self.show_viewer();
+                }
+            }
+            Message::ViewerToggleInclude => {
+                if let Some(Viewer { tool, index }) = self.viewer {
+                    return match tool {
+                        ToolId::Merge => self.merge_update(merge::Msg::Tile(index, TileEvent::ToggleInclude)),
+                        ToolId::Images => Task::none(),
+                        _ => self.handle(Message::Tile(tool, index, TileEvent::ToggleInclude)),
+                    };
+                }
+            }
+            Message::CloseViewer => self.viewer = None,
+            Message::OpenUrl(url) => self.dialogs.open_url(&url),
+            Message::Modifiers(modifiers) => self.modifiers = modifiers,
+            Message::Merge(msg) => return self.merge_update(msg),
+            Message::Images(msg) => return self.images_update(msg),
+            Message::ViewerImage(index, handle) => {
+                if let (Some(Viewer { index: shown, .. }), Some(handle)) = (&self.viewer, handle) {
+                    if *shown == index {
+                        self.viewer_image = Some((index, handle));
+                    }
+                }
             }
         }
-    }
-    let kept = tiles.iter().filter(|t| !t.excluded).count();
-    let summary = if tiles.is_empty() {
-        String::new()
-    } else if kept == tiles.len() {
-        tools::plural(tiles.len(), "page")
-    } else {
-        format!("{kept} of {} kept", tools::plural(tiles.len(), "page"))
-    };
-    let hint = if base.file.is_none() {
-        // Say what's wrong with a chosen file rather than asking for one.
-        Some(match &base.state {
-            FileState::Failed { locked: true, .. } => "Unlock the file first — use “Unlock…” above.",
-            FileState::Failed { .. } => "This file can’t be opened. Choose another one.",
-            FileState::Loading(_) => "Reading the file…",
-            _ => "Choose a PDF to get started.",
-        }
-        .to_owned())
-    } else if caps.include && base.page_count() > 0 && base.kept_pages().is_empty() {
-        Some("Every page is left out — tick at least one to keep it.".to_owned())
-    } else {
-        tool.validate()
-    };
-    let run = run_state(&base.run, tool.run_label(), hint);
-    let card = base.card();
-    let include_all = caps.include && !base.excluded.is_empty();
-    base.pages.set_vec(tiles);
-    let mut texts = tool.texts();
-    texts.resize(texts.len().max(8), String::new());
-    let mut flags = tool.flags();
-    flags.resize(flags.len().max(4), false);
-    s.set_view(
-        index,
-        ToolView {
-            file: card,
-            pages: ModelRc::from(base.pages.clone()),
-            caps,
-            run,
-            summary: summary.into(),
-            include_all,
-            notice: tool.notice().into(),
-            empty_text: tool.empty_text().into(),
-            texts: tools::strings(texts),
-            form_version: tool.form_version(),
-            flags: tools::bools(flags),
-        },
-    );
-}
-
-/// Runs `f` with the app, or later if the app is busy (e.g. a callback fired
-/// while a native dialog was open), then delivers finished background work.
-fn dispatch(app: &Weak<RefCell<App>>, f: impl FnOnce(&mut App) + 'static) {
-    let Some(strong) = app.upgrade() else { return };
-    let Ok(mut guard) = strong.try_borrow_mut() else {
-        let app = app.clone();
-        slint::Timer::single_shot(Duration::from_millis(1), move || dispatch(&app, f));
-        return;
-    };
-    f(&mut guard);
-    drop(guard);
-    jobs::drain();
-}
-
-fn connect(ui: &AppWindow, app: &Rc<RefCell<App>>) {
-    let tools_global = ui.global::<Tools>();
-    let weak = Rc::downgrade(app);
-    let ui_weak = ui.as_weak();
-
-    macro_rules! on {
-        ($global:expr, $setter:ident, |$app:ident $(, $arg:ident : $ty:ty)*| $body:block) => {{
-            let weak = weak.clone();
-            $global.$setter(move |$($arg: $ty),*| {
-                $(let $arg = $arg.clone();)*
-                dispatch(&weak, move |$app: &mut App| $body);
-            });
-        }};
+        Task::none()
     }
 
-    {
-        let ui_weak = ui_weak.clone();
-        let weak = weak.clone();
-        tools_global.on_navigate(move |target| {
-            if let Some(ui) = ui_weak.upgrade() {
-                ui.global::<Tools>().set_active(target.clone());
-            }
-            dispatch(&weak, |app| app.close_viewer());
-        });
-    }
-    on!(tools_global, on_pick_file, |app, tool: i32| {
-        let index = tool as usize;
-        if index == id::MERGE {
-            return;
-        }
-        if index == id::IMAGES {
-            let paths = app.s.dialogs.pick_images();
-            app.tool::<ImagesTool>(index).add_files(paths);
-            app.refresh(index);
-            return;
-        }
-        if let Some(path) = app.s.dialogs.pick_pdf() {
-            app.load_file(index, path);
-        }
-    });
-    on!(tools_global, on_clear_file, |app, tool: i32| { app.clear_file(tool as usize) });
-    on!(tools_global, on_unlock_file, |app, tool: i32| {
-        let path = app.with_tool(tool as usize, |t, _| match &t.base().expect("single").state {
-            FileState::Failed { path, .. } => Some(path.clone()),
+    pub fn subscription(&self) -> Subscription<Message> {
+        let theme = iced::system::theme_changes().map(Message::SystemTheme);
+        let events = event::listen_with(|event, _status, _window| match event {
+            Event::Window(window::Event::FileHovered(_)) => Some(Message::Hovering(true)),
+            Event::Window(window::Event::FilesHoveredLeft) => Some(Message::Hovering(false)),
+            Event::Window(window::Event::FileDropped(path)) => Some(Message::Dropped(path)),
+            Event::Keyboard(iced::keyboard::Event::ModifiersChanged(modifiers)) => Some(Message::Modifiers(modifiers)),
             _ => None,
         });
-        if let Some(path) = path {
-            app.s.ui.global::<Tools>().set_active("unlock".into());
-            app.load_file(id::UNLOCK, path);
+        Subscription::batch([events, theme])
+    }
+
+    // ── View ─────────────────────────────────────────────────────────────
+
+    pub fn view(&self) -> Element<'_, Message> {
+        let page: Element<'_, Message> = match self.screen {
+            Screen::Home => self.home(),
+            Screen::About => crate::about::view(self.copied),
+            Screen::Tool(ToolId::Merge) => self.merge.view(&self.previews),
+            Screen::Tool(ToolId::Images) => self.images.view(),
+            Screen::Tool(id) if self.single(id).is_some() => self.single_page(id),
+            Screen::Tool(id) => not_ported(id),
+        };
+        let main = row![self.sidebar(), container(page).width(Length::Fill).height(Length::Fill).style(theme::page_bg)];
+        let mut layers = stack![main];
+        if let Some(viewer) = self.viewer_view() {
+            layers = layers.push(viewer);
         }
-    });
-    on!(tools_global, on_run, |app, tool: i32| { app.run(tool as usize) });
-    on!(tools_global, on_reveal, |app, tool: i32| {
-        let output = app.with_tool(tool as usize, |t, _| t.run_ref().output.clone());
-        if let Some(output) = output {
-            crate::dialogs::reveal(&output);
+        if self.hovering {
+            let label = match self.screen {
+                Screen::Tool(ToolId::Images) => "Drop images here",
+                Screen::Tool(_) => "Drop PDF files here",
+                _ => "Open a tool first, then drop files",
+            };
+            layers = layers.push(
+                container(center(text(label).size(18).font(BOLD).color(theme::c().accent)))
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .style(|_| container::Style {
+                        background: Some(Color { a: 0.12, ..theme::c().accent }.into()),
+                        border: iced::Border { width: 3.0, color: theme::c().accent, radius: 0.0.into() },
+                        ..Default::default()
+                    }),
+            );
         }
-    });
-    on!(tools_global, on_tile_clicked, |app, tool: i32, index: i32, shift: bool, ctrl: bool| {
-        app.with_tool(tool as usize, |t, s| t.tile_clicked(s, index as usize, shift, ctrl));
-        app.refresh(tool as usize);
-    });
-    on!(tools_global, on_tile_action, |app, tool: i32, action: SharedString, index: i32| {
-        app.tile_action(tool as usize, &action, index as usize)
-    });
-    on!(tools_global, on_tile_moved, |app, tool: i32, from: i32, to: i32| {
-        app.with_tool(tool as usize, |t, s| t.tile_moved(s, from as usize, to.max(0) as usize));
-        app.refresh(tool as usize);
-    });
-    on!(tools_global, on_include_range, |app, tool: i32, from: i32, to: i32, include: bool| {
-        app.include_range(tool as usize, from as usize, to as usize, include)
-    });
-    on!(tools_global, on_visible_range, |app, tool: i32, first: i32, last: i32| {
-        if last >= first {
-            app.request_previews(tool as usize, Some((first.max(0) as usize, last as usize)));
+        layers.into()
+    }
+
+    fn sidebar(&self) -> Element<'_, Message> {
+        let nav = |screen: Screen, name: &'static str, chip: Element<'static, Message>| -> Element<'_, Message> {
+            let active = self.screen == screen;
+            button(
+                row![chip, text(name).font(if active { BOLD } else { iced::Font::DEFAULT })]
+                    .spacing(10)
+                    .align_y(Alignment::Center),
+            )
+            .width(Length::Fill)
+            .padding([5, 8])
+            .style(theme::nav(active))
+            .on_press(Message::Navigate(screen))
+            .into()
+        };
+        let plain_chip = |handle| -> Element<'static, Message> {
+            container(icon(handle, 15.0, theme::c().muted)).center(26).style(theme::chip(theme::c().muted)).into()
+        };
+        let mut tools = column![nav(Screen::Home, "All tools", plain_chip(icons::home())), divider()].spacing(1);
+        for info in &TOOLS {
+            tools = tools.push(nav(Screen::Tool(info.id), info.name, widgets::chip(info, 26.0)));
         }
-    });
-    on!(tools_global, on_grid_action, |app, tool: i32, action: SharedString| { app.grid_action(tool as usize, &action) });
-    on!(tools_global, on_option, |app, tool: i32, key: SharedString, value: SharedString| {
-        app.with_tool(tool as usize, |t, s| {
-            t.option(s, &key, &value);
-            // The last result described other settings.
-            if matches!(t.run_ref().kind, 2 | 3) {
-                *t.run_mut() = tools::Run::default();
-            }
+        container(
+            column![
+                text("PDF Tools").size(16).font(BOLD),
+                tools,
+                space::vertical(),
+                nav(Screen::About, "About", plain_chip(icons::info())),
+                self.theme_switch(),
+            ]
+            .spacing(14)
+            .padding(Padding { top: 18.0, right: 10.0, bottom: 18.0, left: 10.0 }),
+        )
+        .width(210)
+        .height(Length::Fill)
+        .style(theme::sidebar)
+        .into()
+    }
+
+    /// Follow the system, light or dark.
+    fn theme_switch(&self) -> Element<'_, Message> {
+        let choices = [
+            (ThemeChoice::System, icons::monitor(), "Match the system"),
+            (ThemeChoice::Light, icons::sun(), "Light"),
+            (ThemeChoice::Dark, icons::moon(), "Dark"),
+        ];
+        let buttons = choices.into_iter().map(|(choice, handle, label)| {
+            let chosen = self.settings.theme == choice;
+            let tint = if chosen { theme::c().text } else { theme::c().muted };
+            iced::widget::tooltip(
+                button(center(icon(handle, 16.0, tint)))
+                    .width(Length::Fill)
+                    .height(28)
+                    .padding(0)
+                    .style(theme::segment(chosen))
+                    .on_press(Message::Theme(choice)),
+                container(text(label).size(12)).padding([4, 8]).style(theme::hover_bar),
+                iced::widget::tooltip::Position::Top,
+            )
+            .into()
         });
-        app.refresh(tool as usize);
-    });
+        container(row(buttons).spacing(3)).padding(3).style(theme::segmented_track).into()
+    }
 
-    on!(ui.global::<About>(), on_open, |app, url: SharedString| { app.s.dialogs.open_url(&url) });
+    fn home(&self) -> Element<'_, Message> {
+        // Tall enough for four lines of description, so none is cut off.
+        const CARD_HEIGHT: f32 = 112.0;
+        let card = |info: &'static catalog::ToolInfo| -> Element<'static, Message> {
+            button(
+                row![widgets::chip(info, 40.0), column![text(info.name).size(15).font(BOLD), muted(info.description)].spacing(3)]
+                    .spacing(14),
+            )
+            .width(Length::Fill)
+            .height(CARD_HEIGHT)
+            .padding(14)
+            .style(theme::tool_card)
+            .on_press(Message::Navigate(Screen::Tool(info.id)))
+            .into()
+        };
+        // As many columns of at least 215 px as fit.
+        let cards = move |featured: bool| {
+            iced::widget::responsive(move |size| {
+                let columns = (((size.width + 12.0) / (215.0 + 12.0)).floor() as usize).max(1);
+                let tools: Vec<_> = TOOLS.iter().filter(|t| t.featured == featured).collect();
+                let rows = tools.chunks(columns).map(|chunk| {
+                    let mut cells: Vec<Element<'_, Message>> = chunk.iter().map(|info| card(info)).collect();
+                    cells.resize_with(columns, || space::horizontal().into());
+                    row(cells).spacing(12).height(CARD_HEIGHT).into()
+                });
+                column(rows).spacing(12).into()
+            })
+            .height(Length::Shrink)
+        };
+        let content = column![
+            column![
+                text("What would you like to do?").size(28).font(BOLD),
+                text("Everything runs on your computer — your files never leave it.").color(theme::c().muted),
+            ]
+            .spacing(6),
+            section_title("Most used"),
+            cards(true),
+            section_title("More tools"),
+            cards(false),
+        ]
+        .spacing(14)
+        .padding(Padding { top: 36.0, right: 28.0, bottom: 36.0, left: 28.0 });
+        scrollable(content).into()
+    }
 
-    let viewer = ui.global::<Viewer>();
-    on!(viewer, on_step, |app, delta: i32| { app.viewer_step(delta) });
-    on!(viewer, on_rotate, |app, delta: i32| { app.viewer_rotate(delta) });
-    on!(viewer, on_close, |app| { app.close_viewer() });
+    fn single_page(&self, id: ToolId) -> Element<'_, Message> {
+        let info = catalog::info(id);
+        let (single, tool) = self.single(id).expect("single-file tool");
+        let busy = single.run.busy();
+        let caps = tool.caps();
+        let tiles = self.tiles(id);
 
-    let merge = ui.global::<Merge>();
-    on!(merge, on_add_files, |app| {
-        let paths = app.s.dialogs.pick_pdfs();
-        app.tool::<MergeTool>(id::MERGE).add_files(paths);
-        app.refresh(id::MERGE);
-        app.inspect_merge_files();
-    });
-    on!(merge, on_sort_files, |app| {
-        app.tool::<MergeTool>(id::MERGE).sort_by_name();
-        app.refresh(id::MERGE);
-    });
-    on!(merge, on_clear_files, |app| {
-        app.with_tool(id::MERGE, |t, s| (t as &mut dyn std::any::Any).downcast_mut::<MergeTool>().expect("merge").clear(s));
-        app.refresh(id::MERGE);
-    });
-    on!(merge, on_file_action, |app, action: SharedString, index: i32| {
-        let index = index as usize;
-        match action.as_str() {
-            "unlock" => {
-                if let Some(path) = app.tool::<MergeTool>(id::MERGE).path_of(index) {
-                    app.s.ui.global::<Tools>().set_active("unlock".into());
-                    app.load_file(id::UNLOCK, path);
-                }
-                return;
+        let closeup = self.closeup_request(id).and_then(|r| self.previews.get(&r));
+        let left = column![file_card(id, single, &self.previews, busy), tool.view(single, closeup)]
+            .spacing(18)
+            .padding(14);
+        let left = container(scrollable(left)).width(340).height(Length::Fill).style(theme::panel);
+
+        let kept = tiles.iter().filter(|t| !t.excluded).count();
+        let summary = match tiles.len() {
+            0 => String::new(),
+            n if kept == n => plural(n, "page"),
+            n => format!("{kept} of {} kept", plural(n, "page")),
+        };
+        let mut header = row![section_title("Pages"), text(summary).color(theme::c().muted).width(Length::Fill)]
+            .spacing(10)
+            .align_y(Alignment::Center)
+            .padding(Padding { top: 0.0, right: 10.0, bottom: 0.0, left: 14.0 })
+            .height(46);
+        if caps.include && !single.excluded.is_empty() {
+            header = header.push(action("Include all", Some(icons::check()), false, Some(Message::IncludeAll(id))));
+        }
+        for (label, handle, act) in tool.grid_actions() {
+            header = header.push(widgets::small_action(label, handle(), (!busy && !tiles.is_empty()).then_some(Message::GridAction(id, act))));
+        }
+        let empty = tool.empty_text(single).unwrap_or(match &single.state {
+            FileState::Ready(f) if f.info.needs_password => "Pages can be previewed once the file is unlocked.",
+            FileState::Ready(_) => "This file has no pages to preview.",
+            _ => "Pages will appear here once you choose a file.",
+        });
+        let right: Element<'_, Message> = match (tool.stage_page(), single.path()) {
+            // Before there's a file, the big area is where to put one.
+            _ if matches!(single.state, FileState::Empty) => drop_zone(
+                "Drop a PDF here",
+                "or anywhere on the window",
+                "Choose a PDF…",
+                (!busy).then_some(Message::PickFile(id)),
+            ),
+            (Some(page), Some(path)) => {
+                let request = PreviewRequest { path: path.to_path_buf(), page, width: crate::tools::STAGE_WIDTH, rotation: 0, gray: false };
+                tool.stage(single, self.previews.get(&request))
             }
             _ => {
-                app.with_tool(id::MERGE, |t, s| {
-                    (t as &mut dyn std::any::Any).downcast_mut::<MergeTool>().expect("merge").file_action(s, &action, index)
-                });
+                let grid = widgets::page_grid(tiles, caps, busy, empty, move |i, e| Message::Tile(id, i, e));
+                column![header, divider(), grid].into()
+            }
+        };
+        let right = container(right).width(Length::Fill).height(Length::Fill).style(theme::panel);
+
+        let hint = single.hint(caps).or_else(|| tool.validate(single));
+        column![
+            container(widgets::tool_header(info)).padding(Padding { top: 20.0, right: 24.0, bottom: 0.0, left: 24.0 }),
+            row![left, right].spacing(16).padding(Padding { top: 0.0, right: 24.0, bottom: 0.0, left: 24.0 }).height(Length::Fill),
+            run_bar(&single.run, hint, tool.run_label(), (info.icon)(), Message::Run(id), Message::Reveal(id)),
+        ]
+        .spacing(16)
+        .into()
+    }
+
+    /// Whether the viewed page is left out (`None` if the tool can't).
+    fn viewer_excluded(&self) -> Option<bool> {
+        let viewer = self.viewer.as_ref()?;
+        match viewer.tool {
+            ToolId::Merge => Some(self.merge.tiles(&self.previews).get(viewer.index)?.excluded),
+            ToolId::Images => None,
+            tool => {
+                let (_, options) = self.single(tool)?;
+                options.caps().include.then(|| self.specs(tool).get(viewer.index).is_some_and(|s| s.excluded))
             }
         }
-        if action != "focus" {
-            app.refresh(id::MERGE);
-        }
-    });
-    on!(merge, on_file_moved, |app, from: i32, to: i32| {
-        app.tool::<MergeTool>(id::MERGE).move_file(from as usize, to.max(0) as usize);
-        app.refresh(id::MERGE);
-    });
-
-    let sign = ui.global::<Sign>();
-    macro_rules! sig {
-        ($app:ident, |$tool:ident, $s:ident| $body:expr) => {
-            $app.with_tool(id::SIGNATURE, |t, $s| {
-                let $tool = (t as &mut dyn std::any::Any).downcast_mut::<SignatureTool>().expect("signature");
-                $body
-            })
-        };
     }
-    on!(sign, on_pad_down, |app, x: f32, y: f32| { sig!(app, |tool, s| tool.pad_down(s, x, y)) });
-    on!(sign, on_pad_move, |app, x: f32, y: f32| { sig!(app, |tool, s| tool.pad_move(s, x, y)) });
-    on!(sign, on_pad_up, |app| {
-        sig!(app, |tool, s| tool.pad_up(s));
-        app.refresh(id::SIGNATURE);
-    });
-    on!(sign, on_pad_clear, |app| {
-        sig!(app, |tool, s| tool.pad_clear(s));
-        app.refresh(id::SIGNATURE);
-    });
-    on!(sign, on_box_changed, |app, box_id: i32, x: f32, y: f32, w: f32, h: f32| {
-        sig!(app, |tool, s| tool.box_changed(s, box_id, x, y, w, h))
-    });
-    on!(sign, on_box_removed, |app, box_id: i32| {
-        sig!(app, |tool, s| tool.box_removed(s, box_id));
-        app.refresh(id::SIGNATURE);
-    });
-    on!(sign, on_page_step, |app, delta: i32| {
-        sig!(app, |tool, s| tool.page_step(s, delta));
-        app.refresh(id::SIGNATURE);
-    });
-    on!(sign, on_add_box, |app, every: bool| {
-        sig!(app, |tool, s| tool.add_box(s, every));
-        app.refresh(id::SIGNATURE);
-    });
-    on!(sign, on_choose_image, |app| {
-        sig!(app, |tool, s| tool.choose_image(s));
-        app.refresh(id::SIGNATURE);
-    });
+
+    fn viewer_view(&self) -> Option<Element<'_, Message>> {
+        let viewer = self.viewer.as_ref()?;
+        let count = self.viewer_count();
+        let (handle, rotation, can_rotate) = match viewer.tool {
+            ToolId::Images => {
+                let tile = self.images.tiles().into_iter().nth(viewer.index)?;
+                let large = self.viewer_image.as_ref().filter(|(i, _)| *i == viewer.index).map(|(_, h)| h.clone());
+                let small = match tile.overlay {
+                    Some(crate::single::Overlay::Image { handle, .. }) => Some(handle),
+                    _ => None,
+                };
+                (large.or(small), tile.rotation, true)
+            }
+            tool => {
+                let request = self.viewer_request()?;
+                // The thumbnail stands in until the large render arrives.
+                let small = match tool {
+                    ToolId::Merge => self.merge.ordered().get(viewer.index).map(|p| self.merge.request(p, THUMB_WIDTH)),
+                    _ => self.specs(tool).get(viewer.index).and_then(|spec| self.request(tool, spec, THUMB_WIDTH)),
+                };
+                let thumb = self.previews.get(&request).or_else(|| small.as_ref().and_then(|r| self.previews.get(r)));
+                let can_rotate = tool == ToolId::Merge || self.single(tool).is_some_and(|(_, t)| t.caps().rotate);
+                (thumb.map(|t| t.handle.clone()), request.rotation, can_rotate)
+            }
+        };
+        let page: Element<'_, Message> = match handle {
+            // Scroll to zoom, drag to move around.
+            Some(handle) => image::viewer(handle).width(Length::Fill).height(Length::Fill).min_scale(1.0).max_scale(8.0).into(),
+            None => center(text("Loading…").color(Color::WHITE)).into(),
+        };
+        let rotation = if rotation != 0 { format!(" · rotated {rotation}°") } else { String::new() };
+        let excluded = self.viewer_excluded();
+        let left_out = if excluded == Some(true) { " · left out" } else { "" };
+        let caption = text(format!("Page {} of {count}{rotation}{left_out} · scroll to zoom", viewer.index + 1))
+            .color(Color { a: 0.8, ..Color::WHITE });
+        let light = |handle, label, msg: Option<Message>| -> Element<'_, Message> {
+            let tint = if msg.is_some() { Color { a: 0.8, ..Color::WHITE } } else { Color { a: 0.3, ..Color::WHITE } };
+            iced::widget::tooltip(
+                button(center(icon(handle, 24.0, tint))).width(44).height(44).padding(0).style(|_, _| button::Style::default()).on_press_maybe(msg),
+                container(text(label).size(12)).padding([4, 8]).style(theme::hover_bar),
+                iced::widget::tooltip::Position::Top,
+            )
+            .into()
+        };
+        let mut controls = row![].spacing(8).align_y(Alignment::Center);
+        if can_rotate {
+            controls = controls
+                .push(light(icons::rotate_ccw(), "Rotate left", Some(Message::ViewerRotate(-90))))
+                .push(light(icons::rotate_cw(), "Rotate right", Some(Message::ViewerRotate(90))));
+        }
+        if let Some(excluded) = excluded {
+            let (label, handle) = if excluded { ("Put this page back", icons::check()) } else { ("Leave this page out", icons::eye_off()) };
+            controls = controls.push(
+                button(row![icon(handle, 18.0, Color::WHITE), text(label).color(Color::WHITE)].spacing(6).align_y(Alignment::Center))
+                    .padding([8, 12])
+                    .style(|_, status| button::Style {
+                        background: Some(Color { a: if matches!(status, button::Status::Hovered) { 0.22 } else { 0.12 }, ..Color::WHITE }.into()),
+                        border: iced::border::rounded(9),
+                        ..Default::default()
+                    })
+                    .on_press(Message::ViewerToggleInclude),
+            );
+        }
+        let body = column![
+            row![space::horizontal(), light(icons::x(), "Close", Some(Message::CloseViewer))],
+            row![
+                light(icons::chevron_left(), "Previous page", (viewer.index > 0).then_some(Message::ViewerStep(-1))),
+                container(page).width(Length::Fill).height(Length::Fill).padding([0, 20]),
+                light(icons::chevron_right(), "Next page", (viewer.index + 1 < count).then_some(Message::ViewerStep(1))),
+            ]
+            .align_y(Alignment::Center)
+            .height(Length::Fill),
+            // The caption has its own line, so the buttons stay put.
+            center(caption).height(24),
+            center(controls).height(48),
+        ]
+        .padding(12);
+        let backdrop = mouse_area(container(body).width(Length::Fill).height(Length::Fill).style(theme::overlay))
+            .on_press(Message::CloseViewer);
+        Some(opaque(backdrop))
+    }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::tools::THUMB_WIDTH;
+fn divider<'a>() -> Element<'a, Message> {
+    container(space()).width(Length::Fill).height(1).style(|_| container::Style {
+        background: Some(theme::c().border.into()),
+        ..Default::default()
+    })
+    .into()
+}
 
-    #[test]
-    fn tile_keys_round_trip_into_requests() {
-        let tile = PageTile { key: format!("C:\\a|b\\c.pdf|{}|{}", 3, 90).into(), ..Default::default() };
-        let request = tile_request(&tile, true).unwrap();
-        assert_eq!(request.path, PathBuf::from("C:\\a|b\\c.pdf"));
-        assert_eq!((request.page, request.rotation, request.gray, request.width), (3, 90, true, THUMB_WIDTH));
-        assert!(tile_request(&PageTile::default(), false).is_none());
+fn not_ported<'a>(id: ToolId) -> Element<'a, Message> {
+    let info = catalog::info(id);
+    column![
+        widgets::tool_header(info),
+        center(muted("This tool hasn’t been ported to the iced version yet.")),
+    ]
+    .padding(24)
+    .into()
+}
+
+/// A large place to choose or drop files.
+pub fn drop_zone<'a>(heading: &'a str, hint: &'a str, button: &'a str, on_choose: Option<Message>) -> Element<'a, Message> {
+    container(
+        column![
+            icon(icons::upload(), 40.0, theme::c().accent),
+            text(heading).size(18).font(BOLD),
+            muted(hint),
+            action(button, Some(icons::plus()), true, on_choose),
+        ]
+        .spacing(10)
+        .align_x(Alignment::Center),
+    )
+    .center(Length::Fill)
+    .style(theme::grid_bg)
+    .into()
+}
+
+/// The chosen file (or a note that there's none yet).
+fn file_card<'a>(id: ToolId, single: &'a Single, previews: &'a Previews, busy: bool) -> Element<'a, Message> {
+    match &single.state {
+        FileState::Empty => container(
+            row![
+                icon(icons::file(), 22.0, theme::c().muted),
+                text("No PDF chosen").color(theme::c().muted).width(Length::Fill),
+                action("Choose…", None, false, (!busy).then_some(Message::PickFile(id))),
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center),
+        )
+        .padding(10)
+        .style(|_| container::Style {
+            background: Some(theme::c().surface_2.into()),
+            border: iced::Border { width: 1.0, color: theme::c().border, radius: 12.0.into() },
+            ..Default::default()
+        })
+        .into(),
+        FileState::Loading(path) => card(text(file_name(path)).font(BOLD).into(), muted("Reading…"), None, None, id, busy),
+        FileState::Failed { path, message, locked } => {
+            let mut problem = column![text(message.clone()).size(13).color(theme::c().error)].spacing(8);
+            if *locked && id != ToolId::Unlock {
+                problem = problem.push(action("Unlock…", Some(icons::unlock()), false, Some(Message::OpenInUnlock(id))));
+            }
+            card(text(file_name(path)).font(BOLD).into(), muted("Can’t be used"), None, Some(problem.into()), id, busy)
+        }
+        FileState::Ready(file) => {
+            let pages = file.info.pages.map_or_else(|| "Locked".to_owned(), |p| plural(p, "page"));
+            let request = PreviewRequest { path: file.path.clone(), page: 1, width: THUMB_WIDTH, rotation: 0, gray: false };
+            let thumb = previews.get(&request).map(|t| t.handle.clone());
+            card(
+                text(file.name.clone()).font(BOLD).into(),
+                muted(format!("{pages} · {}", crate::single::format_bytes(file.info.file_size))),
+                thumb,
+                None,
+                id,
+                busy,
+            )
+        }
     }
+}
+
+fn card<'a>(
+    name: Element<'a, Message>,
+    details: Element<'a, Message>,
+    thumb: Option<iced::widget::image::Handle>,
+    below: Option<Element<'a, Message>>,
+    id: ToolId,
+    busy: bool,
+) -> Element<'a, Message> {
+    let thumb: Element<'a, Message> = match thumb {
+        Some(handle) => container(image(handle).content_fit(ContentFit::Contain)).width(46).height(60).style(theme::page).into(),
+        None => container(space()).width(46).height(60).style(theme::page).into(),
+    };
+    let mut content = column![row![
+        thumb,
+        column![name, details].spacing(3).width(Length::Fill),
+        icon_button(icons::folder(), "Choose another file", 30.0, (!busy).then_some(Message::PickFile(id))),
+        icon_button(icons::x(), "Remove", 30.0, (!busy).then_some(Message::ClearFile(id))),
+    ]
+    .spacing(12)
+    .align_y(Alignment::Center)]
+    .spacing(10);
+    // Problems get the card's full width rather than squeezing beside the name.
+    if let Some(below) = below {
+        content = content.push(below);
+    }
+    container(content)
+    .padding(10)
+    .style(|_| container::Style {
+        background: Some(theme::c().surface_2.into()),
+        border: iced::Border { width: 1.0, color: theme::c().border, radius: 12.0.into() },
+        ..Default::default()
+    })
+    .into()
+}
+
+/// Starts the app with native dialogs.
+pub fn run() -> iced::Result {
+    iced::application(
+        || {
+            let app = App::new(Rc::new(dialogs::NativeDialogs), false);
+            app.apply_theme();
+            (app, iced::system::theme().map(Message::SystemTheme))
+        },
+        App::update,
+        App::view,
+    )
+    .title(App::title)
+    .subscription(App::subscription)
+    .theme(|_: &App| theme::theme())
+    .settings(iced::Settings { default_text_size: theme::FONT.into(), ..Default::default() })
+    .window(window::Settings {
+        size: iced::Size::new(1180.0, 760.0),
+        min_size: Some(iced::Size::new(760.0, 500.0)),
+        icon: window_icon(),
+        ..Default::default()
+    })
+    .run()
+}
+
+fn window_icon() -> Option<window::Icon> {
+    let png = include_bytes!("../../../packaging/icon-256.png");
+    let image = ::image::load_from_memory(png).ok()?.to_rgba8();
+    window::icon::from_rgba(image.to_vec(), image.width(), image.height()).ok()
 }

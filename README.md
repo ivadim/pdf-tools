@@ -3,10 +3,10 @@
 [![CI](https://github.com/ivadim/pdf-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/ivadim/pdf-tools/actions/workflows/ci.yml)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 
-A cross-platform desktop toolset for working with PDFs, written in Rust with a [Slint](https://slint.dev) UI.
+A cross-platform desktop toolset for working with PDFs, written in Rust with an [iced](https://iced.rs) UI.
 Everything runs locally; files never leave your computer.
 
-It is a single native executable, about 15 MB, with no web view and no runtime to install. Idle, it uses about 20 MB of memory.
+It is a single native executable, about 10 MB, with no web view and no runtime to install. Idle, it uses about 40 MB of memory.
 
 ![PDF Tools home screen with all thirteen tools](docs/screenshots/home.png)
 
@@ -64,16 +64,7 @@ Builds of the latest `main` are attached to each [CI run](https://github.com/iva
 
 Every tool previews pages live, including overlays for page numbers and watermarks. Click a page to see it full size. You can drop files anywhere on the window, and a locked file can be handed to Unlock in one click.
 
-## Experimental: iced version
-
-This branch also builds the app with [iced](https://iced.rs) (MIT licensed, no attribution requirement), in `crates/pdftools-iced`, to compare it with the Slint version. Every tool is ported, and the two share the PDF engine (`pdftools-core`) and the rendering code (`pdftools-render`).
-
-```bash
-cargo run --release -p pdftools-iced            # the iced version
-cargo test -p pdftools-iced                     # its unit and UI tests
-```
-
-UI tests drive the real app through iced's headless simulator and save screenshots of the main screens to `target/iced-shots`.
+The app follows the system's light or dark appearance; the switch at the bottom of the sidebar picks one instead, and is remembered.
 
 ## Develop
 
@@ -93,7 +84,7 @@ cargo test --workspace                        # every test
 
 The release profile is tuned for size (`opt-level = "z"`, LTO, stripped, `panic = "abort"`). The PDF renderer, rasteriser and compression crates are built at `opt-level = 3`, so previews stay fast. Dependencies build at `opt-level = 2` in debug builds too, so debug previews aren't slow.
 
-In debug builds, `PDFTOOLS_SNAPSHOT=out.png PDFTOOLS_OPEN=tool[:file[|file…]]` opens a tool with the given files, saves a screenshot and exits. This is handy for checking layout changes.
+The UI tests save screenshots of the main screens, in both themes, to `target/iced-shots`, which is handy for checking layout changes. `cargo test -p pdftools-app --test ui tour -- --ignored` adds more of them.
 
 Helper examples:
 
@@ -110,26 +101,28 @@ cargo run --release -p pdftools-core --example try_file -- some.pdf target/try  
 | --- | --- | --- |
 | Unit | `crates/*/src/**` | Every operation on small generated PDFs, plus the app's tools, page ranges, preview rendering, text and signature rasterising |
 | Integration | `crates/pdftools-core/tests/real_pdfs.rs` | Every operation on 15 real-world PDFs (`tests/fixtures/pdfjs`). Checks that outputs reopen, text survives, pages and rotation are right, removed pages are gone, encryption round-trips, no colour is left after grayscale, and damaged files don't crash anything |
-| End-to-end | `crates/pdftools-app/tests/ui.rs` | The real Slint UI, driven through Slint's testing backend by accessible labels: clicking, typing, choosing options, reordering, every tool's run on real PDFs, then checking the output files |
+| End-to-end | `crates/pdftools-app/tests/ui.rs` | The real app (`update` and `view`), driven through iced's headless simulator by clicking visible text and by the messages the widgets send: choosing files and options, reordering, every tool's run on real PDFs, then checking the output files |
 
 ```bash
 cargo test --workspace                                 # unit + integration + UI
-cargo llvm-cov --workspace --fail-under-lines 80       # coverage gate (currently ~93% of lines)
+cargo llvm-cov --workspace --fail-under-lines 80       # coverage gate (currently ~88% of lines)
 ```
 
-UI tests replace native file dialogs with scripted answers (`ScriptedDialogs`). They run background jobs inline, so results are deterministic. The tests find controls by accessible label, so every control needs one. That also keeps the app usable with screen readers.
+UI tests replace native file dialogs with scripted answers (`ScriptedDialogs`). They run background jobs inline, so results are deterministic.
 
 ## Layout
 
 | Path | Purpose |
 | --- | --- |
 | `crates/pdftools-core` | PDF operations with no GUI code, built on [`lopdf`](https://crates.io/crates/lopdf) and [`image`](https://crates.io/crates/image). |
-| `crates/pdftools-app/ui` | Slint UI. `app.slint` is the window, `tool-page.slint` the shared layout of single-file tools, and `tools.slint` their option panels. `merge.slint` and `signature.slint` are the two custom pages. |
-| `crates/pdftools-app/src/tools` | One module per tool, implementing the `Tool` trait. Single-file tools share `SingleFile`. |
-| `crates/pdftools-app/src/previews.rs` | Page thumbnails rendered with [hayro](https://github.com/LaurenzV/hayro) (pure Rust) on a worker thread, with a cache. |
-| `crates/pdftools-app/src/raster.rs` | Watermark and signature text (system fonts, any script) and drawn strokes. |
+| `crates/pdftools-render` | Shared rendering: pages with [hayro](https://github.com/LaurenzV/hayro) (pure Rust), watermark and signature text (system fonts, any script), drawn strokes and page ranges. |
+| `crates/pdftools-app/src/app.rs` | The [iced](https://iced.rs) application: state, messages, `update`, `view`, the sidebar and the home screen. |
+| `crates/pdftools-app/src/single.rs`, `src/tools` | Tools that work on one PDF share `Single` (the file, pages left out, the last run); each implements `ToolOptions` for its options panel, preview overlays and job. |
+| `crates/pdftools-app/src/merge.rs`, `src/images.rs` | The two multi-file tools. |
+| `crates/pdftools-app/src/previews.rs` | Page thumbnails rendered in the background, with a cache. |
+| `crates/pdftools-app/src/theme.rs`, `src/widgets.rs` | Light and dark colours, widget styles and shared building blocks. |
 
-The UI reports every change to Rust as `Tools.option(tool, key, value)`. Rust validates it and pushes back a `ToolView` (pages, status, run state). Heavy work runs on background threads (`jobs.rs`), and the results are delivered on the UI thread.
+Every change in the UI is a `Message`; `update` applies it and starts heavy work (rendering, running a tool) as a background task whose result comes back as another message.
 
 ## Releases
 
@@ -152,4 +145,4 @@ The tag's run attaches all four packages to a new GitHub release.
 
 MIT. See [LICENSE](LICENSE).
 
-The UI uses [Slint](https://slint.dev) under its [Royalty-free licence](https://slint.dev/terms-and-conditions#royalty-free), which requires the "Made with Slint" attribution shown on the home screen. The test PDFs in `tests/fixtures/pdfjs` come from Mozilla's [pdf.js](https://github.com/mozilla/pdf.js) test suite (Apache-2.0).
+The test PDFs in `tests/fixtures/pdfjs` come from Mozilla's [pdf.js](https://github.com/mozilla/pdf.js) test suite (Apache-2.0).

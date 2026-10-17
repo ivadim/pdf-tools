@@ -1,5 +1,4 @@
-//! Colours and widget styles for the light and dark themes (matching the
-//! Slint version's).
+//! Colours and widget styles for the light and dark themes.
 
 use iced::border::Radius;
 use iced::widget::{button, container, svg, text_input};
@@ -29,7 +28,7 @@ pub struct Colors {
     pub shadow: f32,
 }
 
-/// The light theme (the Slint version's colours).
+/// The light theme.
 pub const LIGHT: Colors = Colors {
     dark: false,
     bg: color!(0xf4f5f8),
@@ -50,7 +49,7 @@ pub const LIGHT: Colors = Colors {
     shadow: 1.0,
 };
 
-/// The dark theme (also matching the Slint version).
+/// The dark theme.
 pub const DARK: Colors = Colors {
     dark: true,
     bg: color!(0x0e0f13),
@@ -118,7 +117,7 @@ fn shadow(alpha: f32, blur: f32, y: f32) -> Shadow {
 
 // ── Containers ───────────────────────────────────────────────────────────
 
-/// A white card with a border, like the Slint `Panel`.
+/// A card with a border.
 pub fn panel(_: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(c().surface)),

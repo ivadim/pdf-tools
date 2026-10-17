@@ -1,11 +1,11 @@
-//! The SVG icons, shared with the Slint version (monochrome; tinted when drawn).
+//! The SVG icons (monochrome; tinted when drawn).
 
 use iced::widget::svg::Handle;
 
 macro_rules! icons {
     ($($name:ident => $file:literal),* $(,)?) => {
         $(pub fn $name() -> Handle {
-            Handle::from_memory(include_bytes!(concat!("../../pdftools-app/ui/icons/", $file, ".svg")).as_slice())
+            Handle::from_memory(include_bytes!(concat!("../icons/", $file, ".svg")).as_slice())
         })*
     };
 }
