@@ -10,6 +10,13 @@ It is a single native executable, about 10 MB, with no web view and no runtime t
 
 ![PDF Tools home screen with all thirteen tools](docs/screenshots/home.png)
 
+<details>
+<summary>In the dark theme</summary>
+
+![The home screen in the dark theme](docs/screenshots/home-dark.png)
+
+</details>
+
 ## Download
 
 Get the latest build for your system from [Releases](https://github.com/ivadim/pdf-tools/releases):
