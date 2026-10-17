@@ -18,10 +18,6 @@ pub struct Picture {
 }
 
 impl Picture {
-    pub fn to_image(&self) -> slint::Image {
-        slint::Image::from_rgba8(slint::SharedPixelBuffer::clone_from_slice(&self.pixels, self.width, self.height))
-    }
-
     pub fn aspect(&self) -> f32 {
         self.width as f32 / self.height.max(1) as f32
     }

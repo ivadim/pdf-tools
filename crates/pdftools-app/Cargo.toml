@@ -16,6 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 pdftools-core.workspace = true
+pdftools-render.workspace = true
 lopdf.workspace = true
 slint = { version = "~1.18", default-features = false, features = [
     "std",

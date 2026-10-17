@@ -5,6 +5,7 @@ use pdftools_core::{Anchor, HAlign, VAlign};
 
 use super::page_numbers::parse_anchor;
 use super::{choose_output, edit, file_name, Job, Outcome, Shared, SingleFile, Tool};
+use crate::ToImage;
 use crate::ranges::parse_list;
 use crate::raster::{load_picture, render_text, Family, Picture};
 use crate::{single_file_plumbing, PageTile};

@@ -64,6 +64,17 @@ Builds of the latest `main` are attached to each [CI run](https://github.com/iva
 
 Every tool previews pages live, including overlays for page numbers and watermarks. Click a page to see it full size. You can drop files anywhere on the window, and a locked file can be handed to Unlock in one click.
 
+## Experimental: iced version
+
+This branch also builds the app with [iced](https://iced.rs) (MIT licensed, no attribution requirement), in `crates/pdftools-iced`, to compare it with the Slint version. Every tool is ported, and the two share the PDF engine (`pdftools-core`) and the rendering code (`pdftools-render`).
+
+```bash
+cargo run --release -p pdftools-iced            # the iced version
+cargo test -p pdftools-iced                     # its unit and UI tests
+```
+
+UI tests drive the real app through iced's headless simulator and save screenshots of the main screens to `target/iced-shots`.
+
 ## Develop
 
 Prerequisites: Rust (stable). On Linux, also these development packages (Debian/Ubuntu names):

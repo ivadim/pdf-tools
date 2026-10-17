@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/pdftools-core", "crates/pdftools-app"]
+members = ["crates/pdftools-core", "crates/pdftools-render", "crates/pdftools-app", "crates/pdftools-iced"]
 
 [workspace.package]
 version = "0.2.1"
@@ -11,6 +11,7 @@ repository = "https://github.com/ivadim/pdf-tools"
 
 [workspace.dependencies]
 pdftools-core = { path = "crates/pdftools-core" }
+pdftools-render = { path = "crates/pdftools-render" }
 # Date support is not needed; rayon parses large files in parallel.
 lopdf = { version = "0.45", default-features = false, features = ["rayon"] }
 thiserror = "2"

@@ -8,6 +8,7 @@ use pdftools_core::stamps::Placement;
 use slint::{ComponentHandle, ModelRc, VecModel};
 
 use super::{choose_output, color_of, file_name, plural, Job, Outcome, Shared, SingleFile, Tool};
+use crate::ToImage;
 use crate::app::App;
 use crate::previews::PreviewRequest;
 use crate::raster::{load_picture, render_strokes, render_text, strokes_to_svg, Family, Picture};

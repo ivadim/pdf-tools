@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 
+use crate::ToImage;
 use crate::dialogs::Dialogs;
 use crate::jobs;
 use crate::previews::{PreviewRequest, Previews};
