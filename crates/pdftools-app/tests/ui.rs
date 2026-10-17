@@ -427,3 +427,40 @@ fn dark_theme() {
     h.send(Message::Theme(ThemeChoice::System));
     assert!(theme::c().dark);
 }
+
+/// The README's screenshots, saved as target/iced-shots/readme-*.png. Run
+/// `cargo run -p pdftools-core --example sample_images -- target/samples`
+/// first, then `cargo test -p pdftools-app --test ui readme -- --ignored`.
+#[test]
+#[ignore]
+fn readme_screenshots() {
+    let mut h = Harness::new("readme");
+    h.screenshot("readme-home");
+
+    h.click("Merge");
+    h.dialogs.open(&[&fixture("tracemonkey.pdf"), &fixture("sizes.pdf"), &fixture("rotation.pdf")]);
+    h.click("Add PDF files…");
+    for i in 0..19 {
+        h.send(Message::Merge(merge::Msg::Tile(i, TileEvent::Shown)));
+    }
+    h.screenshot("readme-merge");
+
+    h.choose(ToolId::Split, &fixture("tracemonkey.pdf"));
+    h.option(ToolId::Split, "ranges", "1-2, 3-5, 6-");
+    h.render_pages(ToolId::Split, 14);
+    h.screenshot("readme-split");
+
+    h.choose(ToolId::Watermark, &fixture("tracemonkey.pdf"));
+    h.render_pages(ToolId::Watermark, 14);
+    h.screenshot("readme-watermark");
+
+    let samples = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/samples");
+    h.click("Images to PDF");
+    h.dialogs.open(&[&samples.join("photo-1-sunset.jpg"), &samples.join("photo-2-meadow.jpg"), &samples.join("photo-10-logo.png")]);
+    h.click("Add images…");
+    h.screenshot("readme-images");
+
+    h.send(Message::Theme(pdftools_app::settings::ThemeChoice::Dark));
+    h.click("All tools");
+    h.screenshot("readme-home-dark");
+}
