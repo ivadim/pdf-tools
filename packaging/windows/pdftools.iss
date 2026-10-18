@@ -11,7 +11,7 @@
   #define NumericVersion "0.0.0"
 #endif
 #ifndef SourceDir
-  #define SourceDir "..\..\target\release"
+  #define SourceDir "..\..\dist"
 #endif
 
 #define Repository "https://github.com/ivadim/pdf-tools"

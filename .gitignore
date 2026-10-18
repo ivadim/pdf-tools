@@ -7,3 +7,6 @@
 /.claude
 /.vscode
 /.idea
+/bazel-*
+/user.bazelrc
+/dist

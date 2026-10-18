@@ -75,7 +75,7 @@ The app follows the system's light or dark appearance; the switch at the bottom 
 
 ## Develop
 
-Prerequisites: Rust (stable). On Linux, also these development packages (Debian/Ubuntu names):
+The build uses [Bazel](https://bazel.build) with [rules_rust](https://github.com/bazelbuild/rules_rust); it downloads its own Rust toolchain. Prerequisites: [Bazelisk](https://github.com/bazelbuild/bazelisk) (`brew install bazelisk`, `winget install Bazel.Bazelisk`, or `npm install -g @bazel/bazelisk`), which runs the Bazel version in `.bazelversion`. On Linux, also these development packages (Debian/Ubuntu names):
 
 ```bash
 sudo apt-get install libfontconfig1-dev libxkbcommon-dev libwayland-dev libx11-dev
@@ -84,22 +84,26 @@ sudo apt-get install libfontconfig1-dev libxkbcommon-dev libwayland-dev libx11-d
 Then:
 
 ```bash
-cargo run --release -p pdftools-app           # build and start the app
-cargo build --release -p pdftools-app         # target/release/pdftools(.exe)
-cargo test --workspace                        # every test
+bazel run --config=release //crates/pdftools-app:pdftools     # build and start the app
+bazel build --config=release //crates/pdftools-app:pdftools   # bazel-bin/crates/pdftools-app/pdftools(.exe)
+bazel test //...                                              # every test
+bazel build --config=rustfmt //...                            # check formatting
+bazel run @rules_rust//:rustfmt                               # fix formatting
 ```
 
-The release profile is tuned for size (`opt-level = "z"`, LTO, stripped, `panic = "abort"`). The PDF renderer, rasteriser and compression crates are built at `opt-level = 3`, so previews stay fast. Dependencies build at `opt-level = 2` in debug builds too, so debug previews aren't slow.
+Third-party crates are still declared in the crates' `Cargo.toml` files and pinned by `Cargo.lock`; Bazel reads both (crate_universe in `MODULE.bazel`), so add or update a dependency there and Bazel picks it up. The version lives in `version.bzl`.
 
-The UI tests save screenshots of the main screens, in both themes, to `target/iced-shots`, which is handy for checking layout changes. `cargo test -p pdftools-app --test ui tour -- --ignored` adds more of them.
+`--config=release` (in `.bazelrc`) is tuned for size (`opt-level = "z"`, LTO, stripped, `panic = "abort"`). The PDF renderer, rasteriser and compression crates are built at `opt-level = 3`, so previews stay fast. Dependencies build at `opt-level = 2` in development builds too, so debug previews aren't slow.
 
-Helper examples:
+The UI tests save screenshots of the main screens, in both themes, to `bazel-testlogs/crates/pdftools-app/ui/test.outputs/iced-shots`, which is handy for checking layout changes. `bazel test //crates/pdftools-app:ui --test_arg=--ignored --test_arg=tour` adds more of them.
+
+Helper examples (`bazel run` starts them in Bazel's own directory, so give them absolute paths):
 
 ```bash
-cargo run -p pdftools-core --example sample_pdfs -- target/samples          # sample inputs
-cargo run -p pdftools-core --example sample_images -- target/samples        # sample photos for Images to PDF
-cargo run -p pdftools-core --example smoke -- target/samples target/smoke   # every operation, for checking by eye
-cargo run --release -p pdftools-core --example try_file -- some.pdf target/try   # timings on a real file
+bazel run //crates/pdftools-core:sample_pdfs -- "$PWD/samples"                  # sample inputs
+bazel run //crates/pdftools-core:sample_images -- "$PWD/samples"                # sample photos for Images to PDF
+bazel run //crates/pdftools-core:smoke -- "$PWD/samples" "$PWD/smoke"           # every operation, for checking by eye
+bazel run --config=release //crates/pdftools-core:try_file -- "$PWD/some.pdf" "$PWD/try"   # timings on a real file
 ```
 
 ## Testing
@@ -111,8 +115,8 @@ cargo run --release -p pdftools-core --example try_file -- some.pdf target/try  
 | End-to-end | `crates/pdftools-app/tests/ui.rs` | The real app (`update` and `view`), driven through iced's headless simulator by clicking visible text and by the messages the widgets send: choosing files and options, reordering, every tool's run on real PDFs, then checking the output files |
 
 ```bash
-cargo test --workspace                                 # unit + integration + UI
-cargo llvm-cov --workspace --fail-under-lines 80       # coverage gate (currently ~88% of lines)
+bazel test //...                                 # unit + integration + UI
+bazel coverage --combined_report=lcov //...      # coverage, in bazel-out/_coverage/_coverage_report.dat (CI requires 80% of lines; currently ~89%)
 ```
 
 UI tests replace native file dialogs with scripted answers (`ScriptedDialogs`). They run background jobs inline, so results are deterministic.

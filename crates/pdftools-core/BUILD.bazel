@@ -1,0 +1,63 @@
+load("@crates//:defs.bzl", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
+load("//:version.bzl", "RUSTC_ENV", "VERSION")
+
+rust_library(
+    name = "pdftools_core",
+    srcs = glob(["src/**/*.rs"]),
+    rustc_env = RUSTC_ENV,
+    version = VERSION,
+    visibility = ["//visibility:public"],
+    deps = all_crate_deps(normal = True),
+)
+
+rust_test(
+    name = "unit_tests",
+    crate = ":pdftools_core",
+    deps = all_crate_deps(normal_dev = True),
+)
+
+rust_test(
+    name = "real_pdfs",
+    srcs = ["tests/real_pdfs.rs"],
+    data = [
+        "//tests/fixtures:encrypted",
+        "//tests/fixtures:pdfjs",
+    ],
+    rustc_env = RUSTC_ENV,
+    version = VERSION,
+    deps = [":pdftools_core"] + all_crate_deps(
+        normal = True,
+        normal_dev = True,
+    ),
+)
+
+[rust_binary(
+    name = example,
+    srcs = ["examples/%s.rs" % example],
+    rustc_env = RUSTC_ENV,
+    version = VERSION,
+    deps = [":pdftools_core"] + all_crate_deps(
+        normal = True,
+        normal_dev = True,
+    ),
+) for example in [
+    "dump_page",
+    "sample_images",
+    "sample_pdfs",
+    "smoke",
+    "try_file",
+]]
+
+# The photos the README's Images to PDF screenshot adds.
+genrule(
+    name = "sample_photos",
+    outs = [
+        "samples/photo-1-sunset.jpg",
+        "samples/photo-2-meadow.jpg",
+        "samples/photo-10-logo.png",
+    ],
+    cmd = "$(execpath :sample_images) $(RULEDIR)/samples",
+    tools = [":sample_images"],
+    visibility = ["//visibility:public"],
+)

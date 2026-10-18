@@ -15,7 +15,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CARGO_TERM_COLOR: always
   # Headers for winit, fontconfig and the file dialogs, plus fonts for the
   # text-rendering tests. Everything else is loaded at runtime.
   LINUX_DEPS: libfontconfig1-dev libxkbcommon-dev libwayland-dev libx11-dev fonts-dejavu-core
@@ -30,35 +29,38 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: bazel-contrib/setup-bazel@0.19.1
         with:
-          components: rustfmt
-      - uses: Swatinem/rust-cache@v2
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}-test
+          repository-cache: true
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y $LINUX_DEPS
       - name: Formatting
         if: runner.os == 'Linux'
-        run: cargo fmt --all --check
+        run: bazel build --config=rustfmt //...
       - name: Unit, integration and UI tests
-        run: cargo test --workspace --locked
+        run: bazel test //...
 
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: bazel-contrib/setup-bazel@0.19.1
         with:
-          components: llvm-tools-preview
-      - uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-llvm-cov
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}-coverage
+          repository-cache: true
       - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install -y $LINUX_DEPS
       - name: Line coverage of at least 80%
-        run: cargo llvm-cov --workspace --locked --fail-under-lines 80 --summary-only
+        run: |
+          bazel coverage --combined_report=lcov //...
+          awk -F: '/^LF:/ { found += $2 } /^LH:/ { hit += $2 }
+            END { pct = 100 * hit / found; printf "Line coverage: %d/%d = %.1f%%\n", hit, found, pct; exit pct < 80 }' \
+            bazel-out/_coverage/_coverage_report.dat
 
   build:
     name: Build (${{ matrix.name }})
@@ -78,10 +80,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: bazel-contrib/setup-bazel@0.19.1
         with:
-          key: release
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}-release
+          repository-cache: true
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y $LINUX_DEPS
@@ -92,20 +95,27 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             version="${GITHUB_REF_NAME#v}"
           else
-            version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)-${GITHUB_SHA::7}"
+            version="$(sed -n 's/^VERSION = "\(.*\)"/\1/p' version.bzl)-${GITHUB_SHA::7}"
           fi
           echo "VERSION=$version" >> "$GITHUB_ENV"
           echo "PACKAGE=pdftools-$version-${{ matrix.name }}" >> "$GITHUB_ENV"
 
       - name: Build
-        run: cargo build --release --locked -p pdftools-app
+        shell: bash
+        run: |
+          bazel build --config=release //crates/pdftools-app:pdftools
+          # Out of bazel-bin (read-only) for packaging.
+          exe=pdftools; [[ "$RUNNER_OS" == Windows ]] && exe=pdftools.exe
+          mkdir -p dist
+          cp "bazel-bin/crates/pdftools-app/$exe" dist/
+          chmod u+w "dist/$exe"
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force $env:PACKAGE | Out-Null
-          Copy-Item target/release/pdftools.exe, README.md, LICENSE $env:PACKAGE
+          Copy-Item dist/pdftools.exe, README.md, LICENSE $env:PACKAGE
           Compress-Archive -Path $env:PACKAGE -DestinationPath "$env:PACKAGE.zip"
           "ASSET=$env:PACKAGE.zip" | Out-File -Append $env:GITHUB_ENV
 
@@ -117,7 +127,7 @@ jobs:
           if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y }
           # File versions must be numeric: "0.2.0-abc1234" becomes "0.2.0".
           $numeric = $env:VERSION -replace '-.*$', ''
-          & $iscc /Q "/DAppVersion=$env:VERSION" "/DNumericVersion=$numeric" "/DSourceDir=$PWD\target\release" packaging\windows\pdftools.iss
+          & $iscc /Q "/DAppVersion=$env:VERSION" "/DNumericVersion=$numeric" "/DSourceDir=$PWD\dist" packaging\windows\pdftools.iss
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Move-Item "packaging\windows\$env:PACKAGE-setup.exe" .
           "INSTALLER=$env:PACKAGE-setup.exe" | Out-File -Append $env:GITHUB_ENV
@@ -142,7 +152,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           mkdir -p "$PACKAGE"
-          cp target/release/pdftools README.md LICENSE "$PACKAGE/"
+          cp dist/pdftools README.md LICENSE "$PACKAGE/"
           tar -czf "$PACKAGE.tar.gz" "$PACKAGE"
           echo "ASSET=$PACKAGE.tar.gz" >> "$GITHUB_ENV"
 
@@ -151,7 +161,7 @@ jobs:
         run: |
           app="PDF Tools.app"
           mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-          cp target/release/pdftools "$app/Contents/MacOS/"
+          cp dist/pdftools "$app/Contents/MacOS/"
           # The icon at every size macOS asks for.
           mkdir AppIcon.iconset
           for size in 16 32 128 256 512; do
