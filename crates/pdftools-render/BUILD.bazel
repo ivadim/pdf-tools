@@ -1,0 +1,19 @@
+load("@crates//:defs.bzl", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+load("//:version.bzl", "RUSTC_ENV", "VERSION")
+
+rust_library(
+    name = "pdftools_render",
+    srcs = glob(["src/**/*.rs"]),
+    rustc_env = RUSTC_ENV,
+    version = VERSION,
+    visibility = ["//visibility:public"],
+    deps = ["//crates/pdftools-core:pdftools_core"] + all_crate_deps(normal = True),
+)
+
+rust_test(
+    name = "unit_tests",
+    crate = ":pdftools_render",
+    data = ["//tests/fixtures:pdfjs"],
+    deps = all_crate_deps(normal_dev = True),
+)

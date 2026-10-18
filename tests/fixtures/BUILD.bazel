@@ -1,0 +1,11 @@
+filegroup(
+    name = "pdfjs",
+    srcs = glob(["pdfjs/*.pdf"]),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "encrypted",
+    srcs = glob(["encrypted/*.pdf"]),
+    visibility = ["//visibility:public"],
+)

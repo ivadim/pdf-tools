@@ -1,0 +1,76 @@
+load("@crates//:defs.bzl", "all_crate_deps")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
+load("//:version.bzl", "RUSTC_ENV", "VERSION")
+
+APP_DEPS = [
+    "//crates/pdftools-core:pdftools_core",
+    "//crates/pdftools-render:pdftools_render",
+] + all_crate_deps(normal = True)
+
+# The icon and file details Windows shows for pdftools.exe (a no-op elsewhere).
+cargo_build_script(
+    name = "build_script",
+    srcs = ["build.rs"],
+    data = ["//packaging:icon.ico"],
+    deps = all_crate_deps(build = True),
+)
+
+rust_library(
+    name = "pdftools_app",
+    srcs = glob(
+        ["src/**/*.rs"],
+        exclude = ["src/main.rs"],
+    ),
+    compile_data = glob(["icons/*.svg"]) + ["//packaging:icon-256.png"],
+    crate_root = "src/lib.rs",
+    rustc_env = RUSTC_ENV,
+    version = VERSION,
+    deps = APP_DEPS,
+)
+
+rust_binary(
+    name = "pdftools",
+    srcs = ["src/main.rs"],
+    rustc_env = RUSTC_ENV,
+    version = VERSION,
+    visibility = ["//visibility:public"],
+    deps = [
+        ":build_script",
+        ":pdftools_app",
+    ] + APP_DEPS,
+)
+
+rust_test(
+    name = "unit_tests",
+    crate = ":pdftools_app",
+    deps = all_crate_deps(normal_dev = True),
+)
+
+[rust_test(
+    name = test,
+    srcs = [
+        "tests/%s.rs" % test,
+        "tests/common/mod.rs",
+    ],
+    crate_root = "tests/%s.rs" % test,
+    data = [
+        "//crates/pdftools-core:sample_photos",
+        "//tests/fixtures:encrypted",
+        "//tests/fixtures:pdfjs",
+    ],
+    rustc_env = RUSTC_ENV,
+    version = VERSION,
+    deps = [":pdftools_app"] + APP_DEPS + all_crate_deps(normal_dev = True),
+) for test in [
+    "acceptance",
+    "ui",
+]]
+
+rust_binary(
+    name = "render_icons",
+    srcs = ["examples/render_icons.rs"],
+    rustc_env = RUSTC_ENV,
+    version = VERSION,
+    deps = [":pdftools_app"] + APP_DEPS + all_crate_deps(normal_dev = True),
+)

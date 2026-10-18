@@ -20,8 +20,27 @@ pub struct Harness {
     pub out: PathBuf,
 }
 
+/// A file in the repository. Bazel runs tests from the workspace's runfiles,
+/// Cargo from the crate's directory.
+pub fn repo(path: &str) -> PathBuf {
+    if std::env::var_os("TEST_SRCDIR").is_some() {
+        PathBuf::from(path)
+    } else {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(path)
+    }
+}
+
+/// Where tests save files for a person to look at: Bazel's test outputs
+/// (bazel-testlogs/<test>/test.outputs), or `target/` with Cargo.
+pub fn saved(path: &str) -> PathBuf {
+    match std::env::var_os("TEST_UNDECLARED_OUTPUTS_DIR") {
+        Some(dir) => PathBuf::from(dir).join(path),
+        None => repo("target").join(path),
+    }
+}
+
 pub fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/pdfjs").join(name)
+    repo("tests/fixtures/pdfjs").join(name)
 }
 
 pub fn page_count(path: &Path) -> usize {
@@ -96,7 +115,7 @@ impl Harness {
     }
 
     pub fn screenshot(&self, name: &str) {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/iced-shots");
+        let dir = saved("iced-shots");
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(format!("{name}.png"));
         // iced names the file after the renderer; remove the old one so a
@@ -106,9 +125,9 @@ impl Harness {
         simulator.snapshot(&theme::theme()).unwrap().matches_image(&path).unwrap();
     }
 
-    /// A screenshot at another window size, in `target/<dir>`.
+    /// A screenshot at another window size, in `<dir>` of the saved files.
     pub fn screenshot_at(&self, dir: &str, name: &str, size: Size) {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target").join(dir);
+        let dir = saved(dir);
         std::fs::create_dir_all(&dir).unwrap();
         let _ = std::fs::remove_file(dir.join(format!("{name}-tiny-skia.png")));
         let settings = Settings { default_text_size: theme::FONT.into(), ..Settings::default() };

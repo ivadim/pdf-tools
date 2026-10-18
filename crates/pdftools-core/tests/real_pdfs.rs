@@ -18,8 +18,18 @@ use pdftools_core::{merge_files, metadata, Anchor, Error, HAlign, Metadata, Page
 
 // ── Harness ──────────────────────────────────────────────────────────────
 
+/// A file in the repository. Bazel runs tests from the workspace's runfiles,
+/// Cargo from the crate's directory.
+fn repo(path: &str) -> PathBuf {
+    if std::env::var_os("TEST_SRCDIR").is_some() {
+        PathBuf::from(path)
+    } else {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(path)
+    }
+}
+
 fn fixtures() -> Vec<PathBuf> {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/pdfjs");
+    let dir = repo("tests/fixtures/pdfjs");
     let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
         .unwrap_or_else(|e| panic!("fixtures missing at {}: {e}", dir.display()))
         .map(|entry| entry.unwrap().path())
@@ -336,9 +346,9 @@ fn protect_and_unlock_round_trip() {
 /// against another implementation and not only against our own output.
 #[test]
 fn unlocks_files_encrypted_elsewhere() {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/encrypted");
+    let dir = repo("tests/fixtures/encrypted");
     let out = out_dir("unlock-elsewhere");
-    let original = load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/pdfjs/sizes.pdf")).unwrap();
+    let original = load(&repo("tests/fixtures/pdfjs/sizes.pdf")).unwrap();
 
     // AES-256 with an open password: "test".
     let locked = dir.join("aes256-password-test.pdf");

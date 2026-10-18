@@ -2,7 +2,7 @@
 //! through iced's headless simulator (clicking by visible text) and by the
 //! messages the widgets send, with scripted dialogs. Output files are
 //! checked with the PDF engine. Screenshots of key screens are written to
-//! target/iced-shots.
+//! iced-shots in the test's outputs (bazel-testlogs/crates/pdftools-app/ui/test.outputs).
 
 mod common;
 
@@ -12,7 +12,6 @@ use pdftools_app::catalog::ToolId;
 use pdftools_app::theme;
 use pdftools_app::widgets::TileEvent;
 use pdftools_app::{images, merge};
-use std::path::Path;
 
 #[test]
 fn screens_render() {
@@ -211,7 +210,7 @@ fn signature() {
 }
 
 /// Screenshots of every page in a typical state, for design reviews:
-/// `cargo test -p pdftools-app --test ui tour -- --ignored`.
+/// `bazel test //crates/pdftools-app:ui --test_arg=--ignored --test_arg=tour`.
 #[test]
 #[ignore]
 fn tour() {
@@ -294,9 +293,8 @@ fn dark_theme() {
     assert!(theme::c().dark);
 }
 
-/// The README's screenshots, saved as target/iced-shots/readme-*.png. Run
-/// `cargo run -p pdftools-core --example sample_images -- target/samples`
-/// first, then `cargo test -p pdftools-app --test ui readme -- --ignored`.
+/// The README's screenshots, saved as iced-shots/readme-*.png in the test's
+/// outputs: `bazel test //crates/pdftools-app:ui --test_arg=--ignored --test_arg=readme`.
 #[test]
 #[ignore]
 fn readme_screenshots() {
@@ -320,7 +318,8 @@ fn readme_screenshots() {
     h.render_pages(ToolId::Watermark, 14);
     h.screenshot("readme-watermark");
 
-    let samples = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/samples");
+    // Bazel generates the photos (//crates/pdftools-core:sample_photos).
+    let samples = if std::env::var_os("TEST_SRCDIR").is_some() { repo("crates/pdftools-core/samples") } else { repo("target/samples") };
     h.click("Images to PDF");
     h.dialogs.open(&[&samples.join("photo-1-sunset.jpg"), &samples.join("photo-2-meadow.jpg"), &samples.join("photo-10-logo.png")]);
     h.click("Add images…");

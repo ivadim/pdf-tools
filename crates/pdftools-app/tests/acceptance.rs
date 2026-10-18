@@ -1,10 +1,11 @@
 //! Acceptance scenarios: every tool, used as a person would, on real files,
 //! including the awkward ones (locked, damaged, not PDFs, Unicode paths, a
-//! 500-page document). Outputs are kept in `target/acceptance/<scenario>`
+//! 500-page document). Outputs are kept in `acceptance/<scenario>` of the test's
+//! outputs (bazel-testlogs/crates/pdftools-app/acceptance/test.outputs)
 //! with a `manifest.tsv` of what an independent PDF reader should find in
 //! them, so they can be checked with another engine too.
 //!
-//!     cargo test -p pdftools-app --test acceptance -- --ignored
+//!     bazel test //crates/pdftools-app:acceptance --test_arg=--ignored
 //!
 //! Ignored by default: they take a while and write outside the temp folder.
 
@@ -31,7 +32,7 @@ struct Scenario {
 
 impl Scenario {
     fn new(name: &str) -> Self {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/acceptance").join(name);
+        let dir = saved("acceptance").join(name);
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         Self { h: Harness::new(&format!("acc-{name}")), dir, manifest: String::new() }
@@ -53,7 +54,7 @@ impl Scenario {
 }
 
 fn encrypted(name: &str) -> PathBuf {
-    fixture("x").parent().unwrap().parent().unwrap().join("encrypted").join(name)
+    repo("tests/fixtures/encrypted").join(name)
 }
 
 fn is_encrypted(path: &Path) -> bool {
@@ -884,7 +885,7 @@ fn walk(dir: &Path) -> Vec<PathBuf> {
 #[test]
 #[ignore]
 fn contact_sheets() {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/acceptance/screens");
+    let dir = saved("acceptance/screens");
     let out = dir.join("sheets");
     let _ = std::fs::remove_dir_all(&out);
     std::fs::create_dir_all(&out).unwrap();

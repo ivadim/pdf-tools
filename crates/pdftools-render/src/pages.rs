@@ -141,7 +141,10 @@ mod tests {
     use super::*;
 
     fn fixture(name: &str) -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/pdfjs").join(name)
+        // Bazel runs tests from the workspace's runfiles, Cargo from the crate.
+        let repo =
+            if std::env::var_os("TEST_SRCDIR").is_some() { PathBuf::new() } else { Path::new(env!("CARGO_MANIFEST_DIR")).join("../..") };
+        repo.join("tests/fixtures/pdfjs").join(name)
     }
 
     #[test]

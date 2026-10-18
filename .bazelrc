@@ -1,0 +1,39 @@
+common --enable_bzlmod
+common --enable_platform_specific_config
+
+# Tests read their fixtures from runfiles, which Windows leaves off by default.
+build:windows --enable_runfiles
+startup:windows --windows_enable_symlinks
+
+# Third-party crates are optimised in every build (they're the PDF engine,
+# renderer and UI toolkit), so development builds and tests run at realistic speed.
+build --@rules_rust//rust/settings:per_crate_rustc_flag=external/@-Copt-level=2
+
+# Formatting: `bazel build --config=rustfmt //...` checks it,
+# `bazel run @rules_rust//:rustfmt` fixes it.
+build --@rules_rust//rust/settings:rustfmt.toml=//:rustfmt.toml
+build:rustfmt --aspects=@rules_rust//rust:defs.bzl%rustfmt_aspect
+build:rustfmt --output_groups=+rustfmt_checks
+
+test --test_output=errors
+
+# Release: small by default (opt-level z, LTO, stripped, panic=abort); the PDF
+# engine, rasteriser and compression crates keep full speed.
+build:release --compilation_mode=opt
+build:release --@rules_rust//rust/settings:lto=fat
+build:release --@rules_rust//rust/settings:extra_rustc_flag=-Ccodegen-units=1
+build:release --@rules_rust//rust/settings:extra_rustc_flag=-Cpanic=abort
+build:release --@rules_rust//rust/settings:extra_rustc_flag=-Cstrip=symbols
+build:release --@rules_rust//rust/settings:per_crate_rustc_flag=external/@-Copt-level=z
+build:release --@rules_rust//rust/settings:per_crate_rustc_flag=crates/@-Copt-level=z
+build:release --@rules_rust//rust/settings:per_crate_rustc_flag=external/rules_rust++crate+crates__hayro-@-Copt-level=3
+build:release --@rules_rust//rust/settings:per_crate_rustc_flag=external/rules_rust++crate+crates__vello_cpu-@-Copt-level=3
+build:release --@rules_rust//rust/settings:per_crate_rustc_flag=external/rules_rust++crate+crates__fearless_simd-@-Copt-level=3
+build:release --@rules_rust//rust/settings:per_crate_rustc_flag=external/rules_rust++crate+crates__zune-jpeg-@-Copt-level=3
+build:release --@rules_rust//rust/settings:per_crate_rustc_flag=external/rules_rust++crate+crates__lopdf-@-Copt-level=3
+build:release --@rules_rust//rust/settings:per_crate_rustc_flag=external/rules_rust++crate+crates__flate2-@-Copt-level=3
+build:release --@rules_rust//rust/settings:per_crate_rustc_flag=external/rules_rust++crate+crates__miniz_oxide-@-Copt-level=3
+build:release --@rules_rust//rust/settings:per_crate_rustc_flag=external/rules_rust++crate+crates__tiny-skia-@-Copt-level=3
+
+# Machine-specific settings (caches, jobs).
+try-import %workspace%/user.bazelrc
