@@ -15,9 +15,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Headers for winit, fontconfig and the file dialogs, plus fonts for the
-  # text-rendering tests. Everything else is loaded at runtime.
-  LINUX_DEPS: libfontconfig1-dev libxkbcommon-dev libwayland-dev libx11-dev fonts-dejavu-core
+  # Linux builds need nothing from the system (the toolchain and C runtime are
+  # hermetic). The text-rendering tests use the system's fonts, so they need
+  # fontconfig, which the app loads at runtime, and one font.
+  LINUX_DEPS: libfontconfig1 fonts-dejavu-core
 
 jobs:
   test:
@@ -39,9 +40,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y $LINUX_DEPS
       - name: Formatting
         if: runner.os == 'Linux'
-        run: bazel build --config=rustfmt //...
+        run: bazel build --config=ci --config=rustfmt //...
       - name: Unit, integration and UI tests
-        run: bazel test //...
+        run: bazel test --config=ci //...
 
   coverage:
     name: Coverage
@@ -57,8 +58,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y $LINUX_DEPS
       - name: Line coverage of at least 80%
         run: |
-          bazel coverage --combined_report=lcov //...
-          awk -F: '/^LF:/ { found += $2 } /^LH:/ { hit += $2 }
+          bazel coverage --config=ci --combined_report=lcov //...
+          # Product code only: the integration tests' own sources are left out.
+          awk -F: '/^SF:/ { test = ($2 ~ /\/tests\//) } /^LF:/ && !test { found += $2 } /^LH:/ && !test { hit += $2 }
             END { pct = 100 * hit / found; printf "Line coverage: %d/%d = %.1f%%\n", hit, found, pct; exit pct < 80 }' \
             bazel-out/_coverage/_coverage_report.dat
 
@@ -72,8 +74,8 @@ jobs:
           - name: windows-x86_64
             os: windows-latest
           - name: linux-x86_64
-            # The oldest supported runner, so the binary runs on older glibc.
-            os: ubuntu-22.04
+            # Linked against glibc 2.28 stubs whatever the runner's glibc is.
+            os: ubuntu-latest
           - name: macos-arm64
             # Apple silicon runner: a native arm64 build.
             os: macos-latest
@@ -85,9 +87,6 @@ jobs:
           bazelisk-cache: true
           disk-cache: ${{ github.workflow }}-release
           repository-cache: true
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y $LINUX_DEPS
 
       - name: Version
         shell: bash
@@ -103,7 +102,7 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          bazel build --config=release //crates/pdftools-app:pdftools
+          bazel build --config=ci --config=release //crates/pdftools-app:pdftools
           # Out of bazel-bin (read-only) for packaging.
           exe=pdftools; [[ "$RUNNER_OS" == Windows ]] && exe=pdftools.exe
           mkdir -p dist

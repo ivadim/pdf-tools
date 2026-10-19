@@ -75,11 +75,9 @@ The app follows the system's light or dark appearance; the switch at the bottom 
 
 ## Develop
 
-The build uses [Bazel](https://bazel.build) with [rules_rust](https://github.com/bazelbuild/rules_rust); it downloads its own Rust toolchain. Prerequisites: [Bazelisk](https://github.com/bazelbuild/bazelisk) (`brew install bazelisk`, `winget install Bazel.Bazelisk`, or `npm install -g @bazel/bazelisk`), which runs the Bazel version in `.bazelversion`. On Linux, also these development packages (Debian/Ubuntu names):
+The build uses [Bazel](https://bazel.build) with [rules_rust](https://github.com/bazelbuild/rules_rust). The only prerequisite is [Bazelisk](https://github.com/bazelbuild/bazelisk) (`brew install bazelisk`, `winget install Bazel.Bazelisk`, or `npm install -g @bazel/bazelisk`), which runs the Bazel version in `.bazelversion`. Bazel downloads a pinned Rust toolchain on every platform.
 
-```bash
-sudo apt-get install libfontconfig1-dev libxkbcommon-dev libwayland-dev libx11-dev
-```
+Linux builds are hermetic: [hermetic-llvm](https://github.com/hermeticbuild/hermetic-llvm) supplies the compiler and linker and builds the C runtime from source (linked against glibc 2.28, so the binary runs on any distribution since 2018), and fontconfig, X11 and Wayland are loaded at runtime. Nothing needs installing, and any host can build for Linux with `--platforms=//:linux_x86_64` or `//:linux_aarch64`. On macOS and Windows the build uses Xcode or Visual Studio's C toolchain for linking. The text-rendering tests use the system's fonts, so on Linux they need fontconfig and a font (`apt-get install libfontconfig1 fonts-dejavu-core`).
 
 Then:
 
