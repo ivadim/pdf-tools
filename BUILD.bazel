@@ -3,3 +3,15 @@ exports_files([
     "Cargo.lock",
     "rustfmt.toml",
 ])
+
+# Targets for cross-builds: `bazel build --platforms=//:linux_x86_64 ...`.
+[platform(
+    name = "linux_" + cpu,
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:" + cpu,
+    ],
+) for cpu in [
+    "x86_64",
+    "aarch64",
+]]

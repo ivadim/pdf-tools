@@ -2583,6 +2583,7 @@ dependencies = [
 name = "pdftools-render"
 version = "0.3.0"
 dependencies = [
+ "fontique",
  "hayro",
  "image",
  "parley",

@@ -17,6 +17,10 @@ build:rustfmt --output_groups=+rustfmt_checks
 
 test --test_output=errors
 
+# Integration tests are separate crates; instrumenting them is what links the
+# profiling runtime that writes out the coverage of the code they call.
+coverage --instrument_test_targets
+
 # Release: small by default (opt-level z, LTO, stripped, panic=abort); the PDF
 # engine, rasteriser and compression crates keep full speed.
 build:release --compilation_mode=opt
@@ -37,3 +41,6 @@ build:release --@rules_rust//rust/settings:per_crate_rustc_flag=external/rules_r
 
 # Machine-specific settings (caches, jobs).
 try-import %workspace%/user.bazelrc
+
+# CI: fail rather than quietly update a stale MODULE.bazel.lock.
+common:ci --lockfile_mode=error
