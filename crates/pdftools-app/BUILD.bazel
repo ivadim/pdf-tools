@@ -13,6 +13,9 @@ cargo_build_script(
     name = "build_script",
     srcs = ["build.rs"],
     data = ["//packaging:icon.ico"],
+    # winresource fills in the file details from Cargo's package variables.
+    pkg_name = "pdftools-app",
+    version = VERSION,
     deps = all_crate_deps(build = True),
 )
 
