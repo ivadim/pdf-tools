@@ -12,7 +12,11 @@ APP_DEPS = [
 cargo_build_script(
     name = "build_script",
     srcs = ["build.rs"],
-    data = ["//packaging:icon.ico"],
+    # winresource also reads the manifest (for [package.metadata.winresource]).
+    data = [
+        "Cargo.toml",
+        "//packaging:icon.ico",
+    ],
     # winresource fills in the file details from Cargo's package variables.
     pkg_name = "pdftools-app",
     version = VERSION,
