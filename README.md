@@ -104,6 +104,17 @@ bazel run //crates/pdftools-core:smoke -- "$PWD/samples" "$PWD/smoke"           
 bazel run --config=release //crates/pdftools-core:try_file -- "$PWD/some.pdf" "$PWD/try"   # timings on a real file
 ```
 
+### Web version (experimental)
+
+`crates/pdftools-cli` runs every operation from the command line. Built for `wasm32-wasip1`, the same program is the engine of a web page in `web/`, which runs all 13 tools in the browser. It is published at **https://ivadim.github.io/pdf-tools/** by [`pages.yml`](.github/workflows/pages.yml).
+
+```bash
+bazel run --config=release //web:serve      # http://localhost:8080 (needs python3)
+bazel build --config=release //web:site     # the static site, in bazel-bin/web/site
+```
+
+`web/wasi.js` is a small WASI loader with an in-memory file system. A Web Worker (`web/worker.js`) copies each file in once and runs one command per action: `info`, `render` (page previews) and one command per tool. Files never leave the browser. Text watermarks and typed signatures are drawn with the browser's fonts, because WebAssembly can't see the system's.
+
 ## Testing
 
 | Layer | Where | What it covers |

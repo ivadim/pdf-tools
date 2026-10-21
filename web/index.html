@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PDF Tools</title>
+    <link rel="icon" href="icon.png" />
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="app.js"></script>
+  </head>
+  <body>
+    <aside id="sidebar">
+      <button id="brand" class="brand" type="button"><img src="icon.png" alt="" /> PDF Tools</button>
+      <nav id="nav"></nav>
+      <p class="local">Runs in your browser with WebAssembly. Files never leave your computer.</p>
+    </aside>
+    <main id="main">
+      <p id="loading" class="status">Loading the PDF engine…</p>
+    </main>
+    <dialog id="zoom">
+      <form method="dialog"><button class="icon-button close" aria-label="Close">×</button></form>
+      <canvas></canvas>
+    </dialog>
+  </body>
+</html>

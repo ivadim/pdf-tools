@@ -1,0 +1,17 @@
+[package]
+name = "pdftools-cli"
+description = "PDF Tools from the command line; also the WebAssembly module behind the web version"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "pdftools-cli"
+path = "src/main.rs"
+
+[dependencies]
+pdftools-core.workspace = true
+pdftools-render.workspace = true
+lopdf.workspace = true
