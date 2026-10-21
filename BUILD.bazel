@@ -15,3 +15,12 @@ exports_files([
     "x86_64",
     "aarch64",
 ]]
+
+# The web version's WebAssembly: `bazel build --platforms=//:wasm32_wasip1 ...`.
+platform(
+    name = "wasm32_wasip1",
+    constraint_values = [
+        "@platforms//os:wasi",
+        "@platforms//cpu:wasm32",
+    ],
+)

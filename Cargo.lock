@@ -2569,6 +2569,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pdftools-cli"
+version = "0.3.0"
+dependencies = [
+ "lopdf",
+ "pdftools-core",
+ "pdftools-render",
+]
+
+[[package]]
 name = "pdftools-core"
 version = "0.3.0"
 dependencies = [

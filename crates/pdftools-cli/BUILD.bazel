@@ -1,0 +1,23 @@
+load("@crates//:defs.bzl", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_test")
+load("//:version.bzl", "RUSTC_ENV", "VERSION")
+
+CLI_DEPS = [
+    "//crates/pdftools-core:pdftools_core",
+    "//crates/pdftools-render:pdftools_render",
+] + all_crate_deps(normal = True)
+
+rust_binary(
+    name = "pdftools-cli",
+    srcs = ["src/main.rs"],
+    rustc_env = RUSTC_ENV,
+    version = VERSION,
+    visibility = ["//visibility:public"],
+    deps = CLI_DEPS,
+)
+
+rust_test(
+    name = "unit_tests",
+    crate = ":pdftools-cli",
+    deps = CLI_DEPS,
+)

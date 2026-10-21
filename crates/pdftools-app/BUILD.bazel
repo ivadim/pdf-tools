@@ -81,3 +81,10 @@ rust_binary(
     version = VERSION,
     deps = [":pdftools_app"] + APP_DEPS + all_crate_deps(normal_dev = True),
 )
+
+# The web version (//web) uses the same icons.
+filegroup(
+    name = "icons",
+    srcs = glob(["icons/*.svg"]),
+    visibility = ["//web:__pkg__"],
+)

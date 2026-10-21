@@ -1,0 +1,25 @@
+load(":defs.bzl", "web_server", "web_site")
+
+# bazel build --config=release //web:site    → bazel-bin/web/site/
+web_site(
+    name = "site",
+    srcs = [
+        "app.js",
+        "engine.js",
+        "index.html",
+        "style.css",
+        "tools.js",
+        "ui.js",
+        "wasi.js",
+        "worker.js",
+    ],
+    favicon = "//packaging:icon.png",
+    icons = ["//crates/pdftools-app:icons"],
+    wasm = "//crates/pdftools-cli:pdftools-cli",
+)
+
+# bazel run --config=release //web:serve     → http://localhost:8080
+web_server(
+    name = "serve",
+    site = ":site",
+)

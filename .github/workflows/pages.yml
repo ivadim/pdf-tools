@@ -1,0 +1,50 @@
+name: Web version
+
+# Builds the web version (//web:site, with the engine as WebAssembly) and
+# publishes it on GitHub Pages.
+
+on:
+  push:
+    branches: [main, experimental/web-wasm]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: bazel-contrib/setup-bazel@0.19.1
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}
+          repository-cache: true
+      - name: Build the site
+        run: |
+          bazel build --config=ci --config=release //web:site
+          # bazel-bin holds symlinks; publish the files themselves.
+          cp -rL bazel-bin/web/site _site
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

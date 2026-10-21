@@ -13,6 +13,8 @@ rust.toolchain(
     extra_target_triples = [
         "x86_64-unknown-linux-gnu",
         "aarch64-unknown-linux-gnu",
+        # The web version (//web).
+        "wasm32-wasip1",
     ],
     versions = ["1.98.0"],
 )
@@ -31,6 +33,7 @@ crate.from_cargo(
         "x86_64-unknown-linux-gnu",
         "aarch64-unknown-linux-gnu",
         "x86_64-pc-windows-msvc",
+        "wasm32-wasip1",
     ],
 )
 
