@@ -25,3 +25,5 @@ Releases after 0.3.0 include a `SHA256SUMS` file and a signed build-provenance a
 ```bash
 gh attestation verify <downloaded file> --repo ivadim/pdf-tools
 ```
+
+The attestation is also attached to the release as `pdftools-<version>.intoto.jsonl`, for checking offline with `--bundle`.
