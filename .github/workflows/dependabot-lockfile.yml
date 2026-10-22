@@ -91,4 +91,5 @@ jobs:
             gh api "repos/$REPO/git/commits" --input - --jq .sha)
           # Not forced: fails if the branch moved on since this run started.
           gh api -X PATCH "repos/$REPO/git/refs/heads/$BRANCH" -f sha="$commit" -F force=false --silent
-          gh workflow run ci.yml --ref "$BRANCH"
+          # There's no checkout here, so name the repository.
+          gh workflow run ci.yml --repo "$REPO" --ref "$BRANCH"
