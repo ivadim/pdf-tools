@@ -1,0 +1,90 @@
+name: Fuzz
+
+# Feeds mutated PDFs to the code that reads untrusted files (fuzz/): a few
+# minutes per target on pull requests that change it, longer every week.
+# Crashes, hangs and runaway memory use fail the job; the inputs that caused
+# them are uploaded as an artifact. Not part of the required checks.
+
+on:
+  pull_request:
+    paths:
+      - crates/pdftools-core/**
+      - crates/pdftools-render/**
+      - fuzz/**
+      - Cargo.lock
+      - .github/workflows/fuzz.yml
+  schedule:
+    - cron: "23 4 * * 3"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_FUZZ_VERSION: 0.13.2
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fuzz:
+    name: Fuzz (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [load, render, organize]
+    env:
+      TARGET: ${{ matrix.target }}
+      SECONDS: ${{ github.event_name == 'pull_request' && 180 || 1800 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Nightly Rust and cargo-fuzz
+        run: |
+          rustup toolchain install nightly --profile minimal --no-self-update
+          cargo +nightly install cargo-fuzz --version "$CARGO_FUZZ_VERSION" --locked
+      # The corpus grown by earlier weekly runs; only those save it (below),
+      # so pull requests start from main's.
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: fuzz-corpus-${{ matrix.target }}-
+      - name: Build
+        working-directory: fuzz
+        run: |
+          # The app's own lock file, so the fuzzers test the dependency
+          # versions that ship; only the fuzzing crates are resolved here.
+          cp ../Cargo.lock Cargo.lock
+          cargo +nightly fuzz build "$TARGET"
+      - name: Fuzz
+        working-directory: fuzz
+        run: |
+          mkdir -p "corpus/$TARGET"
+          # Seeded with the real-world test PDFs. Inputs are capped at 128 KiB
+          # (larger seeds are cut short, which also exercises recovery).
+          cargo +nightly fuzz run "$TARGET" "corpus/$TARGET" ../tests/fixtures/pdfjs -- \
+            -max_total_time="$SECONDS" -timeout=10 -rss_limit_mb=2048 -max_len=131072
+      - name: Minimize the corpus
+        if: github.event_name != 'pull_request'
+        working-directory: fuzz
+        run: cargo +nightly fuzz cmin "$TARGET" "corpus/$TARGET" -- -timeout=10 -rss_limit_mb=2048 -max_len=131072
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: github.event_name != 'pull_request'
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+      # Reproduce with `cargo +nightly fuzz run <target> <file>`.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: fuzz-${{ matrix.target }}-crashes
+          path: fuzz/artifacts/${{ matrix.target }}
+          if-no-files-found: ignore
+          retention-days: 30
