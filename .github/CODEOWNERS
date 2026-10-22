@@ -1,0 +1,4 @@
+# Reviewers requested automatically on pull requests.
+*                 @ivadim
+# Workflows and repository settings need the owner's eye in particular.
+/.github/         @ivadim

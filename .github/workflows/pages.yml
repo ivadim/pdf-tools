@@ -5,20 +5,22 @@ name: Web version
 
 on:
   push:
-    branches: [main, experimental/web-wasm]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# Queue rather than cancel: stopping a deployment halfway can leave the site broken.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -41,6 +43,7 @@ jobs:
     name: Deploy
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       pages: write
       id-token: write

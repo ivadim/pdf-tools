@@ -1,0 +1,44 @@
+name: Bug report
+description: Something doesn't work as it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Choose …
+        3. Click …
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options:
+        - Desktop app, Windows
+        - Desktop app, macOS
+        - Desktop app, Linux
+        - Web version
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The release (for example 0.3.0) or the browser for the web version.
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Files and logs
+      description: If a particular PDF causes it, attach it if it has nothing private in it. Paste any error message.

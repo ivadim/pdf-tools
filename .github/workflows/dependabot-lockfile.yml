@@ -30,6 +30,7 @@ jobs:
     # Only Dependabot's own branches in this repository.
     if: github.event.pull_request.user.login == 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     outputs:
@@ -63,6 +64,7 @@ jobs:
     needs: refresh
     if: needs.refresh.outputs.changed == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write # commit the lock to the Dependabot branch
       actions: write # start CI on that commit

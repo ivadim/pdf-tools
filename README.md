@@ -1,7 +1,9 @@
 # PDF Tools
 
 [![CI](https://github.com/ivadim/pdf-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/ivadim/pdf-tools/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/ivadim/pdf-tools/badge)](https://scorecard.dev/viewer/?uri=github.com/ivadim/pdf-tools)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+[![Buy me a coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-support-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/ivadim)
 
 A cross-platform desktop toolset for working with PDFs, written in Rust with an [iced](https://iced.rs) UI.
 Everything runs locally; files never leave your computer.
@@ -42,6 +44,12 @@ Or run this in Terminal, then open the app as usual:
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/PDF Tools.app"
+```
+
+**Checking a download.** Releases after 0.3.0 come with a `SHA256SUMS` file and a signed attestation that the file was built by this repository's CI from the tagged commit. With the [GitHub CLI](https://cli.github.com):
+
+```bash
+gh attestation verify pdftools-…-linux-x86_64.tar.gz --repo ivadim/pdf-tools
 ```
 
 Builds of the latest `main` are attached to each [CI run](https://github.com/ivadim/pdf-tools/actions/workflows/ci.yml) as artifacts.
@@ -123,7 +131,7 @@ bazel build --config=release //web:site     # the static site, in bazel-bin/web/
 
 ### Lints and security checks
 
-CI runs these on every push and pull request; release builds wait for the lints.
+CI runs these on every push and pull request (the dependency checks also weekly); release builds wait for the lints. Pull requests need the **CI passed** check, which passes only when every CI job did, and CodeQL.
 
 | Check | What it looks at | Configuration |
 | --- | --- | --- |
@@ -133,8 +141,9 @@ CI runs these on every push and pull request; release builds wait for the lints.
 | [zizmor](https://docs.zizmor.sh) | The GitHub Actions workflows and Dependabot settings | |
 | npm audit | The web lint tooling | `web/package-lock.json` |
 | [CodeQL](.github/workflows/codeql.yml) | Security analysis of the Rust, JavaScript and workflows, also weekly; results under *Security → Code scanning* | |
+| [OpenSSF Scorecard](.github/workflows/scorecard.yml) | The repository's supply-chain practices (branch protection, pinned actions, token permissions, signed releases), weekly | |
 
-[Dependabot](.github/dependabot.yml) proposes weekly, grouped updates for Rust crates, Bazel modules, the web lint tooling and the workflows' actions (pinned to commit SHAs), after a week's cooldown. Security updates come right away. Bazel keeps the resolved crates in `MODULE.bazel.lock`, so on Dependabot's pull requests a [workflow](.github/workflows/dependabot-lockfile.yml) refreshes that file and re-runs CI.
+[Dependabot](.github/dependabot.yml) proposes weekly, grouped updates for Rust crates, Bazel modules, the web lint tooling and the workflows' actions (pinned to commit SHAs), after a week's cooldown. Security updates come right away. Bazel keeps the resolved crates in `MODULE.bazel.lock`, so on Dependabot's pull requests a [workflow](.github/workflows/dependabot-lockfile.yml) refreshes that file and re-runs CI. Patch updates [merge on their own](.github/workflows/dependabot-auto-merge.yml) once the required checks pass; minor and major ones wait for a review.
 
 `cargo deny check` needs Cargo; Bazel's own toolchain has one (`$(bazel info output_base)/external/rules_rust++rust+rust_*__stable_tools/bin`).
 
@@ -176,7 +185,7 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-The tag's run attaches all four packages to a new GitHub release.
+The tag must be on `main`. The tag's run builds without caches, then attaches all four packages to a new GitHub release with a `SHA256SUMS` file and a signed build-provenance attestation. Releases are immutable once published, and `v*` tags can't be moved or deleted.
 
 ## Notes
 
@@ -184,6 +193,14 @@ The tag's run attaches all four packages to a new GitHub release.
 - Merge and Split rebuild the page tree. Merge drops document-level extras (outlines, forms). Rotate, Rearrange and the other single-file tools keep them.
 - Damaged files, such as ones cut short by an interrupted download, open with the pages that can be recovered; the app says so, and outputs contain only those pages.
 - Files that only restrict permissions open without a password, and outputs from any tool are saved without those restrictions.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately, as described in [SECURITY.md](SECURITY.md).
+
+## Support
+
+PDF Tools is free and has no ads or tracking. If it saves you time, you can [buy me a coffee](https://buymeacoffee.com/ivadim). ☕
 
 ## Licence
 
