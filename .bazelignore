@@ -1,2 +1,4 @@
 # npm installs ESLint here (web/package.json); not part of the Bazel build.
 web/node_modules
+# Fuzz targets: built with cargo-fuzz, not Bazel.
+fuzz

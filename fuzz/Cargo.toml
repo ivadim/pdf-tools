@@ -1,0 +1,47 @@
+# Fuzz targets for the code that reads untrusted PDFs: `cargo +nightly fuzz
+# run <target>` (see "Fuzzing" in the README). Not part of the Bazel build
+# (`.bazelignore`) and its own Cargo workspace, so crate_universe never sees
+# libfuzzer-sys.
+[package]
+name = "pdftools-fuzz"
+version = "0.0.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+members = ["."]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+lopdf = { version = "0.45", default-features = false, features = ["rayon"] }
+pdftools-core = { path = "../crates/pdftools-core" }
+pdftools-render = { path = "../crates/pdftools-render" }
+
+# Symbols in crash reports.
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "load"
+path = "fuzz_targets/load.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "render"
+path = "fuzz_targets/render.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "organize"
+path = "fuzz_targets/organize.rs"
+test = false
+doc = false
+bench = false
