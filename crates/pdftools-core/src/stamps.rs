@@ -29,7 +29,7 @@ pub struct PageNumbers {
 
 /// Returns the number of pages numbered.
 pub fn add_page_numbers(doc: &mut Document, options: &PageNumbers) -> Result<usize, Error> {
-    if !(options.font_size > 0.0) {
+    if options.font_size.is_nan() || options.font_size <= 0.0 {
         return Err(Error::InvalidOption("font size must be positive".into()));
     }
     // Fail before changing anything if the text can't be encoded.
@@ -102,7 +102,7 @@ pub struct ImageStamp {
 
 /// Returns the number of pages stamped.
 pub fn add_image_stamp(doc: &mut Document, stamp: &ImageStamp) -> Result<usize, Error> {
-    if !(stamp.width > 0.0) {
+    if stamp.width.is_nan() || stamp.width <= 0.0 {
         return Err(Error::InvalidOption("watermark width must be positive".into()));
     }
     let pages = selected_pages(doc, stamp.pages.as_deref())?;

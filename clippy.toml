@@ -1,0 +1,1 @@
+# Clippy settings for `bazel build --config=clippy //...`.

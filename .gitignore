@@ -10,3 +10,4 @@
 /bazel-*
 /user.bazelrc
 /dist
+/web/node_modules

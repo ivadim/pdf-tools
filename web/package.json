@@ -1,0 +1,14 @@
+{
+  "name": "pdftools-web",
+  "private": true,
+  "description": "Lint tooling for the web version; the site itself has no dependencies.",
+  "type": "module",
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0"
+  }
+}

@@ -1,0 +1,55 @@
+name: Dependabot lockfile
+
+# Bazel records the resolved Rust crates and modules in MODULE.bazel.lock, and
+# CI rejects a stale lock. Dependabot only updates Cargo.lock and MODULE.bazel,
+# so on its pull requests this refreshes MODULE.bazel.lock, commits it, and
+# starts CI again on the new commit (pushes made with GITHUB_TOKEN don't).
+
+on:
+  pull_request:
+    paths:
+      - Cargo.lock
+      - Cargo.toml
+      - crates/*/Cargo.toml
+      - MODULE.bazel
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    name: Refresh MODULE.bazel.lock
+    # Only Dependabot's own branches in this repository.
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the refreshed lock to the Dependabot branch
+      actions: write # start CI on that commit
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: true # zizmor: ignore[artipacked] the job pushes a commit
+      - uses: bazel-contrib/setup-bazel@104e3eea9447cdaa4b00d0fb46191a3985d26ab3 # 0.19.1
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+      - name: Refresh the lock
+        run: bazel build --nobuild --lockfile_mode=update //...
+      - name: Commit and restart CI
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet MODULE.bazel.lock; then
+            echo "MODULE.bazel.lock is up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update MODULE.bazel.lock" MODULE.bazel.lock
+          git push origin "HEAD:refs/heads/$BRANCH"
+          gh workflow run ci.yml --ref "$BRANCH"

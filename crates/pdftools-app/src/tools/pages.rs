@@ -214,7 +214,7 @@ impl ToolOptions for Split {
         true
     }
 
-    fn grid_actions(&self) -> Vec<(&'static str, fn() -> iced::widget::svg::Handle, &'static str)> {
+    fn grid_actions(&self) -> Vec<crate::single::GridAction> {
         if self.mode == Mode::Extract {
             vec![("Select all pages", icons::select_all, "select-all"), ("Clear selection", icons::x, "clear-selection")]
         } else {
@@ -370,7 +370,7 @@ impl ToolOptions for Rearrange {
         }
     }
 
-    fn grid_actions(&self) -> Vec<(&'static str, fn() -> iced::widget::svg::Handle, &'static str)> {
+    fn grid_actions(&self) -> Vec<crate::single::GridAction> {
         vec![("Reverse order", icons::reverse, "reverse"), ("Reset to original order", icons::reset, "reset")]
     }
 

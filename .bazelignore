@@ -1,0 +1,2 @@
+# npm installs ESLint here (web/package.json); not part of the Bazel build.
+web/node_modules

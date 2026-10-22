@@ -2,10 +2,10 @@
 // a new version is picked up as soon as it's online; every answer is kept,
 // and the copy is used when the network isn't there.
 //
-// Bump VERSION to make browsers reinstall the worker itself.
+// Bump VERSION to make browsers reinstall the worker and start a fresh cache.
 const VERSION = 2;
 
-const CACHE = "pdftools";
+const CACHE = `pdftools-v${VERSION}`;
 const APP = [
   "./",
   "index.html",
@@ -27,7 +27,14 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
-self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+self.addEventListener("activate", (event) =>
+  event.waitUntil(
+    caches
+      .keys()
+      .then((names) => Promise.all(names.filter((name) => name.startsWith("pdftools") && name !== CACHE).map((name) => caches.delete(name))))
+      .then(() => self.clients.claim()),
+  ),
+);
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;

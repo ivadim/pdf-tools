@@ -83,7 +83,7 @@ fn media_box(path: &Path, page: u32) -> (f32, f32) {
 fn max_chroma(path: &Path, page: usize) -> u8 {
     let request = pdftools_render::pages::PreviewRequest { path: path.into(), page, width: 400, rotation: 0, gray: false };
     let rendered = pdftools_render::pages::render(&request, &mut Default::default()).unwrap();
-    rendered.pixels.chunks_exact(4).map(|p| p[0].max(p[1]).max(p[2]) - p[0].min(p[1]).min(p[2])).max().unwrap_or(0)
+    rendered.pixels.as_chunks::<4>().0.iter().map(|p| p[0].max(p[1]).max(p[2]) - p[0].min(p[1]).min(p[2])).max().unwrap_or(0)
 }
 
 /// Mean absolute difference between two pages rendered in grey (0–255).
@@ -94,7 +94,8 @@ fn luma_difference(a: &Path, b: &Path, page: usize) -> f64 {
     };
     let (a, b) = (gray(a), gray(b));
     assert_eq!((a.width, a.height), (b.width, b.height));
-    let sum: u64 = a.pixels.chunks_exact(4).zip(b.pixels.chunks_exact(4)).map(|(p, q)| p[0].abs_diff(q[0]) as u64).sum();
+    let sum: u64 =
+        a.pixels.as_chunks::<4>().0.iter().zip(b.pixels.as_chunks::<4>().0.iter()).map(|(p, q)| p[0].abs_diff(q[0]) as u64).sum();
     sum as f64 / (a.pixels.len() / 4) as f64
 }
 
@@ -781,6 +782,9 @@ fn large_document() {
 
 // ── Every screen, both themes, smallest and large windows ───────────────
 
+/// A screenshot's name and how to get to that screen.
+type Shot = (String, Box<dyn Fn(&mut Harness)>);
+
 #[test]
 #[ignore]
 fn screens() {
@@ -788,7 +792,7 @@ fn screens() {
     for (theme, choice) in [("light", ThemeChoice::Light), ("dark", ThemeChoice::Dark)] {
         let h = &mut s.h;
         h.send(Message::Theme(choice));
-        let shots: Vec<(String, Box<dyn Fn(&mut Harness)>)> = vec![
+        let shots: Vec<Shot> = vec![
             ("home".into(), Box::new(|h| h.send(Message::Navigate(Screen::Home)))),
             ("about".into(), Box::new(|h| h.send(Message::Navigate(Screen::About)))),
             (

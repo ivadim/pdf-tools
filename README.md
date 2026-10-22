@@ -91,6 +91,8 @@ bazel build --config=release //crates/pdftools-app:pdftools   # bazel-bin/crates
 bazel test //...                                              # every test
 bazel build --config=rustfmt //...                            # check formatting
 bazel run @rules_rust//:rustfmt                               # fix formatting
+bazel build --config=clippy //...                             # Clippy (warnings fail the build)
+(cd web && npm ci && npm run lint)                            # ESLint for the web version
 ```
 
 Third-party crates are still declared in the crates' `Cargo.toml` files and pinned by `Cargo.lock`; Bazel reads both (crate_universe in `MODULE.bazel`), so add or update a dependency there and Bazel picks it up. The version lives in `version.bzl`.
@@ -118,6 +120,23 @@ bazel build --config=release //web:site     # the static site, in bazel-bin/web/
 ```
 
 `web/wasi.js` is a small WASI loader with an in-memory file system. A Web Worker (`web/worker.js`) copies each file in once and runs one command per action: `info`, `render` (page previews) and one command per tool. Files never leave the browser. Text watermarks and typed signatures are drawn with the browser's fonts, because WebAssembly can't see the system's.
+
+### Lints and security checks
+
+CI runs these on every push and pull request; release builds wait for the lints.
+
+| Check | What it looks at | Configuration |
+| --- | --- | --- |
+| rustfmt, Clippy | Rust formatting and lints; any Clippy warning fails | `rustfmt.toml`, `clippy.toml`, `.bazelrc` |
+| ESLint | The web version's JavaScript | `web/eslint.config.js` |
+| [cargo-deny](https://github.com/EmbarkStudios/cargo-deny) | Rust dependencies: known vulnerabilities (RustSec), yanked crates, licences, sources | `deny.toml` |
+| [zizmor](https://docs.zizmor.sh) | The GitHub Actions workflows and Dependabot settings | |
+| npm audit | The web lint tooling | `web/package-lock.json` |
+| [CodeQL](.github/workflows/codeql.yml) | Security analysis of the Rust, JavaScript and workflows, also weekly; results under *Security → Code scanning* | |
+
+[Dependabot](.github/dependabot.yml) proposes weekly, grouped updates for Rust crates, Bazel modules, the web lint tooling and the workflows' actions (pinned to commit SHAs), after a week's cooldown. Security updates come right away. Bazel keeps the resolved crates in `MODULE.bazel.lock`, so on Dependabot's pull requests a [workflow](.github/workflows/dependabot-lockfile.yml) refreshes that file and re-runs CI.
+
+`cargo deny check` needs Cargo; Bazel's own toolchain has one (`$(bazel info output_base)/external/rules_rust++rust+rust_*__stable_tools/bin`).
 
 ## Testing
 

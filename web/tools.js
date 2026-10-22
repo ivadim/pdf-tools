@@ -410,7 +410,7 @@ const rotate = {
   desc: "Rotate single pages or all pages.",
   keep: true,
   defaults: () => ({}),
-  panel: (ctx) => [h("p", { className: "status" }, "Use the arrows under each page, or rotate them all at once.")],
+  panel: () => [h("p", { className: "status" }, "Use the arrows under each page, or rotate them all at once.")],
   toolbar: (ctx) => [
     h("button", { type: "button", onClick: () => (ctx.state.items.forEach((i) => (i.rotation = (i.rotation + 270) % 360)), ctx.refresh()) }, icon("rotate-ccw"), " All left"),
     h("button", { type: "button", onClick: () => (ctx.state.items.forEach((i) => (i.rotation = (i.rotation + 90) % 360)), ctx.refresh()) }, icon("rotate-cw"), " All right"),
@@ -502,7 +502,7 @@ const numbers = {
   problem(ctx) {
     const { opts } = ctx.state;
     if (!opts.format.trim()) return "Enter a format.";
-    if (/[^\x20-\x7e -ÿ–—‘’“”•…€]/.test(opts.format)) return "The format can only use Latin characters.";
+    if (/[^\x20-\x7e\u00a0-\u00ff\u2013\u2014\u2018\u2019\u201c\u201d\u2022\u2026\u20ac]/.test(opts.format)) return "The format can only use Latin characters.";
     if (!(opts.size > 0)) return "Enter a font size.";
     return keepProblem(ctx.state) ?? pageChoiceProblem(ctx);
   },
@@ -520,7 +520,7 @@ const WATERMARK_MARGIN = 0.05;
 const FONTS = ["sans-serif", "serif", "monospace", "Helvetica", "Arial", "Georgia", "Times New Roman", "Courier New", "Verdana"];
 
 /** Draws an image (a w×h fraction-of-page-width stamp) where the core puts it. */
-function stampOverlay(opts, picture, { width, height, points }) {
+function stampOverlay(opts, picture, { width, points }) {
   const scale = width / points[0];
   const w = opts.width * points[0];
   const hgt = (w * picture.height) / picture.width;

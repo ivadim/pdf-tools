@@ -128,7 +128,7 @@ pub fn rotate(pixels: &[u8], width: u32, height: u32, degrees: i32) -> (Vec<u8>,
 }
 
 pub fn to_gray(pixels: &mut [u8]) {
-    for px in pixels.chunks_exact_mut(4) {
+    for px in pixels.as_chunks_mut::<4>().0 {
         let luma = (0.299 * px[0] as f32 + 0.587 * px[1] as f32 + 0.114 * px[2] as f32).round() as u8;
         px[0] = luma;
         px[1] = luma;
@@ -174,7 +174,7 @@ mod tests {
         let mut docs = DocCache::default();
         let request = PreviewRequest { path: fixture("calrgb.pdf"), page: 1, width: 80, rotation: 0, gray: true };
         let page = render(&request, &mut docs).unwrap();
-        assert!(page.pixels.chunks_exact(4).all(|p| p[0] == p[1] && p[1] == p[2]));
+        assert!(page.pixels.as_chunks::<4>().0.iter().all(|p| p[0] == p[1] && p[1] == p[2]));
     }
 
     #[test]

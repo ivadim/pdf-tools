@@ -1,0 +1,49 @@
+# cargo-deny: known vulnerabilities (RustSec), licences and where crates come
+# from. CI runs `cargo deny check` on every push and pull request.
+
+[graph]
+# Only what we build for.
+targets = [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+    "wasm32-wasip1",
+]
+all-features = false
+
+[advisories]
+# Vulnerabilities and yanked crates fail the check; unmaintained crates only
+# fail when we depend on them directly.
+unmaintained = "workspace"
+yanked = "deny"
+ignore = []
+
+[licenses]
+# Compatible with distributing PDF Tools under MIT.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.9
+
+[licenses.private]
+ignore = true
+
+[bans]
+# Several versions of one crate are common in a GUI stack; report, don't fail.
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
