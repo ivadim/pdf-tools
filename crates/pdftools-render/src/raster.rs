@@ -91,7 +91,12 @@ pub fn render_text(text: &str, family: Family, bold: bool, color: [u8; 3], size:
             let run = glyph_run.run();
             let font = run.font();
             let Some(font_ref) = FontRef::from_index(font.data.as_ref(), font.index as usize) else { continue };
-            let mut scaler = scale.builder(font_ref).size(run.font_size()).hint(false).normalized_coords(run.normalized_coords()).build();
+            let mut scaler = scale
+                .builder(font_ref)
+                .size(run.font_size())
+                .hint(false)
+                .normalized_coords(run.normalized_coords().iter().map(|c| c.to_bits()))
+                .build();
             for glyph in glyph_run.positioned_glyphs() {
                 let (x, y) = (glyph.x + pad, glyph.y + pad);
                 let Some(image) = Render::new(&[Source::ColorOutline(0), Source::ColorBitmap(StrikeWith::BestFit), Source::Outline])

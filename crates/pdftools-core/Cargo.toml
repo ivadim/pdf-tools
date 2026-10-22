@@ -16,5 +16,5 @@ getrandom = "0.3"
 
 [dev-dependencies]
 # Checks the encryption independently of lopdf (already one of its dependencies).
-aes = "0.8"
+aes = "0.9"
 image = { version = "0.25", default-features = false, features = ["png"] }
