@@ -1,28 +1,64 @@
+/* PDF Tools on the web.
+ *
+ * Layout: from 900 px a sidebar lists the tools and each tool shows its pages
+ * beside a sticky options column. Narrower, an app bar (Back, title, menu)
+ * replaces the sidebar, which becomes a drawer; options sit above the pages
+ * and the Run button stays in a bar at the bottom of the screen. Content is
+ * capped in width so very wide screens keep a readable layout.
+ */
+
 :root {
   color-scheme: light dark;
-  --bg: #f6f7f9;
+  --bg: #f4f5f8;
   --panel: #ffffff;
-  --text: #1d2330;
-  --muted: #657084;
+  --raised: #ffffff;
+  --text: #1b2130;
+  --muted: #5f6b80;
   --line: #dde1e8;
+  --line-strong: #c6ccd6;
   --accent: #2f6fed;
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
   --accent-text: #ffffff;
   --danger: #c93a3a;
-  --ok: #1f8a4c;
-  --page-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ok: #1d8049;
+  --page-shadow: 0 1px 2px rgb(0 0 0 / 0.12), 0 2px 8px rgb(0 0 0 / 0.08);
+  --radius: 10px;
+  --sidebar: 228px;
+  --side: 340px;
+  --card: 168px;
+  --bar: 52px;
+  --gutter: clamp(16px, 2.4vw, 36px);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: 14px;
+  line-height: 1.4;
+  -webkit-text-size-adjust: 100%;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #15181e;
-    --panel: #1e222a;
-    --text: #e6e9ef;
-    --muted: #98a1b3;
-    --line: #313744;
+    --bg: #14171d;
+    --panel: #1c2028;
+    --raised: #232833;
+    --text: #e7eaf0;
+    --muted: #9aa3b5;
+    --line: #2e3441;
+    --line-strong: #3d4555;
     --accent: #5b8dff;
-    --page-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+    --page-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+  }
+}
+
+/* Thumbnails grow with the screen. */
+@media (min-width: 1500px) {
+  :root {
+    --card: 196px;
+    --side: 360px;
+  }
+}
+@media (min-width: 2200px) {
+  :root {
+    --card: 236px;
+    --side: 380px;
   }
 }
 
@@ -30,70 +66,113 @@
   box-sizing: border-box;
 }
 
+html {
+  scroll-padding-top: calc(var(--bar) + 8px);
+}
+
 body {
   margin: 0;
-  display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg);
   color: var(--text);
 }
 
 button,
 input,
-select {
+select,
+summary {
   font: inherit;
   color: inherit;
 }
 
-/* ── Sidebar ─────────────────────────────────────────────────────────── */
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  display: inline-block;
+  background: currentColor;
+  mask: var(--icon) center / contain no-repeat;
+  -webkit-mask: var(--icon) center / contain no-repeat;
+}
+
+/* ── App bar (small screens) ─────────────────────────────────────────── */
+
+#topbar {
+  display: none;
+}
+
+/* ── Sidebar / drawer ────────────────────────────────────────────────── */
 
 #sidebar {
-  width: 210px;
-  flex: none;
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: var(--sidebar);
   padding: 14px 10px;
+  padding-left: max(10px, env(safe-area-inset-left));
   border-right: 1px solid var(--line);
   background: var(--panel);
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  position: sticky;
-  top: 0;
-  height: 100vh;
+  gap: 2px;
   overflow-y: auto;
+  z-index: 30;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-weight: 650;
   font-size: 16px;
   background: none;
   border: 0;
-  padding: 6px 8px 10px;
+  border-radius: 8px;
+  padding: 6px 8px 14px;
   cursor: pointer;
+  text-align: left;
 }
 
 .brand img {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
+}
+
+#nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 #nav button {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   width: 100%;
+  min-height: 36px;
   padding: 7px 10px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 8px;
   background: none;
   text-align: left;
   cursor: pointer;
 }
 
 #nav button:hover {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  background: var(--accent-soft);
 }
 
 #nav button.active {
@@ -101,165 +180,302 @@ select {
   color: var(--accent-text);
 }
 
-.local {
+.install {
   margin-top: auto;
-  color: var(--muted);
-  font-size: 12px;
-  padding: 8px;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: none;
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
 }
 
-.icon {
-  width: 18px;
-  height: 18px;
-  flex: none;
-  background: currentColor;
-  mask: var(--icon) center / contain no-repeat;
+.install:not([hidden]) + .local {
+  margin-top: 0;
+}
+
+.local {
+  margin: auto 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 10px 8px 0;
+}
+
+#scrim {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 0.45);
+  z-index: 25;
 }
 
 /* ── Main area ───────────────────────────────────────────────────────── */
 
 #main {
-  flex: 1;
+  margin-left: var(--sidebar);
+  padding: 28px var(--gutter) 64px;
   min-width: 0;
-  padding: 24px 28px 60px;
+}
+
+/* Wide screens: keep lines and grids at a comfortable width. */
+#main[data-view="home"] > * {
+  max-width: 1180px;
+  margin-inline: auto;
+}
+
+#main[data-view="tool"] > * {
+  max-width: 1880px;
+  margin-inline: auto;
+}
+
+.page-head {
+  margin-bottom: 22px;
 }
 
 h1 {
-  font-size: 22px;
+  font-size: 24px;
+  line-height: 1.2;
   margin: 0 0 4px;
+  letter-spacing: -0.01em;
 }
 
 .subtitle {
   color: var(--muted);
-  margin: 0 0 20px;
+  margin: 0;
+  font-size: 15px;
 }
 
+/* Home: tool tiles. */
 .home {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 14px;
 }
 
 .home button {
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
+  gap: 14px;
   padding: 16px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--panel);
   text-align: left;
   cursor: pointer;
+  transition:
+    border-color 0.15s,
+    transform 0.15s,
+    box-shadow 0.15s;
 }
 
 .home button:hover {
   border-color: var(--accent);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.08);
+  transform: translateY(-1px);
 }
 
-.home .icon {
-  width: 26px;
-  height: 26px;
+.tile-icon {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--accent-soft);
   color: var(--accent);
 }
 
-.home strong {
+.tile-icon .icon {
+  width: 22px;
+  height: 22px;
+}
+
+.tile-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.tile-text strong {
   font-size: 15px;
 }
 
-.home span.desc {
+.desc {
   color: var(--muted);
 }
 
+/* ── Tool layout ─────────────────────────────────────────────────────── */
+
+/* The options column runs beside the title and the pages, so it starts at
+   the top and always fits the window, Run button included. */
 .tool {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) var(--side);
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "head side"
+    "work side";
+  column-gap: 28px;
   align-items: start;
 }
 
-.panel {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 16px;
+.tool > .page-head {
+  grid-area: head;
+}
+
+.workspace {
+  grid-area: work;
+  min-width: 0;
+}
+
+.side {
+  grid-area: side;
   position: sticky;
-  top: 16px;
+  top: 20px;
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.panel {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.panel > summary {
+  display: none;
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.panel[hidden] + .actions {
+  border-top: 0;
 }
 
 .panel h2 {
-  font-size: 13px;
+  font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: var(--muted);
-  margin: 4px 0 0;
+  margin: 4px 0 -6px;
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
+  min-width: 0;
 }
 
 .field > span {
   color: var(--muted);
   font-size: 12px;
+  font-weight: 500;
 }
 
 .field input[type="text"],
 .field input[type="password"],
 .field input[type="number"],
 .field select {
-  padding: 6px 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.field input[type="color"] {
+  width: 56px;
+  height: 34px;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
   background: var(--bg);
 }
 
 .field input[type="range"] {
   width: 100%;
+  accent-color: var(--accent);
 }
 
 .check {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
+  min-height: 28px;
+  cursor: pointer;
+}
+
+.check input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--accent);
 }
 
 .segmented {
   display: flex;
+  padding: 3px;
+  gap: 3px;
+  border-radius: 9px;
+  background: var(--bg);
   border: 1px solid var(--line);
-  border-radius: 7px;
-  overflow: hidden;
 }
 
 .segmented button {
   flex: 1;
+  min-width: 0;
+  min-height: 32px;
   border: 0;
-  padding: 6px 4px;
+  border-radius: 7px;
+  padding: 5px 6px;
   background: none;
   cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .segmented button.active {
   background: var(--accent);
   color: var(--accent-text);
+  font-weight: 550;
 }
 
 .anchors {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
+  gap: 5px;
+  max-width: 180px;
 }
 
 .anchors button {
-  border: 1px solid var(--line);
-  border-radius: 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
   background: var(--bg);
-  height: 28px;
+  height: 30px;
   cursor: pointer;
 }
 
@@ -270,16 +486,21 @@ h1 {
 
 .primary,
 .secondary {
-  padding: 9px 14px;
-  border-radius: 7px;
+  min-height: 40px;
+  padding: 9px 16px;
+  border-radius: 9px;
   cursor: pointer;
-  font-weight: 550;
+  font-weight: 600;
 }
 
 .primary {
   background: var(--accent);
   color: var(--accent-text);
   border: 0;
+}
+
+.primary:hover:not(:disabled) {
+  filter: brightness(1.08);
 }
 
 .primary:disabled {
@@ -289,16 +510,22 @@ h1 {
 
 .secondary {
   background: none;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
+}
+
+.secondary:hover {
+  border-color: var(--accent);
 }
 
 .problem {
   color: var(--danger);
   font-size: 13px;
+  margin: 0;
 }
 
 .status {
   color: var(--muted);
+  margin: 0;
 }
 
 .error {
@@ -309,14 +536,12 @@ h1 {
 .results {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  border-top: 1px solid var(--line);
-  padding-top: 12px;
+  gap: 8px;
 }
 
 .results .done {
   color: var(--ok);
-  font-weight: 550;
+  font-weight: 600;
 }
 
 .results a {
@@ -327,15 +552,17 @@ h1 {
 /* ── Drop zone and files ─────────────────────────────────────────────── */
 
 .drop {
-  border: 2px dashed var(--line);
-  border-radius: 12px;
-  padding: 48px 20px;
+  border: 2px dashed var(--line-strong);
+  border-radius: 14px;
+  padding: clamp(36px, 8vw, 72px) 20px;
   text-align: center;
   color: var(--muted);
   cursor: pointer;
+  background: var(--panel);
+  transition: border-color 0.15s;
 }
 
-.drop.over,
+.drop:hover,
 body.dragging .drop {
   border-color: var(--accent);
   color: var(--text);
@@ -343,8 +570,8 @@ body.dragging .drop {
 
 .drop strong {
   display: block;
-  color: var(--text);
-  font-size: 16px;
+  color: var(--accent);
+  font-size: 17px;
   margin-bottom: 4px;
 }
 
@@ -360,22 +587,27 @@ body.dragging .drop {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 6px 4px 10px;
+  min-height: 32px;
+  max-width: 100%;
+  padding: 4px 6px 4px 12px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--panel);
+  overflow-wrap: anywhere;
 }
 
-.chip .swatch {
+.chip .swatch,
+.label .swatch {
   width: 10px;
   height: 10px;
+  flex: none;
   border-radius: 3px;
 }
 
 .notice {
   padding: 12px 14px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  border-radius: 10px;
+  background: var(--accent-soft);
   margin-bottom: 14px;
   display: flex;
   align-items: center;
@@ -387,23 +619,36 @@ body.dragging .drop {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .toolbar button {
-  padding: 5px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 12px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--panel);
   cursor: pointer;
+}
+
+.toolbar button:hover {
+  border-color: var(--accent);
+}
+
+.toolbar .icon {
+  width: 15px;
+  height: 15px;
 }
 
 /* ── Page grid ───────────────────────────────────────────────────────── */
 
 .pages {
   display: grid;
-  grid-template-columns: repeat(auto-fill, 170px);
-  gap: 18px 14px;
+  grid-template-columns: repeat(auto-fill, minmax(var(--card), 1fr));
+  gap: 22px 16px;
 }
 
 .card {
@@ -411,12 +656,12 @@ body.dragging .drop {
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  position: relative;
+  min-width: 0;
 }
 
 .thumb {
-  width: 170px;
-  height: 200px;
+  width: 100%;
+  aspect-ratio: 5 / 6;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -424,15 +669,23 @@ body.dragging .drop {
 
 .sheet {
   position: relative;
+  max-width: 100%;
+  max-height: 100%;
+  container-type: inline-size;
   box-shadow: var(--page-shadow);
   background: #fff;
   cursor: zoom-in;
   outline: 3px solid var(--part, transparent);
-  outline-offset: 2px;
+  outline-offset: 3px;
+  border-radius: 2px;
 }
 
-.sheet canvas,
-.sheet img {
+.sheet.still {
+  cursor: default;
+  overflow: hidden;
+}
+
+.sheet canvas {
   display: block;
   width: 100%;
   height: 100%;
@@ -470,9 +723,11 @@ body.dragging .drop {
   outline: 1px dashed var(--accent);
   pointer-events: auto;
   cursor: grab;
+  touch-action: none;
 }
 
 .overlay .placed img {
+  display: block;
   width: 100%;
   height: 100%;
   pointer-events: none;
@@ -480,47 +735,64 @@ body.dragging .drop {
 
 .overlay .placed button {
   position: absolute;
-  top: -9px;
-  right: -9px;
-  width: 18px;
-  height: 18px;
+  top: -10px;
+  right: -10px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border-radius: 50%;
   border: 0;
   background: var(--danger);
   color: #fff;
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 20px;
   cursor: pointer;
 }
 
 .card .label {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  max-width: 100%;
   font-size: 12px;
   color: var(--muted);
 }
 
+.card .label input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.card .label .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .card .controls {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 2px;
 }
 
 .icon-button {
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 7px;
   background: none;
   cursor: pointer;
   padding: 0;
 }
 
-.icon-button:hover {
+.icon-button:hover:not(:disabled) {
   border-color: var(--line);
   background: var(--panel);
 }
@@ -531,15 +803,22 @@ body.dragging .drop {
 }
 
 .icon-button .icon {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
 }
 
 .placeholder {
-  width: 120px;
-  height: 160px;
-  background: color-mix(in srgb, var(--line) 50%, transparent);
+  width: 76%;
+  aspect-ratio: 3 / 4;
+  background: color-mix(in srgb, var(--line) 60%, transparent);
   border-radius: 3px;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.55;
+  }
 }
 
 /* ── Signature pad ───────────────────────────────────────────────────── */
@@ -547,20 +826,11 @@ body.dragging .drop {
 .pad {
   width: 100%;
   aspect-ratio: 2.4;
-  border: 1px solid var(--line);
-  border-radius: 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
   background: #fff;
   touch-action: none;
   cursor: crosshair;
-}
-
-.signature-preview {
-  max-width: 100%;
-  max-height: 80px;
-  background: #fff;
-  border-radius: 6px;
-  padding: 4px;
-  align-self: flex-start;
 }
 
 /* ── Zoom ────────────────────────────────────────────────────────────── */
@@ -569,37 +839,273 @@ body.dragging .drop {
   border: 0;
   padding: 0;
   background: none;
-  max-width: 94vw;
-  max-height: 94vh;
+  max-width: 96vw;
+  max-height: 96vh;
 }
 
 #zoom::backdrop {
-  background: rgb(0 0 0 / 0.65);
+  background: rgb(0 0 0 / 0.7);
 }
 
 #zoom canvas {
   display: block;
-  max-width: 94vw;
-  max-height: 94vh;
+  max-width: 96vw;
+  max-height: 92vh;
+  max-height: 92dvh;
   background: #fff;
 }
 
 #zoom .close {
   position: fixed;
-  top: 14px;
-  right: 18px;
+  top: max(12px, env(safe-area-inset-top));
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.5);
   color: #fff;
   font-size: 24px;
 }
 
-@media (max-width: 860px) {
+/* ── Small screens: app bar, drawer, options above pages ─────────────── */
+
+@media (max-width: 899px) {
+  :root {
+    --card: 140px;
+  }
+
+  #topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: calc(var(--bar) + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) max(8px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left));
+    background: color-mix(in srgb, var(--panel) 92%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+
+  #bar-logo {
+    width: 26px;
+    height: 26px;
+    margin-left: 8px;
+  }
+
+  #bar-title {
+    flex: 1;
+    min-width: 0;
+    margin-left: 4px;
+    font-weight: 650;
+    font-size: 17px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .bar-button {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 10px;
+    background: none;
+    cursor: pointer;
+  }
+
+  .bar-button:active {
+    background: var(--accent-soft);
+  }
+
+  .bar-button .icon {
+    width: 22px;
+    height: 22px;
+  }
+
   #sidebar {
+    width: min(300px, 84vw);
+    padding-top: max(14px, env(safe-area-inset-top));
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+    box-shadow: 8px 0 30px rgb(0 0 0 / 0.25);
+    transform: translateX(-105%);
+    transition: transform 0.22s ease;
+    visibility: hidden;
+  }
+
+  body.menu-open #sidebar {
+    transform: none;
+    visibility: visible;
+  }
+
+  body.menu-open {
+    overflow: hidden;
+  }
+
+  #nav button {
+    min-height: 44px;
+  }
+
+  #main {
+    margin-left: 0;
+    padding: 16px max(16px, env(safe-area-inset-right)) 32px max(16px, env(safe-area-inset-left));
+  }
+
+  /* The app bar already names the page; keep its one-line description. */
+  .page-head h1 {
     display: none;
   }
-  .tool {
-    grid-template-columns: 1fr;
+
+  .page-head {
+    margin-bottom: 16px;
   }
-  .panel {
+
+  .subtitle {
+    font-size: 14px;
+  }
+
+  .home {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 10px;
+  }
+
+  .home button {
+    padding: 12px 14px;
+    align-items: center;
+  }
+
+  .home button:hover {
+    transform: none;
+  }
+
+  .tile-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  /* One column: description, options, then the pages; Run stays at the bottom. */
+  .tool {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .tool > .page-head {
+    margin-bottom: 0;
+  }
+
+  .workspace {
+    order: 2;
+  }
+
+  .side {
     position: static;
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    background: none;
+  }
+
+  .panel {
+    overflow: visible;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel);
+  }
+
+  .panel > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 46px;
+    padding: 0 16px;
+    font-weight: 600;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .panel > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .panel > summary::after {
+    content: "";
+    width: 9px;
+    height: 9px;
+    border: solid var(--muted);
+    border-width: 0 2px 2px 0;
+    transform: translateY(-2px) rotate(45deg);
+    transition: transform 0.15s;
+  }
+
+  .panel[open] > summary::after {
+    transform: translateY(2px) rotate(-135deg);
+  }
+
+  .panel[open] > summary {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .actions {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 15;
+    max-height: 45vh;
+    overflow-y: auto;
+    padding: 12px max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    border-top: 1px solid var(--line);
+    background: color-mix(in srgb, var(--panel) 95%, transparent);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 -6px 20px rgb(0 0 0 / 0.12);
+  }
+
+  /* Tablets: keep fields and buttons at a comfortable width. */
+  .actions > *,
+  .options > * {
+    width: 100%;
+    max-width: 640px;
+    margin-inline: auto;
+  }
+
+  body.has-actions #main {
+    padding-bottom: calc(var(--actions-h, 72px) + 24px);
+  }
+
+  .files .secondary {
+    min-height: 34px;
+    padding: 6px 12px;
+  }
+
+  .pages {
+    gap: 18px 12px;
+  }
+
+  .drop-hint {
+    display: none;
+  }
+}
+
+/* Touch screens: larger targets on page cards. */
+@media (pointer: coarse) {
+  .icon-button {
+    width: 34px;
+    height: 34px;
+  }
+
+  .card .label input {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
   }
 }

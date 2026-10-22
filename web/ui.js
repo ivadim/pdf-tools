@@ -114,8 +114,13 @@ export function pickFiles(accept, multiple) {
   });
 }
 
-const THUMB_W = 170;
-const THUMB_H = 200;
+/** Page cards are 5:6 boxes; a page fills the box's width or its height. */
+const CARD_ASPECT = 5 / 6;
+
+/** Styles that make a sheet show a `pw`×`ph` page as large as fits its card. */
+export function sheetStyle(pw, ph) {
+  return { aspectRatio: `${pw} / ${ph}`, ...(pw / ph > CARD_ASPECT ? { width: "100%" } : { height: "100%" }) };
+}
 
 /** Draws `picture` turned clockwise by `rotation` into a new canvas. */
 function drawRotated(picture, rotation) {
@@ -141,7 +146,8 @@ function cachedCanvas(cache, picture, rotation) {
  * @param {Promise} o.picture the rendered page (from Pdf.thumbs)
  * @param {number} [o.rotation] extra clockwise rotation
  * @param {(frame: {width: number, height: number, points: number[]}) => Node[]} [o.overlay]
- *   what to draw over the page; `points` is the page size as displayed
+ *   what to draw over the page, in `cqw` units: the page is `width` (100) by
+ *   `height`; `points` is its size as displayed
  */
 export function pageCard({ picture, rotation = 0, cache = {}, label, controls = [], overlay, removed, gray, part, onSheetClick, onZoom }) {
   const thumb = h("div", { className: "thumb" }, h("div", { className: "placeholder" }));
@@ -156,14 +162,14 @@ export function pageCard({ picture, rotation = 0, cache = {}, label, controls = 
     ?.then((pic) => {
       const quarter = ((rotation % 360) + 360) % 180 === 90;
       const [pw, ph] = quarter ? [pic.points[1], pic.points[0]] : pic.points;
-      const scale = Math.min(THUMB_W / pw, THUMB_H / ph);
-      const [width, height] = [Math.round(pw * scale), Math.round(ph * scale)];
-      const layer = h("div", { className: "overlay" }, overlay ? overlay({ width, height, points: [pw, ph] }) : []);
+      // Overlays are laid out in `cqw` (1% of the sheet's width), so the
+      // sheet is 100 wide and they scale with the card.
+      const layer = h("div", { className: "overlay" }, overlay ? overlay({ width: 100, height: (100 * ph) / pw, points: [pw, ph] }) : []);
       const sheet = h(
         "div",
         {
           className: "sheet",
-          style: { width: `${width}px`, height: `${height}px`, ...(part ? { "--part": part } : {}) },
+          style: { ...sheetStyle(pw, ph), ...(part ? { "--part": part } : {}) },
           onClick: (event) => {
             if (onSheetClick) {
               const box = sheet.getBoundingClientRect();

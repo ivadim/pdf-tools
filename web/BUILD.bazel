@@ -6,8 +6,12 @@ web_site(
     srcs = [
         "app.js",
         "engine.js",
+        "icon-192.png",
+        "icon-512.png",
         "index.html",
+        "manifest.webmanifest",
         "style.css",
+        "sw.js",
         "tools.js",
         "ui.js",
         "wasi.js",

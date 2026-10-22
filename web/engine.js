@@ -68,7 +68,8 @@ export class Pdf {
     this.info = null;
     /** page → Promise<{bitmap, width, height, points}> */
     this.thumbs = new Map();
-    this.thumbWidth = Math.round(150 * Math.min(2, window.devicePixelRatio || 1));
+    // Cards grow to about 260 px on wide screens; render sharp enough for that.
+    this.thumbWidth = Math.round(240 * Math.min(2, window.devicePixelRatio || 1));
     this.closed = false;
   }
 
