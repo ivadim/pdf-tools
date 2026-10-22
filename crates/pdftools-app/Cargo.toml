@@ -41,5 +41,5 @@ winresource = "0.1"
 [dev-dependencies]
 iced_test = "0.14"
 # For examples/render_icons.rs (resvg is already built for iced's SVG icons).
-resvg = "0.45"
+resvg = "0.48"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "ico"] }
