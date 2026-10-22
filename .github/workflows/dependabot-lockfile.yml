@@ -2,8 +2,13 @@ name: Dependabot lockfile
 
 # Bazel records the resolved Rust crates and modules in MODULE.bazel.lock, and
 # CI rejects a stale lock. Dependabot only updates Cargo.lock and MODULE.bazel,
-# so on its pull requests this refreshes MODULE.bazel.lock, commits it, and
-# starts CI again on the new commit (pushes made with GITHUB_TOKEN don't).
+# so on its pull requests this refreshes MODULE.bazel.lock and commits it.
+#
+# Two jobs keep the write token away from the updated dependencies: the first
+# runs Bazel on the pull request with read-only access and hands over only the
+# lock file; the second can write, but runs nothing from the pull request. It
+# commits through the API and starts CI on the new commit (pushes made with
+# GITHUB_TOKEN don't start workflows themselves).
 
 on:
   pull_request:
@@ -26,30 +31,64 @@ jobs:
     if: github.event.pull_request.user.login == 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
-      contents: write # push the refreshed lock to the Dependabot branch
-      actions: write # start CI on that commit
+      contents: read
+    outputs:
+      changed: ${{ steps.lock.outputs.changed }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          persist-credentials: true # zizmor: ignore[artipacked] the job pushes a commit
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      # No caches: nothing from the updated dependencies is saved for other runs.
       - uses: bazel-contrib/setup-bazel@104e3eea9447cdaa4b00d0fb46191a3985d26ab3 # 0.19.1
-        with:
-          bazelisk-cache: true
-          repository-cache: true
       - name: Refresh the lock
-        run: bazel build --nobuild --lockfile_mode=update //...
-      - name: Commit and restart CI
-        env:
-          BRANCH: ${{ github.event.pull_request.head.ref }}
-          GH_TOKEN: ${{ github.token }}
+        id: lock
         run: |
+          bazel build --nobuild --lockfile_mode=update //...
           if git diff --quiet MODULE.bazel.lock; then
             echo "MODULE.bazel.lock is up to date."
-            exit 0
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Update MODULE.bazel.lock" MODULE.bazel.lock
-          git push origin "HEAD:refs/heads/$BRANCH"
+      - if: steps.lock.outputs.changed == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: module-bazel-lock
+          path: MODULE.bazel.lock
+          retention-days: 1
+
+  commit:
+    name: Commit MODULE.bazel.lock
+    needs: refresh
+    if: needs.refresh.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # commit the lock to the Dependabot branch
+      actions: write # start CI on that commit
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: module-bazel-lock
+          path: lock
+      - name: Commit and restart CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # One commit on top of the pull request's head, changing only the lock.
+          base64 -w0 lock/MODULE.bazel.lock > lock.b64
+          blob=$(jq -n --rawfile content lock.b64 '{content: $content, encoding: "base64"}' |
+            gh api "repos/$REPO/git/blobs" --input - --jq .sha)
+          base_tree=$(gh api "repos/$REPO/git/commits/$HEAD_SHA" --jq .tree.sha)
+          tree=$(jq -n --arg base "$base_tree" --arg blob "$blob" \
+            '{base_tree: $base, tree: [{path: "MODULE.bazel.lock", mode: "100644", type: "blob", sha: $blob}]}' |
+            gh api "repos/$REPO/git/trees" --input - --jq .sha)
+          commit=$(jq -n --arg tree "$tree" --arg parent "$HEAD_SHA" \
+            '{message: "Update MODULE.bazel.lock", tree: $tree, parents: [$parent]}' |
+            gh api "repos/$REPO/git/commits" --input - --jq .sha)
+          # Not forced: fails if the branch moved on since this run started.
+          gh api -X PATCH "repos/$REPO/git/refs/heads/$BRANCH" -f sha="$commit" -F force=false --silent
           gh workflow run ci.yml --ref "$BRANCH"
