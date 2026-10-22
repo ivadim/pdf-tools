@@ -1,0 +1,15 @@
+# Advisories reported against Cargo.lock that don't affect PDF Tools, with why.
+# OSV-Scanner (and the OpenSSF Scorecard, which uses it) read this file;
+# cargo-deny in CI applies its own policy from deny.toml.
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0253"
+reason = "lru is only reachable through iced's wgpu renderer (cryoglyph), which is disabled; it is in Cargo.lock but never built. The bug also needs a key whose Drop panics, caught with catch_unwind."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0206"
+reason = "Informational (unmaintained), not a vulnerability. rustybuzz comes in through iced's SVG renderer (usvg); it goes once iced moves off it."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0192"
+reason = "Informational (unmaintained), not a vulnerability. ttf-parser comes in through iced's text stack (fontdb, cosmic-text); it goes once iced moves off it."

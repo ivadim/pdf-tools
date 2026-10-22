@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping. Bug reports, ideas and pull requests are all welcome.
+Thanks for helping. Bug reports, ideas and pull requests are all welcome. Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Reporting bugs and asking for features
 
