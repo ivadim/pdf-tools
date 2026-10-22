@@ -11,7 +11,7 @@ publish.workspace = true
 [dependencies]
 pdftools-core.workspace = true
 hayro = { version = "0.8", default-features = false, features = ["embed-fonts", "simd"] }
-parley = "0.11"
+parley = "0.12"
 swash = "0.2"
 tiny-skia = "0.12"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
@@ -19,4 +19,4 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg"]
 # Loads fontconfig when it's first needed rather than linking it, so building
 # for Linux needs nothing from the host system.
 [target.'cfg(target_os = "linux")'.dependencies]
-fontique = { version = "0.11", default-features = false, features = ["fontconfig-dlopen"] }
+fontique = { version = "0.12", default-features = false, features = ["fontconfig-dlopen"] }

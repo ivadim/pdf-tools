@@ -202,14 +202,14 @@ mod tests {
 
     #[test]
     fn perms_entry_is_encrypted_with_the_file_key() {
-        use aes::cipher::{BlockDecrypt, KeyInit};
+        use aes::cipher::{BlockCipherDecrypt, KeyInit};
         let mut doc = sample("a", 1);
         let key = [7u8; 32];
         let protection = Protection { allow_copy: false, ..Protection::with_password("open") };
         protect_with_key(&mut doc, &protection, &key).unwrap();
         let dict = doc.get_encrypted().unwrap();
         let perms = dict.get(b"Perms").and_then(Object::as_str).unwrap();
-        let mut block = aes::Block::clone_from_slice(perms);
+        let mut block = aes::Block::try_from(perms).unwrap();
         aes::Aes256::new(&key.into()).decrypt_block(&mut block);
         let p = dict.get(b"P").and_then(Object::as_i64).unwrap() as i32;
         assert_eq!(&block[..4], &p.to_le_bytes());
