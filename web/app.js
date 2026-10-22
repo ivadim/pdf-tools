@@ -3,7 +3,7 @@
 
 import { ready, Pdf, put } from "./engine.js";
 import { TOOLS, fileColor } from "./tools.js";
-import { h, icon, pageCard, zoom, pickFiles, download } from "./ui.js";
+import { h, icon, pageCard, sheetStyle, zoom, pickFiles, download } from "./ui.js";
 
 const main = document.getElementById("main");
 const nav = document.getElementById("nav");
@@ -30,35 +30,95 @@ function navButton(iconName, label, active, onClick) {
   return h("button", { type: "button", className: active ? "active" : "", onClick }, icon(iconName), label);
 }
 
-function showHome(message) {
+function showHome(message, { push = true } = {}) {
   current = null;
-  history.replaceState(null, "", location.pathname);
-  renderNav();
+  setRoute(null, push);
   main.replaceChildren(
     ...[
-    h("h1", {}, "PDF Tools"),
-    h("p", { className: "subtitle" }, "Everything runs in this tab; nothing is uploaded."),
+    h("header", { className: "page-head" }, h("h1", {}, "PDF Tools"), h("p", { className: "subtitle" }, "Everything runs on this device; nothing is uploaded.")),
     sharedPdf ? h("div", { className: "notice" }, `${sharedPdf.name} is open. Choose what to do with it.`) : null,
     typeof message === "string" ? h("div", { className: "notice" }, message) : null,
     h(
       "div",
       { className: "home" },
       TOOLS.map((tool) =>
-        h("button", { type: "button", onClick: () => openTool(tool) }, icon(tool.icon), h("strong", {}, tool.name), h("span", { className: "desc" }, tool.desc)),
+        h(
+          "button",
+          { type: "button", onClick: () => openTool(tool) },
+          h("span", { className: "tile-icon" }, icon(tool.icon)),
+          h("span", { className: "tile-text" }, h("strong", {}, tool.name), h("span", { className: "desc" }, tool.desc)),
+        ),
       ),
     ),
     ].filter(Boolean),
   );
 }
 
+// ── Navigation ─────────────────────────────────────────────────────────
+
+const back = document.getElementById("back");
+const barTitle = document.getElementById("bar-title");
+const menuButton = document.getElementById("menu");
+const scrim = document.getElementById("scrim");
+
+/** Each tool gets a history entry, so Back (browser, phone gesture or app bar) returns home. */
+function setRoute(tool, push) {
+  const url = tool ? `#${tool.id}` : location.pathname + location.search;
+  if (push && location.hash !== (tool ? `#${tool.id}` : "")) history.pushState({ fromHome: main.dataset.view === "home" }, "", url);
+  else history.replaceState(history.state, "", url);
+  document.title = tool ? `${tool.name} · PDF Tools` : "PDF Tools";
+  barTitle.textContent = tool ? tool.name : "PDF Tools";
+  back.hidden = !tool;
+  document.getElementById("bar-logo").hidden = Boolean(tool);
+  main.dataset.view = tool ? "tool" : "home";
+  document.body.classList.remove("has-actions");
+  setMenu(false);
+  renderNav();
+  window.scrollTo(0, 0);
+}
+
+window.addEventListener("popstate", () => {
+  const tool = TOOLS.find((t) => t.id === location.hash.slice(1));
+  if (tool) openTool(tool, { push: false });
+  else showHome(undefined, { push: false });
+});
+
+back.addEventListener("click", () => {
+  // Return to the home entry this tool was opened from, if there is one.
+  if (history.state?.fromHome) history.back();
+  else showHome();
+});
+
+// The options can be collapsed on small screens; wide layouts always show them.
+matchMedia("(min-width: 900px)").addEventListener("change", (event) => {
+  if (event.matches) for (const panel of document.querySelectorAll("details.panel")) panel.open = true;
+  setMenu(false);
+});
+
+function setMenu(open) {
+  document.body.classList.toggle("menu-open", open);
+  menuButton.setAttribute("aria-expanded", String(open));
+  scrim.hidden = !open;
+}
+menuButton.addEventListener("click", () => setMenu(!document.body.classList.contains("menu-open")));
+scrim.addEventListener("click", () => setMenu(false));
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") setMenu(false);
+});
+
 // ── Opening a tool ─────────────────────────────────────────────────────
 
 let nextImage = 0;
 
-function openTool(tool) {
+function openTool(tool, { push = true } = {}) {
   const state = { tool, pdf: null, files: [], items: [], opts: {}, result: null, error: null, busy: false };
-  const pagesBox = h("div");
-  const panelBox = h("div", { className: "panel" });
+  const pagesBox = h("div", { className: "workspace" });
+  const optionsBox = h("div", { className: "options" });
+  // Collapsible on small screens, where the options sit above the pages.
+  const panelBox = h("details", { className: "panel", open: true }, h("summary", {}, "Options"), optionsBox);
+  const actionsBox = h("div", { className: "actions", hidden: true });
+  // On small screens the actions are pinned over the page; leave room for them.
+  new ResizeObserver(() => document.documentElement.style.setProperty("--actions-h", `${actionsBox.offsetHeight}px`)).observe(actionsBox);
   const ctx = {
     tool,
     state,
@@ -83,15 +143,20 @@ function openTool(tool) {
     },
     pagesBox,
     panelBox,
+    optionsBox,
+    footer: actionsBox,
   };
   if (tool.kind) state.opts = tool.defaults(state);
   current = ctx;
-  history.replaceState(null, "", `#${tool.id}`);
-  renderNav();
+  setRoute(tool, push);
   main.replaceChildren(
-    h("h1", {}, tool.name),
-    h("p", { className: "subtitle" }, tool.desc),
-    h("div", { className: "tool" }, pagesBox, panelBox),
+    h(
+      "div",
+      { className: "tool" },
+      h("header", { className: "page-head" }, h("h1", {}, tool.name), h("p", { className: "subtitle" }, tool.desc)),
+      pagesBox,
+      h("div", { className: "side" }, panelBox, actionsBox),
+    ),
   );
   if (!tool.kind && sharedPdf) usePdf(ctx, sharedPdf);
   else if (tool.kind === "merge" && sharedPdf && !sharedPdf.locked) {
@@ -107,8 +172,9 @@ function usePdf(ctx, pdf) {
   state.pdf = pdf;
   state.result = state.error = null;
   state.items = [];
+  // Before the pages are drawn: drawing checks the options.
+  state.opts = !pdf.locked || tool.allowLocked ? tool.defaults(state) : {};
   ctx.resetItems();
-  if (!pdf.locked || tool.allowLocked) state.opts = tool.defaults(state);
 }
 
 async function addFiles(ctx, files) {
@@ -153,8 +219,9 @@ function draw(ctx, { panel }) {
   const hasInput = tool.kind ? state.items.length || state.files.length : state.pdf;
   ctx.pagesBox.replaceChildren(...(hasInput ? pagesView(ctx) : [dropZone(ctx)]));
   if (panel) {
-    const options = hasInput && (!state.pdf?.locked || tool.allowLocked) ? tool.panel(ctx) : [];
-    ctx.panelBox.replaceChildren(...options.flat().filter(Boolean), (ctx.footer = h("div", { className: "footer" })));
+    const options = hasInput && (!state.pdf?.locked || tool.allowLocked) ? tool.panel(ctx).flat().filter(Boolean) : [];
+    ctx.optionsBox.replaceChildren(...options);
+    ctx.panelBox.hidden = !options.length;
   }
   drawFooter(ctx, hasInput);
 }
@@ -166,7 +233,7 @@ function dropZone(ctx) {
     "div",
     {},
     state.error ? h("p", { className: "error" }, state.error) : null,
-    h("div", { className: "drop", onClick: () => ctx.addFiles() }, h("strong", {}, `Choose ${what}`), "or drop them anywhere on this page"),
+    h("div", { className: "drop", onClick: () => ctx.addFiles() }, h("strong", {}, `Choose ${what}`), h("span", { className: "drop-hint" }, "or drop them anywhere on this page")),
   );
 }
 
@@ -288,26 +355,27 @@ function pdfCard(ctx, item, index) {
 function imageCard(ctx, item, index) {
   const { state, tool } = ctx;
   const layout = tool.layout(state.opts, item);
-  const scale = Math.min(170 / layout.page[0], 200 / layout.page[1]);
-  const [pw, ph] = [layout.page[0] * scale, layout.page[1] * scale];
+  const [pw, ph] = layout.page;
+  // The image's box before it's turned, as a share of the page.
   const quarter = item.rotation % 180 === 90;
-  const [w, hgt] = [layout.width * scale, layout.height * scale];
+  const [bw, bh] = quarter ? [layout.height, layout.width] : [layout.width, layout.height];
   const img = h("img", {
     src: item.url,
+    alt: "",
     style: {
       position: "absolute",
-      width: `${quarter ? hgt : w}px`,
-      height: `${quarter ? w : hgt}px`,
-      left: `${(pw - (quarter ? hgt : w)) / 2}px`,
-      top: `${(ph - (quarter ? w : hgt)) / 2}px`,
+      width: `${(bw / pw) * 100}%`,
+      height: `${(bh / ph) * 100}%`,
+      left: `${((pw - bw) / 2 / pw) * 100}%`,
+      top: `${((ph - bh) / 2 / ph) * 100}%`,
       transform: `rotate(${item.rotation}deg)`,
     },
   });
   return h(
     "div",
     { className: "card" },
-    h("div", { className: "thumb" }, h("div", { className: "sheet", style: { width: `${pw}px`, height: `${ph}px`, cursor: "default" } }, img)),
-    h("div", { className: "label", title: item.name }, item.name.length > 22 ? `${item.name.slice(0, 20)}…` : item.name),
+    h("div", { className: "thumb" }, h("div", { className: "sheet still", style: sheetStyle(pw, ph) }, img)),
+    h("div", { className: "label", title: item.name }, h("span", { className: "name" }, item.name)),
     h(
       "div",
       { className: "controls" },
@@ -321,19 +389,13 @@ function imageCard(ctx, item, index) {
 }
 
 const iconBtn = (name, title, onClick, disabled = false) =>
-  h("button", { type: "button", className: "icon-button", title, disabled, onClick }, icon(name));
+  h("button", { type: "button", className: "icon-button", title, ariaLabel: title, disabled, onClick }, icon(name));
 
 function drawFooter(ctx, hasInput) {
   const { state, tool } = ctx;
-  if (!ctx.footer) return;
-  if (!hasInput) {
-    fill(ctx.footer, h("p", { className: "status" }, tool.kind === "images" ? "Add images to begin." : "Choose a file to begin."));
-    return;
-  }
-  if (state.pdf?.locked && !tool.allowLocked) {
-    fill(ctx.footer, );
-    return;
-  }
+  ctx.footer.hidden = !hasInput || (state.pdf?.locked && !tool.allowLocked);
+  document.body.classList.toggle("has-actions", !ctx.footer.hidden);
+  if (ctx.footer.hidden) return;
   const problem = state.busy ? null : tool.problem(ctx);
   const button = h("button", { type: "button", className: "primary", disabled: Boolean(problem) || state.busy, onClick: () => runTool(ctx) }, state.busy ? "Working…" : `Run ${tool.name}`);
   fill(ctx.footer, 
@@ -398,10 +460,14 @@ document.addEventListener("dragover", (event) => {
 document.addEventListener("dragleave", (event) => {
   if (!event.relatedTarget) document.body.classList.remove("dragging");
 });
-document.addEventListener("drop", async (event) => {
+document.addEventListener("drop", (event) => {
   event.preventDefault();
   document.body.classList.remove("dragging");
-  const files = [...event.dataTransfer.files];
+  openFiles([...event.dataTransfer.files]);
+});
+
+/** Files dropped on the page or opened with the installed app. */
+async function openFiles(files) {
   if (!files.length) return;
   if (!current) {
     if (files.every(isImage)) openTool(TOOLS.find((t) => t.id === "images"));
@@ -419,7 +485,40 @@ document.addEventListener("drop", async (event) => {
     }
   }
   current.addFiles(files);
+}
+
+// ── Installing as an app ───────────────────────────────────────────────
+
+if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  navigator.serviceWorker.register("sw.js").catch((error) => console.warn("No offline support:", error));
+}
+
+// Chrome and Edge offer installing; the sidebar shows a button while they do.
+const install = document.getElementById("install");
+let installPrompt = null;
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  installPrompt = event;
+  install.hidden = false;
 });
+install.addEventListener("click", async () => {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  await installPrompt.userChoice;
+  installPrompt = null;
+  install.hidden = true;
+});
+window.addEventListener("appinstalled", () => (install.hidden = true));
+
+// PDFs and images opened with the installed app (its file handlers).
+if ("launchQueue" in window) {
+  window.launchQueue.setConsumer(async (params) => {
+    if (!params.files?.length) return;
+    const files = await Promise.all(params.files.map((handle) => handle.getFile()));
+    await ready;
+    openFiles(files);
+  });
+}
 
 document.getElementById("brand").addEventListener("click", () => showHome());
 

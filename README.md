@@ -8,6 +8,8 @@ Everything runs locally; files never leave your computer.
 
 It is a single native executable, about 10 MB, with no web view and no runtime to install. Idle, it uses about 40 MB of memory.
 
+**Try it in your browser: [ivadim.github.io/pdf-tools](https://ivadim.github.io/pdf-tools/)** (experimental). The same PDF engine runs as WebAssembly, so files still never leave your computer. In Chrome or Edge you can install it as an app (the install icon in the address bar, or *Install app* in the sidebar) to pin it to your desktop or dock and open PDFs with it; it then works offline too.
+
 ![PDF Tools home screen with all thirteen tools](docs/screenshots/home.png)
 
 <details>
@@ -19,7 +21,9 @@ It is a single native executable, about 10 MB, with no web view and no runtime t
 
 ## Download
 
-Get the latest build for your system from [Releases](https://github.com/ivadim/pdf-tools/releases):
+**In the browser:** open [ivadim.github.io/pdf-tools](https://ivadim.github.io/pdf-tools/). Nothing to install, or install it as an app from Chrome or Edge.
+
+**Desktop app:** get the latest build for your system from [Releases](https://github.com/ivadim/pdf-tools/releases):
 
 | System | File | How to run |
 | --- | --- | --- |

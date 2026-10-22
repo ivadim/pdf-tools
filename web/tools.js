@@ -490,8 +490,8 @@ const numbers = {
         const last = opts.start + stamped.length - 1;
         const text = opts.format.replaceAll("{n}", opts.start + index).replaceAll("{total}", last);
         const [v, hz] = opts.position.split("-");
-        const style = { fontSize: `${opts.size * scale}px`, color: opts.color };
-        const margin = `${opts.margin * scale}px`;
+        const style = { fontSize: `${opts.size * scale}cqw`, color: opts.color };
+        const margin = `${opts.margin * scale}cqw`;
         style[v === "top" ? "top" : "bottom"] = margin;
         if (hz === "center") Object.assign(style, { left: "50%", transform: "translateX(-50%)" });
         else style[hz] = margin;
@@ -533,10 +533,10 @@ function stampOverlay(opts, picture, { width, height, points }) {
       className: "stamp",
       src: picture.url,
       style: {
-        width: `${w * scale}px`,
-        height: `${hgt * scale}px`,
-        left: `${(cx - w / 2) * scale}px`,
-        top: `${(cy - hgt / 2) * scale}px`,
+        width: `${w * scale}cqw`,
+        height: `${hgt * scale}cqw`,
+        left: `${(cx - w / 2) * scale}cqw`,
+        top: `${(cy - hgt / 2) * scale}cqw`,
         opacity: opts.opacity,
         transform: `rotate(${-opts.angle}deg)`,
         mixBlendMode: opts.under ? "multiply" : "normal",
@@ -832,7 +832,7 @@ const signature = {
               "div",
               {
                 className: "placed",
-                style: { left: `${box.x * width}px`, top: `${box.y * height}px`, width: `${box.width * width}px`, height: `${box.height * height}px` },
+                style: { left: `${box.x * width}cqw`, top: `${box.y * height}cqw`, width: `${box.width * width}cqw`, height: `${box.height * height}cqw` },
                 onClick: (e) => e.stopPropagation(),
               },
               h("img", { src: opts.picture.url }),
@@ -841,12 +841,13 @@ const signature = {
             el.addEventListener("pointerdown", (e) => {
               if (e.target.tagName === "BUTTON") return;
               el.setPointerCapture(e.pointerId);
+              const sheet = el.parentElement.getBoundingClientRect();
               const start = [e.clientX, e.clientY, placement.cx, placement.cy];
               const move = (m) => {
-                placement.cx = start[2] + (m.clientX - start[0]) / width;
-                placement.cy = start[3] + (m.clientY - start[1]) / height;
+                placement.cx = start[2] + (m.clientX - start[0]) / sheet.width;
+                placement.cy = start[3] + (m.clientY - start[1]) / sheet.height;
                 const b = this.box(opts, placement, points);
-                Object.assign(el.style, { left: `${b.x * width}px`, top: `${b.y * height}px` });
+                Object.assign(el.style, { left: `${b.x * width}cqw`, top: `${b.y * height}cqw` });
               };
               el.addEventListener("pointermove", move);
               el.addEventListener("pointerup", () => el.removeEventListener("pointermove", move), { once: true });
