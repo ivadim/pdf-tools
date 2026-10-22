@@ -261,7 +261,10 @@ jobs:
           test -f "$volume/PDF Tools.app/Contents/Resources/AppIcon.icns"
           test -L "$volume/Applications"
           codesign --verify --deep "$volume/PDF Tools.app"
-          hdiutil detach "$volume"
+          # Spotlight may still be indexing the new volume ("Resource busy"):
+          # retry, then force.
+          for _ in 1 2 3 4 5; do hdiutil detach "$volume" && exit 0; sleep 3; done
+          hdiutil detach -force "$volume"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
