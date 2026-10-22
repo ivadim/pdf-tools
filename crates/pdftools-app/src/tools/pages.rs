@@ -284,7 +284,10 @@ impl ToolOptions for Split {
         let split: Vec<SplitPart> = parts
             .iter()
             .enumerate()
-            .map(|(i, pages)| SplitPart { pages: specs(pages), output: folder.join(format!("{base}-{}.pdf", i + 1)) })
+            .map(|(i, pages)| SplitPart {
+                pages: specs(pages),
+                output: folder.join(pdftools_core::split_output_filename(&base, i + 1, parts.len())),
+            })
             .collect();
         let existing: Vec<String> = split.iter().filter(|p| p.output.exists()).map(|p| file_name(&p.output)).collect();
         if !existing.is_empty() {
