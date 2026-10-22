@@ -104,7 +104,7 @@ pub(crate) fn decode_image(doc: &Document, stream: &Stream) -> Option<DecodedIma
         1 => (DynamicImage::ImageLuma8(GrayImage::from_raw(width, height, data.to_vec())?), false),
         3 => (DynamicImage::ImageRgb8(RgbImage::from_raw(width, height, data.to_vec())?), false),
         4 => {
-            let rgb = data.chunks_exact(4).flat_map(|p| cmyk_to_rgb(p[0], p[1], p[2], p[3])).collect();
+            let rgb = data.as_chunks::<4>().0.iter().flat_map(|p| cmyk_to_rgb(p[0], p[1], p[2], p[3])).collect();
             (DynamicImage::ImageRgb8(RgbImage::from_raw(width, height, rgb)?), true)
         }
         _ => return None,

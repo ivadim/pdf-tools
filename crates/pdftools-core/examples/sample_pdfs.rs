@@ -6,8 +6,10 @@ use std::path::PathBuf;
 
 use lopdf::{dictionary, Document, Object, Stream};
 
-/// (file name, page count, page size in points, background colour).
-const SAMPLES: [(&str, usize, (i64, i64), (f32, f32, f32)); 4] = [
+/// File name, page count, page size in points, background colour.
+type Sample = (&'static str, usize, (i64, i64), (f32, f32, f32));
+
+const SAMPLES: [Sample; 4] = [
     ("chapter-1.pdf", 3, (595, 842), (0.85, 0.90, 1.0)),
     ("chapter-2.pdf", 5, (595, 842), (1.0, 0.88, 0.86)),
     ("chapter-10.pdf", 2, (595, 842), (0.86, 0.96, 0.89)),

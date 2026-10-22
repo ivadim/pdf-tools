@@ -284,7 +284,7 @@ impl Merge {
             Msg::Unlock(i) => return self.entries.get(i).map(|e| Effect::Unlock(e.path.clone())),
             Msg::Tile(index, event) => {
                 let ordered = self.ordered();
-                let Some(page) = ordered.get(index).cloned() else { return None };
+                let page = ordered.get(index).cloned()?;
                 let key = self.key_of(&page);
                 match event {
                     TileEvent::Shown => return Some(Effect::Render(self.request(&page, THUMB_WIDTH))),

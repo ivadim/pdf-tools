@@ -44,3 +44,10 @@ try-import %workspace%/user.bazelrc
 
 # CI: fail rather than quietly update a stale MODULE.bazel.lock.
 common:ci --lockfile_mode=error
+
+# Lints: `bazel build --config=clippy //...` runs Clippy on our crates and
+# fails on any warning (settings in clippy.toml; third-party crates are skipped).
+build --@rules_rust//rust/settings:clippy.toml=//:clippy.toml
+build:clippy --aspects=@rules_rust//rust:defs.bzl%rust_clippy_aspect
+build:clippy --output_groups=+clippy_checks
+build:clippy --@rules_rust//rust/settings:clippy_flag=-Dwarnings

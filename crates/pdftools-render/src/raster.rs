@@ -206,7 +206,7 @@ mod tests {
     use super::*;
 
     fn inked(p: &Picture) -> usize {
-        p.pixels.chunks_exact(4).filter(|px| px[3] > 0).count()
+        p.pixels.as_chunks::<4>().0.iter().filter(|px| px[3] > 0).count()
     }
 
     #[test]
@@ -267,7 +267,9 @@ pub fn rotate_picture(picture: &Picture, degrees: f32) -> Picture {
     // tiny-skia wants premultiplied pixels.
     let premultiplied: Vec<u8> = picture
         .pixels
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .flat_map(|p| {
             let a = p[3] as u16;
             [(p[0] as u16 * a / 255) as u8, (p[1] as u16 * a / 255) as u8, (p[2] as u16 * a / 255) as u8, p[3]]
@@ -302,7 +304,7 @@ mod rotate_tests {
         assert_eq!((quarter.width, quarter.height), (10, 40));
         let tilted = rotate_picture(&picture, 45.0);
         assert_eq!(tilted.width, tilted.height);
-        assert!(tilted.pixels.chunks_exact(4).any(|p| p[3] == 0), "corners are transparent");
+        assert!(tilted.pixels.as_chunks::<4>().0.iter().any(|p| p[3] == 0), "corners are transparent");
         assert_eq!(rotate_picture(&picture, 0.0), picture);
     }
 }

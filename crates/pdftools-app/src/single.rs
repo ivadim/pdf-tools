@@ -28,6 +28,7 @@ impl Loaded {
 }
 
 #[derive(Debug, Clone, Default)]
+#[expect(clippy::large_enum_variant, reason = "one per open tool; boxing would only add indirection")]
 pub enum FileState {
     #[default]
     Empty,
@@ -39,6 +40,9 @@ pub enum FileState {
         locked: bool,
     },
 }
+
+/// A button above the page grid: (label, icon, action).
+pub type GridAction = (&'static str, fn() -> Handle, &'static str);
 
 /// Work done off the UI thread: a message for the run bar and the file
 /// written, or what went wrong.
@@ -115,8 +119,8 @@ pub trait ToolOptions {
         false
     }
 
-    /// Buttons above the page grid: (label, icon, action).
-    fn grid_actions(&self) -> Vec<(&'static str, fn() -> Handle, &'static str)> {
+    /// Buttons above the page grid.
+    fn grid_actions(&self) -> Vec<GridAction> {
         Vec::new()
     }
 

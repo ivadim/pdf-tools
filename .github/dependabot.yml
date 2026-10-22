@@ -1,0 +1,46 @@
+# Weekly dependency updates, grouped so minor and patch bumps arrive as one
+# pull request per ecosystem. New releases wait a week first (most hijacked
+# packages are caught within days); security updates are separate and immediate.
+# Rust and Bazel updates also need MODULE.bazel.lock refreshed; the
+# "Dependabot lockfile" workflow does that on their pull requests.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      rust:
+        update-types: [minor, patch]
+
+  - package-ecosystem: bazel
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      bazel:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      web-lint:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        update-types: [minor, patch]

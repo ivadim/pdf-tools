@@ -99,10 +99,10 @@ export function anchorPicker(value, onChange, { middle = true } = {}) {
 }
 
 /** Where a w×h box goes on a page at `anchor`, `margin` from the edges; its centre. */
-export function place(anchor, pageW, pageH, w, h, margin) {
+export function place(anchor, pageW, pageH, w, height, margin) {
   const [v, hz] = anchor.split("-");
   const x = hz === "left" ? margin + w / 2 : hz === "right" ? pageW - margin - w / 2 : pageW / 2;
-  const y = v === "top" ? margin + h / 2 : v === "bottom" ? pageH - margin - h / 2 : pageH / 2;
+  const y = v === "top" ? margin + height / 2 : v === "bottom" ? pageH - margin - height / 2 : pageH / 2;
   return [x, y];
 }
 

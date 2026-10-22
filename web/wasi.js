@@ -77,7 +77,6 @@ export function runCommand(module, args, fs) {
     [PREOPEN_FD, { kind: "dir", path: "/" }],
   ]);
   let nextFd = PREOPEN_FD + 1;
-  let memory;
   const view = () => new DataView(memory.buffer);
   const bytes = () => new Uint8Array(memory.buffer);
   const encoder = new TextEncoder();
@@ -287,7 +286,7 @@ export function runCommand(module, args, fs) {
   // Anything else the module might import fails cleanly instead of linking errors.
   const imports = new Proxy(wasi, { get: (target, name) => target[name] ?? (() => E.NOSYS) });
   const instance = new WebAssembly.Instance(module, { wasi_snapshot_preview1: imports });
-  memory = instance.exports.memory;
+  const memory = instance.exports.memory;
 
   let code = 0;
   try {

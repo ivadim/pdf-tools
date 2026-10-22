@@ -8,6 +8,8 @@ edition = "2021"
 license = "MIT"
 authors = ["Dmitry Ivanov"]
 repository = "https://github.com/ivadim/pdf-tools"
+# Applications, not libraries for crates.io.
+publish = false
 
 [workspace.dependencies]
 pdftools-core = { path = "crates/pdftools-core" }

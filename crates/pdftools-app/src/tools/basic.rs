@@ -223,7 +223,7 @@ impl ToolOptions for Rotate {
         }
     }
 
-    fn grid_actions(&self) -> Vec<(&'static str, fn() -> iced::widget::svg::Handle, &'static str)> {
+    fn grid_actions(&self) -> Vec<crate::single::GridAction> {
         vec![
             ("Rotate all left", icons::rotate_ccw, "rotate-all-left"),
             ("Rotate all right", icons::rotate_cw, "rotate-all-right"),
