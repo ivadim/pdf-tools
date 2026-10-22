@@ -345,7 +345,7 @@ fn split(args: &Args) -> Result<String, String> {
     let mut parts = Vec::new();
     for (i, group) in groups.iter().enumerate() {
         let pages = pdftools_render::ranges::parse_groups(group, total)?.into_iter().flatten().map(|p| PageSpec::new(0, p)).collect();
-        parts.push(SplitPart { pages, output: dir.join(format!("{base}-{}.pdf", i + 1)) });
+        parts.push(SplitPart { pages, output: dir.join(pdftools_core::split_output_filename(base, i + 1, groups.len())) });
     }
     let count = split_file(&input, &parts, |_| {}).map_err(|e| e.to_string())?;
     let files: Vec<String> = parts.iter().map(|p| json_string(&p.output.to_string_lossy())).collect();
