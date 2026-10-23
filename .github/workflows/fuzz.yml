@@ -12,6 +12,7 @@ on:
       - crates/pdftools-render/**
       - fuzz/**
       - Cargo.lock
+      - third_party/patches/**
       - .github/workflows/fuzz.yml
   schedule:
     - cron: "23 4 * * 3"
@@ -32,11 +33,6 @@ jobs:
     name: Fuzz (${{ matrix.target }})
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    # hayro 0.8.0 panics on colour values with the wrong number of components
-    # (https://github.com/LaurenzV/hayro/issues/1546, fixed on its main but
-    # not released), so render failures don't fail the run until we update
-    # hayro. Crashing inputs are still uploaded.
-    continue-on-error: ${{ matrix.target == 'render' }}
     permissions:
       contents: read
     strategy:
@@ -67,6 +63,8 @@ jobs:
           # The app's own lock file, so the fuzzers test the dependency
           # versions that ship; only the fuzzing crates are resolved here.
           cp ../Cargo.lock Cargo.lock
+          # Unreleased fixes to dependencies, as the Bazel build applies them.
+          ./patch-crates.sh
           cargo +nightly fuzz build "$TARGET"
       - name: Fuzz
         working-directory: fuzz

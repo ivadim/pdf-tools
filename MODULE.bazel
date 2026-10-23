@@ -55,6 +55,16 @@ crate.from_cargo(
     "x11-dl",
 ]]
 
+# hayro-interpret 0.8.0 panics on malformed RGB colours and images (found by
+# the render fuzz target); the patch returns "can't convert" instead. Remove
+# once a hayro release includes it. fuzz/patch-crates.sh applies the same patch.
+crate.annotation(
+    crate = "hayro-interpret",
+    patch_args = ["-p1"],
+    patches = ["//third_party/patches:hayro-interpret-rgb-length.patch"],
+    version = "0.8.0",
+)
+
 use_repo(crate, "crates")
 
 # Linux builds compile and link with hermetic-llvm: LLVM and its tools are

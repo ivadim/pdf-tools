@@ -16,6 +16,7 @@ rust_test(
     crate = ":pdftools_render",
     data = [
         "//tests/fixtures:encrypted",
+        "//tests/fixtures:fuzz",
         "//tests/fixtures:pdfjs",
     ],
     deps = all_crate_deps(normal_dev = True),

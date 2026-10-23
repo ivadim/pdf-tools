@@ -1,0 +1,14 @@
+--- a/src/color/device_rgb.rs
++++ b/src/color/device_rgb.rs
+@@ -5,6 +5,11 @@
+ 
+ impl ToRgb for DeviceRgb {
+     fn convert(&self, input: &[u8], output: &mut [u8]) -> Option<()> {
++        // pdf-tools patch: malformed colours and images can give a different
++        // number of components; copy_from_slice would panic.
++        if input.len() != output.len() {
++            return None;
++        }
+         output.copy_from_slice(input);
+ 
+         Some(())

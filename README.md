@@ -200,11 +200,12 @@ Fuzzing needs Cargo with a nightly toolchain ([rustup](https://rustup.rs)), not 
 rustup toolchain install nightly
 cargo install cargo-fuzz --locked
 cp Cargo.lock fuzz/ && cd fuzz
+./patch-crates.sh      # dependency fixes from third_party/patches, as Bazel applies them
 cargo +nightly fuzz run render corpus/render ../tests/fixtures/pdfjs -- -max_total_time=300 -timeout=10 -max_len=131072
 cargo +nightly fuzz run render artifacts/render/crash-…     # reproduce a crash
 ```
 
-New inputs go to `fuzz/corpus/<target>` (the `tests/fixtures/pdfjs` seeds are only read) and crashes to `fuzz/artifacts/<target>`. Both are ignored by git.
+New inputs go to `fuzz/corpus/<target>` (the `tests/fixtures/pdfjs` seeds are only read) and crashes to `fuzz/artifacts/<target>`. Both are ignored by git, as is `fuzz/vendor`. Crashes that were fixed are kept in `tests/fixtures/fuzz` as regression tests. A fix to a dependency goes in `third_party/patches`, applied by a `crate.annotation` in `MODULE.bazel` and listed in `fuzz/patch-crates.sh`.
 
 ## Layout
 

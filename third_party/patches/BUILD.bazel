@@ -1,0 +1,3 @@
+# Fixes applied to third-party crates until upstream releases include them
+# (see crate.annotation in MODULE.bazel and fuzz/patch-crates.sh).
+exports_files(glob(["*.patch"]))

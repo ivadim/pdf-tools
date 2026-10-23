@@ -249,6 +249,15 @@ mod tests {
     }
 
     #[test]
+    fn survives_colours_with_the_wrong_number_of_components() {
+        // Found by the render fuzz target: hayro-interpret 0.8.0 panicked
+        // (third_party/patches/hayro-interpret-rgb-length.patch).
+        let path = fixture("sizes.pdf").parent().unwrap().join("../fuzz/render-rgb-length.pdf");
+        let request = PreviewRequest { path, page: 1, width: 64, rotation: 90, gray: true };
+        let _ = render(&request, &DocCache::default());
+    }
+
+    #[test]
     fn rotates_pixels() {
         // 2×1: red, blue.
         let pixels = [255, 0, 0, 255, 0, 0, 255, 255];

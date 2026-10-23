@@ -45,3 +45,8 @@ path = "fuzz_targets/organize.rs"
 test = false
 doc = false
 bench = false
+
+# Third-party crates with fixes that aren't released yet: patch-crates.sh
+# downloads them and applies third_party/patches (as Bazel does).
+[patch.crates-io]
+hayro-interpret = { path = "vendor/hayro-interpret" }

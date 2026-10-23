@@ -9,3 +9,10 @@ filegroup(
     srcs = glob(["encrypted/*.pdf"]),
     visibility = ["//visibility:public"],
 )
+
+# Inputs the fuzzers found crashes with, kept as regression tests.
+filegroup(
+    name = "fuzz",
+    srcs = glob(["fuzz/*.pdf"]),
+    visibility = ["//visibility:public"],
+)
