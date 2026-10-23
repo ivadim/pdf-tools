@@ -18,9 +18,8 @@ final class PDFToolsUITests: XCTestCase {
         runTool(expecting: "Merged 2 files into 16 pages.")
 
         // The result can be renamed before it's shared or saved.
-        tapWhenReady(app.buttons["Rename merged.pdf"])
         let name = app.alerts["Rename"].textFields.firstMatch
-        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        tap(app.buttons["Rename merged.pdf"], until: name, matches: "exists == true")
         // Return confirms, like tapping Rename.
         name.clearAndType("Combined report\n")
         let alert = app.alerts["Rename"]
@@ -130,14 +129,20 @@ final class PDFToolsUITests: XCTestCase {
         let tile = app.buttons["tool.\(id)"]
         XCTAssertTrue(tile.waitForExistence(timeout: 10))
         scrollTo(tile)
-        // A tap while the grid is still gliding from the last swipe only stops
-        // it, so tap again until the tool's screen has replaced the grid.
+        // Done when the tool's screen has replaced the grid.
+        tap(tile, until: tile, matches: "exists == false || isHittable == false")
+    }
+
+    /// Taps `element` until `target` matches `predicate`. The CI's simulators
+    /// sometimes drop a tap: one while a grid is still gliding from a swipe
+    /// only stops it, and some vanish with nothing moving.
+    @MainActor private func tap(_ element: XCUIElement, until target: XCUIElement, matches predicate: String, file: StaticString = #filePath, line: UInt = #line) {
         for _ in 0..<3 {
-            tapWhenReady(tile)
-            let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false || isHittable == false"), object: tile)
-            if XCTWaiter().wait(for: [gone], timeout: 5) == .completed { return }
+            tapWhenReady(element, file: file, line: line)
+            let done = XCTNSPredicateExpectation(predicate: NSPredicate(format: predicate), object: target)
+            if XCTWaiter().wait(for: [done], timeout: 5) == .completed { return }
         }
-        XCTFail("\(tile) didn't open")
+        XCTFail("Tapping \(element) didn't work", file: file, line: line)
     }
 
     /// Waits until `element` exists and can be tapped (the CI's simulators are
