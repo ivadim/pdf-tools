@@ -130,7 +130,14 @@ final class PDFToolsUITests: XCTestCase {
         let tile = app.buttons["tool.\(id)"]
         XCTAssertTrue(tile.waitForExistence(timeout: 10))
         scrollTo(tile)
-        tapWhenReady(tile)
+        // A tap while the grid is still gliding from the last swipe only stops
+        // it, so tap again until the tool's screen has replaced the grid.
+        for _ in 0..<3 {
+            tapWhenReady(tile)
+            let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false || isHittable == false"), object: tile)
+            if XCTWaiter().wait(for: [gone], timeout: 5) == .completed { return }
+        }
+        XCTFail("\(tile) didn't open")
     }
 
     /// Waits until `element` exists and can be tapped (the CI's simulators are
