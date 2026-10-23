@@ -141,6 +141,7 @@ CI runs these on every push and pull request (the dependency checks also weekly)
 | [zizmor](https://docs.zizmor.sh) | The GitHub Actions workflows and Dependabot settings | |
 | npm audit | The web lint tooling | `web/package-lock.json` |
 | [CodeQL](.github/workflows/codeql.yml) | Security analysis of the Rust, JavaScript and workflows, also weekly; results under *Security → Code scanning* | |
+| [Fuzzing](#fuzzing) | Crashes, hangs and memory blow-ups on crafted PDFs when opening, previewing, rotating and splitting; on pull requests that touch the core or renderer, and weekly | `fuzz/` |
 | [OpenSSF Scorecard](.github/workflows/scorecard.yml) | The repository's supply-chain practices (branch protection, pinned actions, token permissions, signed releases), weekly | |
 
 [Dependabot](.github/dependabot.yml) proposes weekly, grouped updates for Rust crates, Bazel modules, the web lint tooling and the workflows' actions (pinned to commit SHAs), after a week's cooldown. Security updates come right away. Bazel keeps the resolved crates in `MODULE.bazel.lock`, so on Dependabot's pull requests a [workflow](.github/workflows/dependabot-lockfile.yml) refreshes that file and re-runs CI. Patch updates [merge on their own](.github/workflows/dependabot-auto-merge.yml) once the required checks pass; minor and major ones wait for a review.
@@ -161,6 +162,30 @@ bazel coverage --combined_report=lcov //...      # coverage, in bazel-out/_cover
 ```
 
 UI tests replace native file dialogs with scripted answers (`ScriptedDialogs`). They run background jobs inline, so results are deterministic.
+
+### Fuzzing
+
+The app opens untrusted files, so `fuzz/` feeds mutated PDFs to the code that reads them with [cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz) (libFuzzer). Any panic, hang or runaway memory use is a bug (see [SECURITY.md](SECURITY.md)).
+
+| Target | What it runs |
+| --- | --- |
+| `load` | `inspect` and `load` in `pdftools-core`, as the tools open a file, including recovery of damaged files |
+| `render` | A page preview through `pdftools-render` (hayro), falling back to the recovered file |
+| `organize` | Rotating every page and splitting off every other page, then saving |
+
+The [Fuzz workflow](.github/workflows/fuzz.yml) runs each target for 3 minutes on pull requests that touch `crates/pdftools-core`, `crates/pdftools-render` or `fuzz/`, and for 30 minutes every week. The weekly runs keep the corpus they grow in the Actions cache. When a run fails, the crashing inputs are uploaded as an artifact.
+
+Fuzzing needs Cargo with a nightly toolchain ([rustup](https://rustup.rs)), not Bazel: `fuzz/` is in `.bazelignore` and is its own Cargo workspace, so crate_universe never sees it. Copy the main `Cargo.lock` into `fuzz/` first so the fuzzers build the dependency versions the app ships:
+
+```bash
+rustup toolchain install nightly
+cargo install cargo-fuzz --locked
+cp Cargo.lock fuzz/ && cd fuzz
+cargo +nightly fuzz run render corpus/render ../tests/fixtures/pdfjs -- -max_total_time=300 -timeout=10 -max_len=131072
+cargo +nightly fuzz run render artifacts/render/crash-…     # reproduce a crash
+```
+
+New inputs go to `fuzz/corpus/<target>` (the `tests/fixtures/pdfjs` seeds are only read) and crashes to `fuzz/artifacts/<target>`. Both are ignored by git.
 
 ## Layout
 
