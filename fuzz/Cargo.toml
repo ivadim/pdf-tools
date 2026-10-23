@@ -50,3 +50,4 @@ bench = false
 # downloads them and applies third_party/patches (as Bazel does).
 [patch.crates-io]
 hayro-interpret = { path = "vendor/hayro-interpret" }
+hayro-syntax = { path = "vendor/hayro-syntax" }

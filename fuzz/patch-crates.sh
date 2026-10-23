@@ -10,6 +10,7 @@ patches=../third_party/patches
 # name version sha256 (as in Cargo.lock) patch
 crates=(
   "hayro-interpret 0.8.0 ac9df074ff163a63864cec9b0bf640ccbff8abf4e44481df7369ce0ac172ffbe hayro-interpret-rgb-length.patch"
+  "hayro-syntax 0.8.0 6cdc818d8d265dcb42081d488f7599df4f73fb79e9d347ecedcd3c23809d2026 hayro-syntax-unreadable-items.patch"
 )
 
 sha256() {
