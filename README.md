@@ -140,7 +140,7 @@ ios/build-engine.sh                 # the engine → ios/Engine/PdftoolsFFI.xcfr
 open ios/PDFTools.xcodeproj         # then run the PDFTools scheme on a simulator or device
 ```
 
-`ios/build-engine.sh --debug` builds the engine faster but unoptimised. To install on your own device, choose a team under *Signing & Capabilities*.
+`ios/build-engine.sh --debug` builds the engine faster but unoptimised. To install on your own device, put your team in `ios/Local.xcconfig` (ignored by git): `DEVELOPMENT_TEAM = ABCDE12345`. The project reads it through `ios/Signing.xcconfig`, so no team is committed; CI takes it from the `APPLE_TEAM_ID` repository secret.
 
 ```bash
 ios/test.sh                         # unit and UI tests on the newest iPhone and iPad simulators

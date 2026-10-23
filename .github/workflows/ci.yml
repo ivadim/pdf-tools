@@ -291,6 +291,10 @@ jobs:
           bazelisk-cache: true
           disk-cache: ${{ github.workflow }}-ios
           repository-cache: true
+      - name: Signing team (from the APPLE_TEAM_ID secret; empty on forks)
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: printf 'DEVELOPMENT_TEAM = %s\n' "$APPLE_TEAM_ID" > ios/Local.xcconfig
       - name: Engine (XCFramework for devices and the simulator)
         run: ios/build-engine.sh --debug
       - name: App for devices (unsigned)
