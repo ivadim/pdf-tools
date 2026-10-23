@@ -126,6 +126,13 @@ pub(crate) fn jpeg_bytes(image: &DynamicImage, quality: u8) -> Option<Vec<u8>> {
 /// Embeds a PNG or JPEG as an image XObject (with a soft mask for
 /// transparency) and returns its id and pixel size.
 pub(crate) fn embed_image(doc: &mut Document, bytes: &[u8]) -> Result<(ObjectId, u32, u32), Error> {
+    let streams = image_streams(bytes)?;
+    let (width, height) = (streams.width, streams.height);
+    Ok((streams.add_to(doc), width, height))
+}
+
+/// [`embed_image`] without the document: the image's streams, ready to add.
+pub(crate) fn image_streams(bytes: &[u8]) -> Result<ImageStreams, Error> {
     let format = image::guess_format(bytes).map_err(|e| Error::Image(e.to_string()))?;
     let decoded = image::load(Cursor::new(bytes), format).map_err(|e| Error::Image(e.to_string()))?;
     let (width, height) = (decoded.width(), decoded.height());
@@ -147,17 +154,38 @@ pub(crate) fn embed_image(doc: &mut Document, bytes: &[u8]) -> Result<(ObjectId,
                 "BitsPerComponent" => 8,
                 "Filter" => "DCTDecode",
             };
-            let id = doc.add_object(Stream::new(dict, bytes.to_vec()).with_compression(false));
-            return Ok((id, width, height));
+            let image = Stream::new(dict, bytes.to_vec()).with_compression(false);
+            return Ok(ImageStreams { image, mask: None, width, height });
         }
     }
 
-    Ok(embed_pixels(doc, &decoded))
+    Ok(pixel_streams(&decoded))
 }
 
-/// Embeds decoded pixels losslessly (Flate), with a soft mask when any pixel
-/// is transparent, and returns the image's id and pixel size.
-pub(crate) fn embed_pixels(doc: &mut Document, decoded: &DynamicImage) -> (ObjectId, u32, u32) {
+/// An image XObject (and its soft mask, if any pixel is transparent), ready
+/// to add. Preparing these is the slow part of embedding an image, and needs
+/// no document, so several can be prepared at once.
+pub(crate) struct ImageStreams {
+    pub image: Stream,
+    pub mask: Option<Stream>,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl ImageStreams {
+    /// Adds the image (and mask) to `doc`; returns the image's id.
+    pub(crate) fn add_to(self, doc: &mut Document) -> ObjectId {
+        let mut image = self.image;
+        if let Some(mask) = self.mask {
+            image.dict.set("SMask", Object::Reference(doc.add_object(mask)));
+        }
+        doc.add_object(image)
+    }
+}
+
+/// Decoded pixels as losslessly compressed (Flate) streams, with a soft mask
+/// when any pixel is transparent.
+pub(crate) fn pixel_streams(decoded: &DynamicImage) -> ImageStreams {
     let (width, height) = (decoded.width(), decoded.height());
     let rgba = decoded.to_rgba8();
     let mut rgb = Vec::with_capacity((width * height * 3) as usize);
@@ -167,7 +195,7 @@ pub(crate) fn embed_pixels(doc: &mut Document, decoded: &DynamicImage) -> (Objec
         alpha.push(pixel.0[3]);
     }
 
-    let mut dict = dictionary! {
+    let dict = dictionary! {
         "Type" => "XObject",
         "Subtype" => "Image",
         "Width" => width as i64,
@@ -175,7 +203,7 @@ pub(crate) fn embed_pixels(doc: &mut Document, decoded: &DynamicImage) -> (Objec
         "ColorSpace" => "DeviceRGB",
         "BitsPerComponent" => 8,
     };
-    if alpha.iter().any(|&a| a < 255) {
+    let mask = if alpha.iter().any(|&a| a < 255) {
         let mask = dictionary! {
             "Type" => "XObject",
             "Subtype" => "Image",
@@ -186,11 +214,13 @@ pub(crate) fn embed_pixels(doc: &mut Document, decoded: &DynamicImage) -> (Objec
         };
         let mut mask = Stream::new(mask, alpha);
         let _ = mask.compress();
-        dict.set("SMask", Object::Reference(doc.add_object(mask)));
-    }
-    let mut stream = Stream::new(dict, rgb);
-    let _ = stream.compress();
-    (doc.add_object(stream), width, height)
+        Some(mask)
+    } else {
+        None
+    };
+    let mut image = Stream::new(dict, rgb);
+    let _ = image.compress();
+    ImageStreams { image, mask, width, height }
 }
 
 /// Ids of images used as (soft) masks of other images; recompressing those

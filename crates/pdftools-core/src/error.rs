@@ -30,6 +30,14 @@ pub enum Error {
     #[error("the file is not password-protected")]
     NotEncrypted,
 
+    #[error(
+        "{} is too large to open on this device: it needs about {} of memory and {} is free",
+        file_name(path),
+        human_bytes(*needed),
+        human_bytes(*available)
+    )]
+    TooLarge { path: PathBuf, needed: u64, available: u64 },
+
     #[error("couldn’t save {}: {message}", file_name(path))]
     Save { path: PathBuf, message: String },
 
@@ -49,6 +57,16 @@ pub enum Error {
 /// Messages name files, not full paths: the person knows where they are.
 fn file_name(path: &Path) -> String {
     path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned())
+}
+
+/// "1.4 GB", "350 MB".
+fn human_bytes(bytes: u64) -> String {
+    let mb = bytes as f64 / 1_000_000.0;
+    if mb >= 1000.0 {
+        format!("{:.1} GB", mb / 1000.0)
+    } else {
+        format!("{mb:.0} MB")
+    }
 }
 
 /// Why a PDF couldn't be opened, in words a person can act on.
@@ -83,5 +101,7 @@ mod tests {
         assert_eq!(load.to_string(), "couldn’t open report.pdf: the file no longer exists");
         let save = Error::Save { path: "/x/out.pdf".into(), message: io_reason(&missing()) };
         assert_eq!(save.to_string(), "couldn’t save out.pdf: the folder doesn’t exist");
+        let large = Error::TooLarge { path: "/x/big.pdf".into(), needed: 2_300_000_000, available: 900_000_000 };
+        assert_eq!(large.to_string(), "big.pdf is too large to open on this device: it needs about 2.3 GB of memory and 900 MB is free");
     }
 }

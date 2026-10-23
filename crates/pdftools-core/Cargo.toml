@@ -13,6 +13,13 @@ lopdf.workspace = true
 thiserror.workspace = true
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 getrandom = "0.4"
+# Deflate for image pixels and streams, compressed on several threads
+# (already used through lopdf).
+flate2 = "1"
+
+# Large PDFs are mapped rather than read on iOS (see `read_file`).
+[target.'cfg(target_os = "ios")'.dependencies]
+memmap2 = "0.9"
 
 [dev-dependencies]
 # Checks the encryption independently of lopdf (already one of its dependencies).

@@ -50,15 +50,18 @@ pub fn grayscale_document(doc: &mut Document, convert_images: bool) -> Grayscale
         let masks = mask_ids(doc);
         let images: Vec<ObjectId> =
             doc.objects.iter().filter(|(id, object)| !masks.contains(id) && is_image(object)).map(|(id, _)| *id).collect();
-        for id in images {
-            if let Some(stream) = gray_image(doc, id) {
+        // Each image is decoded, converted and re-encoded on its own: several at once.
+        let shared = &*doc;
+        let streams = crate::parallel::map(&images, |&id| gray_image(shared, id), |_| {});
+        for (id, stream) in images.into_iter().zip(streams) {
+            if let Some(stream) = stream {
                 doc.objects.insert(id, Object::Stream(stream));
                 summary.images += 1;
             }
         }
     }
 
-    doc.compress();
+    crate::compress_streams(doc);
     summary
 }
 

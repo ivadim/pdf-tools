@@ -95,7 +95,7 @@ fn info_dictionary(doc: &Document) -> Option<&Dictionary> {
 
 /// Converts a PDF date (`D:YYYYMMDDHHmmSSOHH'mm'`, all but the year
 /// optional) to ISO 8601.
-fn parse_pdf_date(raw: &str) -> Option<String> {
+pub fn parse_pdf_date(raw: &str) -> Option<String> {
     let s = raw.trim().strip_prefix("D:").unwrap_or(raw.trim());
     let digits: String = s.chars().take_while(char::is_ascii_digit).collect();
     if digits.len() < 4 {

@@ -2610,10 +2610,21 @@ name = "pdftools-core"
 version = "0.3.0"
 dependencies = [
  "aes",
+ "flate2",
  "getrandom 0.4.3",
  "image",
  "lopdf",
+ "memmap2",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "pdftools-ffi"
+version = "0.3.0"
+dependencies = [
+ "pdftools-cli",
+ "pdftools-core",
+ "pdftools-render",
 ]
 
 [[package]]
@@ -2623,6 +2634,7 @@ dependencies = [
  "fontique",
  "hayro",
  "image",
+ "lopdf",
  "parley",
  "pdftools-core",
  "swash",

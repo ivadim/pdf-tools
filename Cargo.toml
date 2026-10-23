@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/pdftools-core", "crates/pdftools-render", "crates/pdftools-app", "crates/pdftools-cli"]
+members = ["crates/pdftools-core", "crates/pdftools-render", "crates/pdftools-app", "crates/pdftools-cli", "crates/pdftools-ffi"]
 
 [workspace.package]
 version = "0.3.0"

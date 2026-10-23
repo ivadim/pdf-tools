@@ -10,5 +10,5 @@ mod common;
 
 fuzz_target!(|data: &[u8]| {
     let request = PreviewRequest { path: common::as_file(data).to_path_buf(), page: 1, width: 64, rotation: 90, gray: true };
-    let _ = render(&request, &mut DocCache::default());
+    let _ = render(&request, &DocCache::default());
 });

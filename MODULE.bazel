@@ -4,6 +4,8 @@ module(name = "pdftools")
 
 bazel_dep(name = "rules_rust", version = "0.74.0")
 bazel_dep(name = "platforms", version = "1.1.0")
+# Xcode's toolchain and the iOS platforms, for the iOS app's engine.
+bazel_dep(name = "apple_support", version = "2.8.0")
 bazel_dep(name = "llvm", version = "0.8.24")
 
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
@@ -15,6 +17,9 @@ rust.toolchain(
         "aarch64-unknown-linux-gnu",
         # The web version (//web).
         "wasm32-wasip1",
+        # The iOS app's engine (//crates/pdftools-ffi), for devices and the simulator.
+        "aarch64-apple-ios",
+        "aarch64-apple-ios-sim",
     ],
     versions = ["1.98.0"],
 )
@@ -34,6 +39,8 @@ crate.from_cargo(
         "aarch64-unknown-linux-gnu",
         "x86_64-pc-windows-msvc",
         "wasm32-wasip1",
+        "aarch64-apple-ios",
+        "aarch64-apple-ios-sim",
     ],
 )
 

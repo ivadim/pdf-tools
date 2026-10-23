@@ -12,7 +12,7 @@ use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader};
 use lopdf::content::{Content, Operation};
 use lopdf::{dictionary, Document, Object, ObjectId, Stream};
 
-use crate::image_data::{embed_image, embed_pixels};
+use crate::image_data::{image_streams, pixel_streams, ImageStreams};
 use crate::Error;
 
 /// Points per pixel when a page takes the image's own size: 96 pixels per
@@ -147,18 +147,19 @@ pub fn load_image(path: &Path, rotation: i32) -> Result<DynamicImage, Error> {
     Ok(rotate(image, rotation))
 }
 
-/// Builds a document with one page per image, in order. `progress` is called
-/// with the index of each image before it is read.
-pub fn images_to_pdf(images: &[ImagePage], layout: &ImageLayout, mut progress: impl FnMut(usize)) -> Result<Document, Error> {
+/// Builds a document with one page per image, in order. Images are read and
+/// compressed on several threads; `progress` is called (on this thread) with
+/// the number of images done so far.
+pub fn images_to_pdf(images: &[ImagePage], layout: &ImageLayout, progress: impl FnMut(usize)) -> Result<Document, Error> {
     if images.is_empty() {
         return Err(Error::NoInput);
     }
+    let prepared = crate::parallel::map(images, prepare_page, progress);
     let mut doc = Document::with_version("1.7");
     let pages_id = doc.new_object_id();
     let mut kids = Vec::with_capacity(images.len());
-    for (index, page) in images.iter().enumerate() {
-        progress(index);
-        kids.push(Object::Reference(add_image_page(&mut doc, pages_id, page, layout)?));
+    for page in prepared {
+        kids.push(Object::Reference(add_image_page(&mut doc, pages_id, page?, layout)?));
     }
     doc.objects.insert(
         pages_id,
@@ -180,7 +181,13 @@ pub fn images_to_pdf_file(images: &[ImagePage], layout: &ImageLayout, output: &P
     Ok(images.len())
 }
 
-fn add_image_page(doc: &mut Document, parent: ObjectId, page: &ImagePage, layout: &ImageLayout) -> Result<ObjectId, Error> {
+/// An image read and compressed, with the quarter turns to draw it with.
+struct PreparedPage {
+    streams: ImageStreams,
+    turns: i32,
+}
+
+fn prepare_page(page: &ImagePage) -> Result<PreparedPage, Error> {
     if page.rotation % 90 != 0 {
         return Err(Error::InvalidRotation(page.rotation.into()));
     }
@@ -190,16 +197,19 @@ fn add_image_page(doc: &mut Document, parent: ObjectId, page: &ImagePage, layout
 
     // Rotations are applied while drawing, so JPEGs are embedded untouched.
     // Mirrored orientations are rare: those images are decoded and flipped.
-    let (image_id, width, height, turns) = if is_mirrored(orientation) {
+    let (streams, turns) = if is_mirrored(orientation) {
         let mut decoded = DynamicImage::from_decoder(decoder(&bytes).map_err(read_error)?).map_err(|e| read_error(e.to_string()))?;
         decoded.apply_orientation(orientation);
-        let (id, w, h) = embed_pixels(doc, &decoded);
-        (id, w, h, 0)
+        (pixel_streams(&decoded), 0)
     } else {
-        let (id, w, h) = embed_image(doc, &bytes).map_err(|e| read_error(e.to_string()))?;
-        (id, w, h, quarter_turns(orientation))
+        (image_streams(&bytes).map_err(|e| read_error(e.to_string()))?, quarter_turns(orientation))
     };
-    let turns = (turns + page.rotation.div_euclid(90)).rem_euclid(4);
+    Ok(PreparedPage { streams, turns: (turns + page.rotation.div_euclid(90)).rem_euclid(4) })
+}
+
+fn add_image_page(doc: &mut Document, parent: ObjectId, page: PreparedPage, layout: &ImageLayout) -> Result<ObjectId, Error> {
+    let (width, height, turns) = (page.streams.width, page.streams.height, page.turns);
+    let image_id = page.streams.add_to(doc);
     let shown = if turns % 2 == 1 { (height, width) } else { (width, height) };
     let place = layout.place((shown.0 as f32, shown.1 as f32));
 
@@ -349,7 +359,7 @@ mod tests {
         let mut seen = Vec::new();
         let output = dir.join("out.pdf");
         let pages = images_to_pdf_file(&images, &ImageLayout::default(), &output, |i| seen.push(i)).unwrap();
-        assert_eq!((pages, seen), (2, vec![0, 1]));
+        assert_eq!((pages, seen), (2, vec![1, 2]), "progress counts the images done");
 
         let doc = Document::load(&output).unwrap();
         assert_eq!(doc.get_pages().len(), 2);

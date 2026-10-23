@@ -405,14 +405,32 @@ function drawFooter(ctx, hasInput) {
   );
 }
 
+/** "a/b:c" → "a_b_c": characters file names can't contain. */
+const cleanName = (name) => name.replace(/[/\\:*?"<>|]/g, "_").trim();
+
+/** A result file: its name, editable (the extension stays), and its download link. */
+function resultFile(file) {
+  const ext = /\.[^./]+$/.exec(file.name)?.[0] ?? "";
+  const original = file.name.slice(0, file.name.length - ext.length);
+  const link = download(file.name, file.data);
+  const rename = (base) => {
+    file.name = (cleanName(base) || original) + ext;
+    link.download = file.name;
+    link.textContent = `Download ${file.name}`;
+  };
+  const input = h("input", { type: "text", value: original, spellcheck: false, "aria-label": "File name", onInput: (e) => rename(e.target.value) });
+  return { link, row: h("div", { className: "result-file" }, h("label", { className: "name" }, input, h("span", { className: "ext" }, ext)), link) };
+}
+
 function results(ctx) {
   const { files, message } = ctx.state.result;
-  const links = files.map((f) => download(f.name, f.data));
+  const rows = files.map(resultFile);
+  const links = rows.map((r) => r.link);
   return h(
     "div",
     { className: "results" },
     h("span", { className: "done" }, message),
-    links,
+    rows.map((r) => r.row),
     links.length > 1
       ? h("button", { type: "button", className: "secondary", onClick: () => links.forEach((a, i) => setTimeout(() => a.click(), i * 250)) }, "Download all")
       : null,

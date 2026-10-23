@@ -10,6 +10,7 @@ publish.workspace = true
 
 [dependencies]
 pdftools-core.workspace = true
+lopdf.workspace = true
 hayro = { version = "0.8", default-features = false, features = ["embed-fonts", "simd"] }
 parley = "0.12"
 swash = "0.2"

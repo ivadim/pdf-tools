@@ -56,7 +56,8 @@ export class Pdf {
   static async open(file) {
     const pdf = new Pdf(file.name, `/in/${++nextFile}.pdf`, file.size);
     await put(pdf.path, await file.arrayBuffer());
-    pdf.info = (await run(["info", pdf.path])).json;
+    // --images: the Compress panel shows how many images the file has.
+    pdf.info = (await run(["info", pdf.path, "--images"])).json;
     pdf.queueThumbnails();
     return pdf;
   }
