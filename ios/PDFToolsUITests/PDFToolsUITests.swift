@@ -63,8 +63,7 @@ final class PDFToolsUITests: XCTestCase {
 
         let page = app.buttons["page.1"]
         scrollTo(page)
-        tapWhenReady(page)
-        XCTAssertTrue(app.buttons["Remove signature"].waitForExistence(timeout: 5))
+        tap(page, until: app.buttons["Remove signature"], matches: "exists == true")
         runTool(expecting: "Signed 1 page.")
     }
 
@@ -99,8 +98,7 @@ final class PDFToolsUITests: XCTestCase {
         tapWhenReady(app.buttons["Choose a PDF"])
         let page = app.buttons["page.2"]
         scrollTo(page)
-        tapWhenReady(page)
-        XCTAssertTrue(app.navigationBars["Page 2"].waitForExistence(timeout: 5))
+        tap(page, until: app.navigationBars["Page 2"], matches: "exists == true")
         tapWhenReady(app.buttons["Done"])
         XCTAssertTrue(app.buttons["run"].waitForExistence(timeout: 5))
     }
