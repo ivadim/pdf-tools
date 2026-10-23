@@ -26,6 +26,7 @@ const USAGE: &str = "\
 usage: pdftools-cli <command> [arguments] [--option=value ...]
 
   info        IN [--password=P]
+  version     Print the version number (same as --version)
   render      IN OUTDIR --width=PX [--pages=LIST]      writes OUTDIR/<n>.rgba
   merge       OUT IN... [--pages=SRC:PAGE:ROT,...]     SRC is 0-based
   split       IN OUTDIR --parts=LIST;LIST... [--name=BASE]
@@ -45,7 +46,10 @@ usage: pdftools-cli <command> [arguments] [--option=value ...]
   images      OUT IMG[:ROT]... [--size=a4|letter|fit] [--orientation=auto|portrait|landscape]
               [--margin=PT]
 
---pages for numbers and stamp count pages after --keep has removed the rest.";
+--pages for numbers and stamp count pages after --keep has removed the rest.
+
+Options:
+  -V, --version  Print the version number and exit";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -224,6 +228,7 @@ fn run(args: &[String]) -> Result<String, String> {
             Ok(format!(r#"{{"pages":{count}}}"#))
         }
         "images" => images(&args),
+        "version" | "--version" | "-V" => Ok(json_string(env!("CARGO_PKG_VERSION"))),
         "help" | "--help" | "-h" => Ok(json_string(USAGE)),
         other => Err(format!("unknown command “{other}”\n\n{USAGE}")),
     }
@@ -458,5 +463,14 @@ mod tests {
         assert!(anchor("left").is_err());
         assert_eq!(color("#ff0000").unwrap(), [1.0, 0.0, 0.0]);
         assert_eq!(json_string("a\"b\n"), r#""a\"b\n""#);
+    }
+
+    #[test]
+    fn version_returns_json_string() {
+        let expected = format!("\"{}\"", env!("CARGO_PKG_VERSION"));
+        for cmd in ["version", "--version", "-V"] {
+            assert_eq!(run(&[cmd.to_string()]).unwrap(), expected, "wrong output for {cmd}");
+        }
+        assert!(USAGE.contains("--version") && USAGE.contains("-V"));
     }
 }
