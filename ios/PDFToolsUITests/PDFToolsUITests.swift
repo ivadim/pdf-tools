@@ -12,13 +12,13 @@ final class PDFToolsUITests: XCTestCase {
     @MainActor func testMergeTwoFiles() {
         launch(with: [pdf("tracemonkey"), pdf("rotation")])
         openTool("merge")
-        app.buttons["Choose PDFs"].tap()
+        tapWhenReady(app.buttons["Choose PDFs"])
         XCTAssertTrue(app.staticTexts["tracemonkey.pdf"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["rotation.pdf"].exists)
         runTool(expecting: "Merged 2 files into 16 pages.")
 
         // The result can be renamed before it's shared or saved.
-        app.buttons["Rename merged.pdf"].tap()
+        tapWhenReady(app.buttons["Rename merged.pdf"])
         let name = app.alerts["Rename"].textFields.firstMatch
         XCTAssertTrue(name.waitForExistence(timeout: 5))
         // Return confirms, like tapping Rename.
@@ -33,7 +33,7 @@ final class PDFToolsUITests: XCTestCase {
     @MainActor func testSplitByRanges() {
         launch(with: [pdf("tracemonkey")])
         openTool("split")
-        app.buttons["Choose a PDF"].tap()
+        tapWhenReady(app.buttons["Choose a PDF"])
         let ranges = app.textFields["1-3, 4-6, 7-"]
         XCTAssertTrue(ranges.waitForExistence(timeout: 10))
         XCTAssertEqual(problem, "Enter page ranges, e.g. 1-3, 4-6")
@@ -46,17 +46,17 @@ final class PDFToolsUITests: XCTestCase {
     @MainActor func testWatermarkWithDefaults() {
         launch(with: [pdf("tracemonkey")])
         openTool("watermark")
-        app.buttons["Choose a PDF"].tap()
+        tapWhenReady(app.buttons["Choose a PDF"])
         runTool(expecting: "Watermarked 14 pages.")
     }
 
     @MainActor func testSignWithATypedName() {
         launch(with: [pdf("rotation")])
         openTool("signature")
-        app.buttons["Choose a PDF"].tap()
+        tapWhenReady(app.buttons["Choose a PDF"])
         let type = app.buttons["Type"]
         XCTAssertTrue(type.waitForExistence(timeout: 10))
-        type.tap()
+        tapWhenReady(type)
         let name = app.textFields["Name"]
         name.tap()
         name.typeText("Ada Lovelace\n")
@@ -64,7 +64,7 @@ final class PDFToolsUITests: XCTestCase {
 
         let page = app.buttons["page.1"]
         scrollTo(page)
-        page.tap()
+        tapWhenReady(page)
         XCTAssertTrue(app.buttons["Remove signature"].waitForExistence(timeout: 5))
         runTool(expecting: "Signed 1 page.")
     }
@@ -72,10 +72,10 @@ final class PDFToolsUITests: XCTestCase {
     @MainActor func testLockedFileGoesToUnlock() {
         launch(with: [locked])
         openTool("compress")
-        app.buttons["Choose a PDF"].tap()
+        tapWhenReady(app.buttons["Choose a PDF"])
         let alert = app.alerts["This PDF has a password"]
         XCTAssertTrue(alert.waitForExistence(timeout: 10))
-        alert.buttons["Unlock it"].tap()
+        tapWhenReady(alert.buttons["Unlock it"])
         XCTAssertTrue(app.navigationBars["Unlock"].waitForExistence(timeout: 5))
 
         let password = app.secureTextFields["Password"]
@@ -88,21 +88,21 @@ final class PDFToolsUITests: XCTestCase {
         let images = try [image(width: 800, height: 600, name: "landscape.png"), image(width: 600, height: 900, name: "portrait.png")]
         launch(with: images)
         openTool("images")
-        app.buttons["Choose image files"].tap()
+        tapWhenReady(app.buttons["Choose image files"])
         XCTAssertTrue(app.staticTexts["2 images"].waitForExistence(timeout: 10))
-        app.buttons["Letter"].tap()
+        tapWhenReady(app.buttons["Letter"])
         runTool(expecting: "Created a PDF with 2 pages.")
     }
 
     @MainActor func testPageViewerOpensAndCloses() {
         launch(with: [pdf("tracemonkey")])
         openTool("grayscale")
-        app.buttons["Choose a PDF"].tap()
+        tapWhenReady(app.buttons["Choose a PDF"])
         let page = app.buttons["page.2"]
         scrollTo(page)
-        page.tap()
+        tapWhenReady(page)
         XCTAssertTrue(app.navigationBars["Page 2"].waitForExistence(timeout: 5))
-        app.buttons["Done"].tap()
+        tapWhenReady(app.buttons["Done"])
         XCTAssertTrue(app.buttons["run"].waitForExistence(timeout: 5))
     }
 
@@ -130,7 +130,16 @@ final class PDFToolsUITests: XCTestCase {
         let tile = app.buttons["tool.\(id)"]
         XCTAssertTrue(tile.waitForExistence(timeout: 10))
         scrollTo(tile)
-        tile.tap()
+        tapWhenReady(tile)
+    }
+
+    /// Waits until `element` exists and can be tapped (the CI's simulators are
+    /// slow: screens may still be sliding in), then taps it.
+    @MainActor private func tapWhenReady(_ element: XCUIElement, timeout: TimeInterval = 20, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(element.waitForExistence(timeout: timeout), "\(element) never appeared", file: file, line: line)
+        let hittable = expectation(for: NSPredicate(format: "isHittable == true"), evaluatedWith: element)
+        wait(for: [hittable], timeout: timeout)
+        element.tap()
     }
 
     /// Swipes up until `element` is on screen and clear of the run bar at the
@@ -138,6 +147,8 @@ final class PDFToolsUITests: XCTestCase {
     @MainActor private func scrollTo(_ element: XCUIElement) {
         let bottom = app.windows.firstMatch.frame.maxY - 160
         func visible() -> Bool { element.exists && element.isHittable && element.frame.midY < bottom }
+        // Let the screen settle first: it may still be appearing.
+        _ = element.waitForExistence(timeout: 10)
         for _ in 0..<12 where !visible() {
             let before = element.exists ? element.frame : .null
             app.swipeUp(velocity: .slow)
