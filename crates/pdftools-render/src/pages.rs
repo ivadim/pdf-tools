@@ -144,6 +144,9 @@ fn load(path: &Path) -> Result<Pdf, String> {
     }
 }
 
+/// The longest side of a rendered page, in pixels.
+const MAX_SIDE: f32 = 8192.0;
+
 /// Renders one page; the core of the preview system.
 pub fn render(request: &PreviewRequest, docs: &DocCache) -> Result<Rendered, String> {
     let pdf = docs.get(&request.path)?;
@@ -153,7 +156,9 @@ pub fn render(request: &PreviewRequest, docs: &DocCache) -> Result<Rendered, Str
     // Scale so the displayed width (after extra rotation) matches the request.
     let quarter_turn = request.rotation.rem_euclid(180) == 90;
     let displayed_w = if quarter_turn { page_h } else { page_w };
-    let scale = (request.width as f32 / displayed_w.max(1.0)).clamp(0.01, 8.0);
+    // Neither side beyond MAX_SIDE, even for pages far longer than they are
+    // wide (the renderer's sizes are 16-bit).
+    let scale = (request.width as f32 / displayed_w.max(1.0)).clamp(0.01, 8.0).min(MAX_SIDE / page_w.max(page_h).max(1.0));
     let pixmap = hayro::render(
         page,
         &RenderCache::new(),
@@ -250,8 +255,10 @@ mod tests {
 
     #[test]
     fn survives_inputs_that_crashed_the_fuzzer() {
-        // Each made hayro 0.8.0 panic; the fixes are in third_party/patches.
-        for name in ["render-rgb-length.pdf", "render-unreadable-array.pdf"] {
+        // Each made hayro 0.8.0 panic: the first two are fixed in
+        // third_party/patches; render-huge-page.pdf (a page 10^55 points tall)
+        // by MAX_SIDE.
+        for name in ["render-rgb-length.pdf", "render-unreadable-array.pdf", "render-huge-page.pdf"] {
             let path = fixture("sizes.pdf").parent().unwrap().join("../fuzz").join(name);
             let request = PreviewRequest { path, page: 1, width: 64, rotation: 90, gray: true };
             let _ = render(&request, &DocCache::default());
