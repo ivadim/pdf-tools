@@ -177,7 +177,7 @@ pub fn inspect(path: &Path) -> Result<PdfInfo, Error> {
 /// A file's bytes, as [`read_file`] returns them.
 pub enum FileBytes {
     Read(Vec<u8>),
-    #[cfg(target_os = "ios")]
+    #[cfg(any(target_os = "ios", target_os = "android"))]
     Mapped(memmap2::Mmap),
 }
 
@@ -185,24 +185,25 @@ impl AsRef<[u8]> for FileBytes {
     fn as_ref(&self) -> &[u8] {
         match self {
             FileBytes::Read(bytes) => bytes,
-            #[cfg(target_os = "ios")]
+            #[cfg(any(target_os = "ios", target_os = "android"))]
             FileBytes::Mapped(map) => map,
         }
     }
 }
 
-/// A file's bytes. On iOS the file is memory-mapped: its pages are read on
-/// demand, and as clean file-backed memory the system can drop and re-read
-/// them, so a large PDF doesn't count against the app's memory limit.
-/// Elsewhere it is read into memory (another program could shorten a mapped
-/// file, which would crash the reader).
+/// A file's bytes. On iOS and Android the file is memory-mapped: its pages
+/// are read on demand, and as clean file-backed memory the system can drop
+/// and re-read them, so a large PDF doesn't count against the app's memory
+/// limit. Elsewhere it is read into memory (another program could shorten a
+/// mapped file, which would crash the reader).
 pub fn read_file(path: &Path) -> std::io::Result<FileBytes> {
-    #[cfg(target_os = "ios")]
+    #[cfg(any(target_os = "ios", target_os = "android"))]
     {
         let file = std::fs::File::open(path)?;
         if file.metadata()?.len() > 0 {
-            // SAFETY: the iOS app only maps its own copies of files, in its
-            // temporary folder, which nothing changes while they're open.
+            // SAFETY: the mobile apps only map their own copies of files, in
+            // their temporary or cache folder, which nothing changes while
+            // they're open.
             if let Ok(map) = unsafe { memmap2::Mmap::map(&file) } {
                 return Ok(FileBytes::Mapped(map));
             }
