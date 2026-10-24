@@ -312,13 +312,71 @@ jobs:
           path: ios/build/TestResults/*.xcresult
           if-no-files-found: ignore
 
+  android:
+    name: Build and test (Android)
+    if: github.event_name != 'schedule'
+    needs: [test, lint]
+    # x86_64 Linux: the only hosted runner with KVM, which the emulator needs
+    # (macOS and arm64 Linux runners can't run it accelerated).
+    runs-on: ubuntu-latest
+    # A cold cache builds the engine twice (debug and release): about 45 minutes.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Bazel downloads its own Android SDK, NDK, emulator and JDK, so the
+      # runner's are removed to make room for them and the system image.
+      - name: Free disk space
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/share/swift /opt/hostedtoolcache/CodeQL
+      - uses: bazel-contrib/setup-bazel@104e3eea9447cdaa4b00d0fb46191a3985d26ab3 # 0.19.1
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}-android
+          repository-cache: true
+      - name: Engine lints (Clippy and rustfmt, for Android)
+        run: |
+          bazel build --config=ci --config=android --config=clippy --config=rustfmt \
+            --platforms=@rules_android//:arm64-v8a //crates/pdftools-ffi:pdftools_jni
+      # Before the emulator starts: R8 and the emulator together run the
+      # runner out of memory.
+      - name: Release app (R8)
+        run: |
+          bazel build --config=ci --config=android --config=release //android:app
+          cp bazel-bin/android/app.apk pdftools-release.apk
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Every tool on the emulator (debug app)
+        run: |
+          android/test.sh
+          cp android/build/app.apk pdftools-debug.apk
+      # Not published yet (they're signed with Bazel's debug key), so the name
+      # is outside the release job's pdftools-* pattern.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-apks
+          path: pdftools-*.apk
+          if-no-files-found: error
+      - name: Test screenshots and emulator log
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-test-results
+          path: |
+            android/build/test
+            ~/.cache/pdftools-android/avd/emulator.log
+          if-no-files-found: ignore
+
   # The one check pull requests must pass: fails if any job above failed or
   # was cancelled. (A job skipped because one it needs failed counts as passed
   # for required checks, so requiring Build alone isn't enough.)
   ci-passed:
     name: CI passed
     if: always()
-    needs: [test, lint, security, coverage, build, ios]
+    needs: [test, lint, security, coverage, build, ios, android]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -353,6 +411,9 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: dist
+          # The desktop packages only (each is named after its file), not
+          # other jobs' artifacts such as the Android APKs or test results.
+          pattern: pdftools-*
           merge-multiple: true
           # Keep the zipped packages as they are.
           skip-decompress: true

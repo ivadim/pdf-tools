@@ -1,6 +1,6 @@
 [package]
 name = "pdftools-ffi"
-description = "C interface to the PDF Tools engine, linked into the iOS app"
+description = "C and JNI interfaces to the PDF Tools engine, linked into the iOS and Android apps"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -16,3 +16,6 @@ crate-type = ["staticlib", "rlib"]
 pdftools-cli = { path = "../pdftools-cli" }
 pdftools-core.workspace = true
 pdftools-render.workspace = true
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"

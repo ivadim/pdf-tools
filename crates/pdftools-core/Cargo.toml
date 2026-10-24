@@ -17,8 +17,8 @@ getrandom = "0.4"
 # (already used through lopdf).
 flate2 = "1"
 
-# Large PDFs are mapped rather than read on iOS (see `read_file`).
-[target.'cfg(target_os = "ios")'.dependencies]
+# Large PDFs are mapped rather than read on iOS and Android (see `read_file`).
+[target.'cfg(any(target_os = "ios", target_os = "android"))'.dependencies]
 memmap2 = "0.9"
 
 [dev-dependencies]

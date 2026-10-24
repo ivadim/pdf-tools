@@ -1,5 +1,5 @@
 load("@crates//:defs.bzl", "all_crate_deps")
-load("@rules_rust//rust:defs.bzl", "rust_library", "rust_static_library", "rust_test")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_shared_library", "rust_static_library", "rust_test")
 load("//:version.bzl", "RUSTC_ENV", "VERSION")
 
 FFI_DEPS = [
@@ -12,8 +12,21 @@ FFI_DEPS = [
 # the simulator and packs it with include/ into an XCFramework.
 rust_static_library(
     name = "pdftools_ffi",
-    srcs = ["src/lib.rs"],
+    srcs = glob(["src/*.rs"]),
     rustc_env = RUSTC_ENV,
+    version = VERSION,
+    visibility = ["//visibility:public"],
+    deps = FFI_DEPS,
+)
+
+# The engine for the Android app (//android), with its JNI functions
+# (src/android.rs); the app loads it as libpdftools_ffi.so.
+rust_shared_library(
+    name = "pdftools_jni",
+    srcs = glob(["src/*.rs"]),
+    crate_name = "pdftools_ffi",
+    rustc_env = RUSTC_ENV,
+    target_compatible_with = ["@platforms//os:android"],
     version = VERSION,
     visibility = ["//visibility:public"],
     deps = FFI_DEPS,
@@ -22,7 +35,7 @@ rust_static_library(
 # The same crate as a Rust library, for its tests.
 rust_library(
     name = "pdftools_ffi_lib",
-    srcs = ["src/lib.rs"],
+    srcs = glob(["src/*.rs"]),
     crate_name = "pdftools_ffi",
     rustc_env = RUSTC_ENV,
     version = VERSION,

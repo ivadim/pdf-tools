@@ -1,12 +1,16 @@
 //! A C interface to the PDF Tools engine for the iOS app (see
-//! `include/pdftools.h`). Tools run the same commands as `pdftools-cli` and
-//! the web version, in-process; pages are rendered straight into memory.
+//! `include/pdftools.h`), and JNI functions for the Android app
+//! ([`android`]). Tools run the same commands as `pdftools-cli` and the web
+//! version, in-process; pages are rendered straight into memory.
 
 use std::ffi::{c_char, CStr, CString};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 
 use pdftools_render::pages::{render, DocCache, PreviewRequest};
+
+#[cfg(target_os = "android")]
+pub mod android;
 
 /// A rendered page, owned by the caller until `pdftools_free_page`.
 #[repr(C)]

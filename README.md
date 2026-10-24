@@ -148,6 +148,25 @@ ios/test.sh                         # unit and UI tests on the newest iPhone and
 
 `ios/PDFToolsTests` runs every tool end to end on the PDFs in `tests/fixtures`, as the screens drive them, and checks the outputs with the engine (Swift Testing). `ios/PDFToolsUITests` launches the app and goes through Merge, Split, Watermark, Signature, Unlock, Images to PDF and the page viewer by tapping and typing (XCUITest). The system's Files picker can't be scripted reliably, so in debug builds the UI tests hand the app their files in `PDFTOOLS_TEST_FILES` instead. `IOS_TEST_DEVICES` picks other simulators. CI builds the app for devices, unsigned, and runs both suites on an iPhone and an iPad; when they fail, the results are attached to the run.
 
+### Android app (experimental)
+
+`android/` is a native Kotlin and Jetpack Compose app with all 13 tools, for phones and tablets (Android 10+). It follows Material 3 but keeps the iOS app's layout and colours: the same home screen of tiles, the options panel above the page cards (beside them on tablets), the run bar and the result sheet. It links the same engine: `crates/pdftools-ffi/src/android.rs` adds JNI functions to the crate, built with Bazel as `libpdftools_ffi.so`. Text watermarks and typed signatures are drawn with the device's fonts. Files are copied into the app's cache folder while it works on them and never leave the device; results are saved with the system's file picker or shared. PDFs are memory-mapped, and one too large for the memory the device has free fails with a message instead of the app being stopped.
+
+The whole build is Bazel and hermetic: [`hermetic_android_toolchains`](https://github.com/keith/hermetic_android_toolchains) downloads a pinned Android SDK, NDK and emulator, `rules_android` and `rules_kotlin` build the app, and the AndroidX libraries are pinned in `android/maven_install.json`. Nothing needs installing (no Android Studio, JDK or SDK). The Android targets are left out of `//...` and need `--config=android`, which registers the SDK, NDK and Kotlin toolchains. Building the app accepts the Android SDK and NDK licences named in `.bazelrc`.
+
+```bash
+android/run.sh                       # build, start the emulator if no device is connected, install and open
+android/run.sh --release             # the same with the release build
+bazel build --config=android //android:app                    # bazel-bin/android/app.apk (debug)
+bazel build --config=android --config=release //android:app   # optimised engine, shrunk with R8
+android/test.sh                      # every tool on the emulator
+bazel run @android_maven//:pin       # after changing the AndroidX libraries in MODULE.bazel
+```
+
+`android/run.sh` starts the emulator with an Android 16 image for the host: arm64 on Apple silicon, x86_64 elsewhere (on Linux it needs KVM). A phone with USB debugging on is used instead when one is connected. With `CI` set, the emulator runs without a window and cold-boots each time. Debug and release builds are signed with Bazel's debug key. Other builds don't download the SDK, apart from its 65 MB platform files, which `rules_android` loads in every build.
+
+`android/test.sh` goes through every tool on the emulator by tapping and typing (UI Automator) and checks each result's message; failures leave a screenshot in `android/build/test`. As on iOS, the system's document picker runs outside the app, so in debug builds the tests start the app with the tool and the fixture paths in its launch intent. CI runs `android/test.sh` on an x86_64 emulator on Linux with KVM, the only GitHub-hosted runner that can run it accelerated (macOS and arm64 Linux runners can't), then builds the release APK. Both APKs are attached to the run, and when a test fails, its screenshot and the emulator's log are too.
+
 ### Lints and security checks
 
 CI runs these on every push and pull request (the dependency checks also weekly); release builds wait for the lints. Pull requests need the **CI passed** check, which passes only when every CI job did, and CodeQL.
@@ -218,9 +237,10 @@ New inputs go to `fuzz/corpus/<target>` (the `tests/fixtures/pdfjs` seeds are on
 | `crates/pdftools-app/src/merge.rs`, `src/images.rs` | The two multi-file tools. |
 | `crates/pdftools-app/src/previews.rs` | Page thumbnails rendered in the background, with a cache. |
 | `crates/pdftools-app/src/theme.rs`, `src/widgets.rs` | Light and dark colours, widget styles and shared building blocks. |
-| `crates/pdftools-ffi` | The C interface to the engine that the iOS app links (`include/pdftools.h`). |
+| `crates/pdftools-ffi` | The C interface to the engine that the iOS app links (`include/pdftools.h`), and the JNI functions the Android app calls (`src/android.rs`). |
 | `ios/PDFTools` | The SwiftUI iOS app: `Engine/` wraps the C interface, `Model/` holds a tool screen's state, `Tools/` has each tool's options, page overlays and command, `Views/` the screens. |
 | `ios/PDFToolsTests`, `ios/PDFToolsUITests` | The iOS app's unit tests and UI tests (`ios/test.sh`). |
+| `android/java/io/github/ivadim/pdftools` | The Compose Android app, laid out like the iOS one: `Engine.kt` wraps the JNI functions, `Session.kt` holds a tool screen's state, `*Tools.kt` and `*Tool.kt` have each tool's options, page overlays and command, `*Screen.kt` and `PageCard.kt` the screens. |
 
 Every change in the UI is a `Message`; `update` applies it and starts heavy work (rendering, running a tool) as a background task whose result comes back as another message.
 
