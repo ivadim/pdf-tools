@@ -69,19 +69,33 @@ pub(crate) fn read_pdf(path: &Path) -> Result<FileBytes, Error> {
 /// file's size in memory (measured: 3 GB for an 877 MB file, including the file).
 const PARSE_FACTOR: (u64, u64) = (5, 2);
 
+/// Whether the mapped file itself counts as memory in use, on top of parsing
+/// it. Android's low-memory killer counts its resident pages (measured: the
+/// app was stopped at 3.2 GB with a 920 MB file); iOS doesn't count clean
+/// mapped memory against an app.
+const FILE_COUNTS: bool = cfg!(target_os = "android");
+
 /// Fails, instead of being stopped by the system, when parsing a `size`-byte
 /// PDF wouldn't fit in the `available` memory (unknown: always tries).
 fn check_memory(path: &Path, size: u64, available: Option<u64>) -> Result<(), Error> {
-    let needed = size.saturating_mul(PARSE_FACTOR.0) / PARSE_FACTOR.1;
+    let parsing = size.saturating_mul(PARSE_FACTOR.0) / PARSE_FACTOR.1;
+    let needed = if FILE_COUNTS { parsing.saturating_add(size) } else { parsing };
     match available {
         Some(available) if needed > available => Err(Error::TooLarge { path: path.to_path_buf(), needed, available }),
         _ => Ok(()),
     }
 }
 
-/// Memory the app may still use before the system stops it. Only iOS limits
-/// apps this way (and says how much is left).
+/// Memory the app may still use before the system stops it. iOS limits each
+/// app and says how much is left; Android stops apps when the device runs low,
+/// so it's the memory the kernel says is available.
 fn available_memory() -> Option<u64> {
+    #[cfg(target_os = "android")]
+    {
+        if let Some(available) = std::fs::read_to_string("/proc/meminfo").ok().as_deref().and_then(mem_available) {
+            return Some(available);
+        }
+    }
     #[cfg(target_os = "ios")]
     {
         extern "C" {
@@ -95,6 +109,14 @@ fn available_memory() -> Option<u64> {
         }
     }
     None
+}
+
+/// `MemAvailable` from `/proc/meminfo`, in bytes.
+#[cfg(any(target_os = "android", test))]
+fn mem_available(meminfo: &str) -> Option<u64> {
+    let line = meminfo.lines().find_map(|line| line.strip_prefix("MemAvailable:"))?;
+    let kb: u64 = line.trim().strip_suffix("kB")?.trim().parse().ok()?;
+    Some(kb.saturating_mul(1024))
 }
 
 /// A damaged PDF's recoverable pages as a fresh, readable file (for viewers
@@ -373,6 +395,14 @@ mod tests {
         assert!(check_memory(path, 1_000, Some(2_500)).is_ok());
         assert!(matches!(check_memory(path, 1_000, Some(2_499)), Err(Error::TooLarge { needed: 2_500, available: 2_499, .. })));
         assert!(check_memory(path, u64::MAX, Some(u64::MAX / 4)).is_err(), "saturates rather than overflowing");
+    }
+
+    #[test]
+    fn reads_the_memory_available_on_android() {
+        let meminfo = "MemTotal:        4014920 kB\nMemFree:         3089384 kB\nMemAvailable:    3061188 kB\nBuffers: 0 kB\n";
+        assert_eq!(mem_available(meminfo), Some(3_061_188 * 1024));
+        assert_eq!(mem_available("MemTotal: 1 kB\n"), None);
+        assert_eq!(mem_available("MemAvailable: lots\n"), None);
     }
 
     #[test]
