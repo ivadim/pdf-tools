@@ -4,3 +4,4 @@ artifacts
 coverage
 # Seeded from the main Cargo.lock on each build (see the README).
 Cargo.lock
+vendor

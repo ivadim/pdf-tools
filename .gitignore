@@ -11,3 +11,7 @@
 /user.bazelrc
 /dist
 /web/node_modules
+/ios/Engine/
+/ios/build/
+xcuserdata/
+/ios/Local.xcconfig

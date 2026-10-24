@@ -129,6 +129,25 @@ bazel build --config=release //web:site     # the static site, in bazel-bin/web/
 
 `web/wasi.js` is a small WASI loader with an in-memory file system. A Web Worker (`web/worker.js`) copies each file in once and runs one command per action: `info`, `render` (page previews) and one command per tool. Files never leave the browser. Text watermarks and typed signatures are drawn with the browser's fonts, because WebAssembly can't see the system's.
 
+### iOS app (experimental)
+
+`ios/` is a native SwiftUI app with all 13 tools, for iPhone and iPad (iOS 18+). It links the same engine as the other versions: `crates/pdftools-ffi` is a C interface that runs `pdftools-cli`'s commands in-process and renders page previews straight into memory, built with Bazel as a static library for devices and the simulator. Text watermarks and typed signatures are drawn with the system's fonts, and drawn signatures use PencilKit. Files are copied into the app's temporary folder while it works on them and never leave the device.
+
+It needs Xcode 16 or later on an Apple silicon Mac:
+
+```bash
+ios/build-engine.sh                 # the engine → ios/Engine/PdftoolsFFI.xcframework (again after changing Rust code)
+open ios/PDFTools.xcodeproj         # then run the PDFTools scheme on a simulator or device
+```
+
+`ios/build-engine.sh --debug` builds the engine faster but unoptimised. To install on your own device, put your team in `ios/Local.xcconfig` (ignored by git): `DEVELOPMENT_TEAM = ABCDE12345`. The project reads it through `ios/Signing.xcconfig`, so no team is committed; CI takes it from the `APPLE_TEAM_ID` repository secret.
+
+```bash
+ios/test.sh                         # unit and UI tests on the newest iPhone and iPad simulators
+```
+
+`ios/PDFToolsTests` runs every tool end to end on the PDFs in `tests/fixtures`, as the screens drive them, and checks the outputs with the engine (Swift Testing). `ios/PDFToolsUITests` launches the app and goes through Merge, Split, Watermark, Signature, Unlock, Images to PDF and the page viewer by tapping and typing (XCUITest). The system's Files picker can't be scripted reliably, so in debug builds the UI tests hand the app their files in `PDFTOOLS_TEST_FILES` instead. `IOS_TEST_DEVICES` picks other simulators. CI builds the app for devices, unsigned, and runs both suites on an iPhone and an iPad; when they fail, the results are attached to the run.
+
 ### Lints and security checks
 
 CI runs these on every push and pull request (the dependency checks also weekly); release builds wait for the lints. Pull requests need the **CI passed** check, which passes only when every CI job did, and CodeQL.
@@ -181,11 +200,12 @@ Fuzzing needs Cargo with a nightly toolchain ([rustup](https://rustup.rs)), not 
 rustup toolchain install nightly
 cargo install cargo-fuzz --locked
 cp Cargo.lock fuzz/ && cd fuzz
+./patch-crates.sh      # dependency fixes from third_party/patches, as Bazel applies them
 cargo +nightly fuzz run render corpus/render ../tests/fixtures/pdfjs -- -max_total_time=300 -timeout=10 -max_len=131072
 cargo +nightly fuzz run render artifacts/render/crash-…     # reproduce a crash
 ```
 
-New inputs go to `fuzz/corpus/<target>` (the `tests/fixtures/pdfjs` seeds are only read) and crashes to `fuzz/artifacts/<target>`. Both are ignored by git.
+New inputs go to `fuzz/corpus/<target>` (the `tests/fixtures/pdfjs` seeds are only read) and crashes to `fuzz/artifacts/<target>`. Both are ignored by git, as is `fuzz/vendor`. Crashes that were fixed are kept in `tests/fixtures/fuzz` as regression tests. A fix to a dependency goes in `third_party/patches`, applied by a `crate.annotation` in `MODULE.bazel` and listed in `fuzz/patch-crates.sh`.
 
 ## Layout
 
@@ -198,6 +218,9 @@ New inputs go to `fuzz/corpus/<target>` (the `tests/fixtures/pdfjs` seeds are on
 | `crates/pdftools-app/src/merge.rs`, `src/images.rs` | The two multi-file tools. |
 | `crates/pdftools-app/src/previews.rs` | Page thumbnails rendered in the background, with a cache. |
 | `crates/pdftools-app/src/theme.rs`, `src/widgets.rs` | Light and dark colours, widget styles and shared building blocks. |
+| `crates/pdftools-ffi` | The C interface to the engine that the iOS app links (`include/pdftools.h`). |
+| `ios/PDFTools` | The SwiftUI iOS app: `Engine/` wraps the C interface, `Model/` holds a tool screen's state, `Tools/` has each tool's options, page overlays and command, `Views/` the screens. |
+| `ios/PDFToolsTests`, `ios/PDFToolsUITests` | The iOS app's unit tests and UI tests (`ios/test.sh`). |
 
 Every change in the UI is a `Message`; `update` applies it and starts heavy work (rendering, running a tool) as a background task whose result comes back as another message.
 

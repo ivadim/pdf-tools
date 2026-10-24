@@ -2,3 +2,5 @@
 web/node_modules
 # Fuzz targets: built with cargo-fuzz, not Bazel.
 fuzz
+# The iOS app's Xcode build folder.
+ios/build

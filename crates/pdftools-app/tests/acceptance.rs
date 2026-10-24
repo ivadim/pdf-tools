@@ -82,7 +82,7 @@ fn media_box(path: &Path, page: u32) -> (f32, f32) {
 /// The most colourful pixel on a rendered page (0 = grey everywhere).
 fn max_chroma(path: &Path, page: usize) -> u8 {
     let request = pdftools_render::pages::PreviewRequest { path: path.into(), page, width: 400, rotation: 0, gray: false };
-    let rendered = pdftools_render::pages::render(&request, &mut Default::default()).unwrap();
+    let rendered = pdftools_render::pages::render(&request, &Default::default()).unwrap();
     rendered.pixels.as_chunks::<4>().0.iter().map(|p| p[0].max(p[1]).max(p[2]) - p[0].min(p[1]).min(p[2])).max().unwrap_or(0)
 }
 
@@ -90,7 +90,7 @@ fn max_chroma(path: &Path, page: usize) -> u8 {
 fn luma_difference(a: &Path, b: &Path, page: usize) -> f64 {
     let gray = |path: &Path| {
         let request = pdftools_render::pages::PreviewRequest { path: path.into(), page, width: 300, rotation: 0, gray: true };
-        pdftools_render::pages::render(&request, &mut Default::default()).unwrap()
+        pdftools_render::pages::render(&request, &Default::default()).unwrap()
     };
     let (a, b) = (gray(a), gray(b));
     assert_eq!((a.width, a.height), (b.width, b.height));

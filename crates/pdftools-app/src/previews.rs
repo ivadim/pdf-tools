@@ -6,7 +6,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use iced::widget::image::Handle;
 use pdftools_render::pages::{render, DocCache, PreviewRequest};
@@ -27,7 +27,8 @@ pub fn key(request: &PreviewRequest) -> String {
 
 #[derive(Default)]
 pub struct Previews {
-    docs: Arc<Mutex<DocCache>>,
+    /// Shared by the background renders, which run in parallel.
+    docs: Arc<DocCache>,
     ready: HashMap<String, Thumb>,
     pending: HashSet<String>,
     failed: HashSet<String>,
@@ -50,8 +51,7 @@ impl Previews {
         }
         let docs = self.docs.clone();
         Some(move || {
-            let mut docs = docs.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-            let result = render(&request, &mut docs).map(|page| Thumb {
+            let result = render(&request, &docs).map(|page| Thumb {
                 aspect: page.aspect(),
                 page_size: page.page_size,
                 // Pages are opaque, so premultiplied and straight alpha agree.
@@ -78,6 +78,6 @@ impl Previews {
         let prefix = format!("{}|", path.display());
         self.ready.retain(|k, _| !k.starts_with(&prefix));
         self.failed.retain(|k| !k.starts_with(&prefix));
-        self.docs.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).forget(path);
+        self.docs.forget(path);
     }
 }

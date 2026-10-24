@@ -1,0 +1,18 @@
+[package]
+name = "pdftools-ffi"
+description = "C interface to the PDF Tools engine, linked into the iOS app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+pdftools-cli = { path = "../pdftools-cli" }
+pdftools-core.workspace = true
+pdftools-render.workspace = true

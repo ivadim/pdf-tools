@@ -3,7 +3,6 @@
 
 use std::path::Path;
 
-use image::imageops::FilterType;
 use lopdf::{Document, Object, ObjectId, Stream};
 
 use crate::image_data::{decode_image, is_image, jpeg_bytes, mask_ids};
@@ -40,7 +39,8 @@ pub struct CompressSummary {
     pub images_recompressed: usize,
 }
 
-/// Returns the number of images that were re-encoded.
+/// Returns the number of images that were re-encoded. Images are recompressed
+/// on several threads (see [`crate::set_max_threads`]).
 pub fn compress_document(doc: &mut Document, level: Level) -> usize {
     // Embedded page thumbnails are redundant; viewers render their own.
     for page_id in doc.get_pages().into_values() {
@@ -54,8 +54,10 @@ pub fn compress_document(doc: &mut Document, level: Level) -> usize {
         let masks = mask_ids(doc);
         let images: Vec<ObjectId> =
             doc.objects.iter().filter(|(id, object)| !masks.contains(id) && is_image(object)).map(|(id, _)| *id).collect();
-        for id in images {
-            if let Some(stream) = recompress_image(doc, id, max_side, quality) {
+        let shared = &*doc;
+        let streams = crate::parallel::map(&images, |&id| recompress_image(shared, id, max_side, quality), |_| {});
+        for (id, stream) in images.into_iter().zip(streams) {
+            if let Some(stream) = stream {
                 doc.objects.insert(id, Object::Stream(stream));
                 recompressed += 1;
             }
@@ -63,7 +65,7 @@ pub fn compress_document(doc: &mut Document, level: Level) -> usize {
     }
 
     doc.prune_objects();
-    doc.compress();
+    crate::compress_streams(doc);
     recompressed
 }
 
@@ -74,7 +76,9 @@ fn recompress_image(doc: &Document, id: ObjectId, max_side: u32, quality: u8) ->
     if image.width().max(image.height()) < MIN_IMAGE_SIDE {
         return None;
     }
-    let image = if image.width().max(image.height()) > max_side { image.resize(max_side, max_side, FilterType::CatmullRom) } else { image };
+    // Averaging blocks of pixels (integer maths) is several times faster than
+    // a CatmullRom resample, and looks the same at these sizes.
+    let image = if image.width().max(image.height()) > max_side { image.thumbnail(max_side, max_side) } else { image };
     let bytes = jpeg_bytes(&image, quality)?;
     // Only keep the result if it is meaningfully smaller.
     if bytes.len() as f64 >= stream.content.len() as f64 * 0.9 {
@@ -146,6 +150,33 @@ mod tests {
         assert_eq!(image.dict.get(b"Width").unwrap().as_i64().unwrap(), 1200);
         assert!(image.content.len() < original / 4, "{} vs {original}", image.content.len());
         assert_eq!(page_labels(&doc), ["a-1"]);
+    }
+
+    #[test]
+    fn threads_give_the_same_result() {
+        let photos = |count: usize| {
+            let mut doc = sample("a", 1);
+            let mut ids = Vec::new();
+            for size in (0..count).map(|i| 1300 + 50 * i as u32) {
+                let (with, id) = with_photo(doc, size);
+                doc = with;
+                doc.trailer.set(format!("Keep{}", id.0), Object::Reference(id));
+                ids.push(id);
+            }
+            (doc, ids)
+        };
+        let (mut one, ids) = photos(5);
+        let (mut four, _) = photos(5);
+        crate::set_max_threads(1);
+        assert_eq!(compress_document(&mut one, Level::Strong), 5);
+        crate::set_max_threads(4);
+        assert_eq!(compress_document(&mut four, Level::Strong), 5);
+        for id in ids {
+            let (a, b) = (one.get_object(id).unwrap().as_stream().unwrap(), four.get_object(id).unwrap().as_stream().unwrap());
+            assert_eq!(a.content, b.content);
+            // Downscaled to fit 1200 px, keeping the shape.
+            assert_eq!(a.dict.get(b"Width").unwrap().as_i64().unwrap(), 1200);
+        }
     }
 
     #[test]

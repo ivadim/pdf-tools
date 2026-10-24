@@ -549,6 +549,31 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+/* A result's name, editable before it's downloaded. */
+.result-file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.result-file .name {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.result-file .name input {
+  flex: 1;
+  min-width: 0;
+}
+
+.result-file .ext {
+  color: var(--muted);
+}
+
 /* ── Drop zone and files ─────────────────────────────────────────────── */
 
 .drop {

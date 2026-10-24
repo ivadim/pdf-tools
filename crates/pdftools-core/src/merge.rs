@@ -195,7 +195,7 @@ pub fn merge_documents(docs: Vec<Document>, pages: Option<&[PageSpec]>) -> Resul
     // Drop objects only the discarded catalogs referenced (outlines etc.).
     merged.prune_objects();
     merged.renumber_objects();
-    merged.compress();
+    crate::compress_streams(&mut merged);
     Ok(merged)
 }
 

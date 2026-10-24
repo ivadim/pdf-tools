@@ -1,0 +1,8 @@
+// Code signing for builds on your own devices. The development team isn't
+// committed: put yours in ios/Local.xcconfig (ignored by git), e.g.
+//
+//   DEVELOPMENT_TEAM = ABCDE12345
+//
+// CI passes it from the APPLE_TEAM_ID repository secret. If Xcode's Signing &
+// Capabilities pane writes a team into project.pbxproj, move it here instead.
+#include? "Local.xcconfig"
