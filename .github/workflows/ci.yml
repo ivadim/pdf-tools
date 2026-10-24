@@ -319,7 +319,8 @@ jobs:
     # x86_64 Linux: the only hosted runner with KVM, which the emulator needs
     # (macOS and arm64 Linux runners can't run it accelerated).
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # A cold cache builds the engine twice (debug and release): about 45 minutes.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -337,6 +338,12 @@ jobs:
         run: |
           bazel build --config=ci --config=android --config=clippy --config=rustfmt \
             --platforms=@rules_android//:arm64-v8a //crates/pdftools-ffi:pdftools_jni
+      # Before the emulator starts: R8 and the emulator together run the
+      # runner out of memory.
+      - name: Release app (R8)
+        run: |
+          bazel build --config=ci --config=android --config=release //android:app
+          cp bazel-bin/android/app.apk pdftools-release.apk
       - name: Enable KVM for the emulator
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -345,11 +352,7 @@ jobs:
       - name: Every tool on the emulator (debug app)
         run: |
           android/test.sh
-          cp bazel-bin/android/app.apk pdftools-debug.apk
-      - name: Release app (R8)
-        run: |
-          bazel build --config=ci --config=android --config=release //android:app
-          cp bazel-bin/android/app.apk pdftools-release.apk
+          cp android/build/app.apk pdftools-debug.apk
       # Not published yet (they're signed with Bazel's debug key), so the name
       # is outside the release job's pdftools-* pattern.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

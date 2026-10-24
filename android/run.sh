@@ -5,7 +5,7 @@
 #
 #   android/run.sh              # debug build
 #   android/run.sh --release    # what the app ships (smaller, faster engine)
-#   android/run.sh --install    # build and install, but don't open it
+#   android/run.sh --install    # build and install, but don't open it (android/build/app.apk)
 #   android/run.sh --emulator   # just start the emulator
 #
 # The emulator runs the host's architecture: arm64 on Apple silicon, x86_64
@@ -33,18 +33,31 @@ arm64 | aarch64)
     ;;
 *)
     arch=x86_64 abi=x86_64
-    # Devices, and this host's emulator.
+    # Devices, and this host's emulator; in CI only the emulator's, which
+    # halves the engine's build.
     platforms=@rules_android//:arm64-v8a,@rules_android//:x86_64
+    [ -n "${CI:-}" ] && platforms=@rules_android//:x86_64
     ;;
 esac
 
-# The emulator's SDK: links into Bazel's downloads, in the layout it expects.
+# One set of flags for every Bazel command, so none of them discards
+# another's analysis or moves bazel-bin.
+flags="--config=android --android_platforms=$platforms $config"
+# The app (first, so its build doesn't compete with a booting emulator) and
+# the emulator with its system image.
 image=@android_system_image_36_$arch//:files
-bazel build --config=android @androidsdk//:emulator_runtime @androidsdk//:adb "$image"
-base=$(bazel info output_base)
-path() { echo "$base/$(bazel cquery --config=android --output=files "$1" 2>/dev/null | head -1)"; }
+app=//android:app
+[ $mode = emulator ] && app=
+# shellcheck disable=SC2086
+bazel build $flags $app @androidsdk//:emulator_runtime @androidsdk//:adb "$image"
+base=$(bazel info $flags output_base)
+# shellcheck disable=SC2086
+files() { bazel cquery $flags --output=files "$1" 2>/dev/null | head -1; }
+path() { echo "$base/$(files "$1")"; }
 # The repository (external/<name>) holding a target's files.
-repository() { echo "$base/$(bazel cquery --config=android --output=files "$1" 2>/dev/null | head -1 | cut -d/ -f1-2)"; }
+repository() { echo "$base/$(files "$1" | cut -d/ -f1-2)"; }
+
+# The emulator's SDK: links into Bazel's downloads, in the layout it expects.
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/pdftools-android"
 sdk="$cache/sdk"
 mkdir -p "$sdk/platform-tools" "$sdk/system-images/android-36/default"
@@ -102,7 +115,12 @@ EOF
 fi
 [ $mode = emulator ] && exit 0
 
-bazel build --config=android --android_platforms=$platforms $config //android:app
-"$adb" install -r -t bazel-bin/android/app.apk
+# Where Bazel put it (not bazel-bin: --android_platforms has its own output
+# folder), copied to a fixed place for android/test.sh and CI.
+apk=android/build/app.apk
+mkdir -p android/build
+cp -f "$(bazel cquery $flags --output=files //android:app 2>/dev/null | grep '/app\.apk$')" $apk
+chmod u+w $apk
+"$adb" install -r -t $apk
 [ $mode = install ] && exit 0
 "$adb" shell am start -n io.github.ivadim.pdftools/.MainActivity
