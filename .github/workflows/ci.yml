@@ -42,7 +42,7 @@ jobs:
           bazelisk-cache: true
           disk-cache: ${{ github.workflow }}-test
           repository-cache: true
-      - uses: ./.github/actions/buildbuddy
+      - uses: $/.github/actions/buildbuddy
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         with:
           api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
@@ -68,7 +68,7 @@ jobs:
           bazelisk-cache: true
           disk-cache: ${{ github.workflow }}-lint
           repository-cache: true
-      - uses: ./.github/actions/buildbuddy
+      - uses: $/.github/actions/buildbuddy
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         with:
           api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
@@ -130,7 +130,7 @@ jobs:
           bazelisk-cache: true
           disk-cache: ${{ github.workflow }}-coverage
           repository-cache: true
-      - uses: ./.github/actions/buildbuddy
+      - uses: $/.github/actions/buildbuddy
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         with:
           api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
@@ -174,7 +174,7 @@ jobs:
           bazelisk-cache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           disk-cache: ${{ !startsWith(github.ref, 'refs/tags/') && format('{0}-release', github.workflow) }}
           repository-cache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-      - uses: ./.github/actions/buildbuddy
+      - uses: $/.github/actions/buildbuddy
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         with:
           api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
@@ -307,7 +307,7 @@ jobs:
           bazelisk-cache: true
           disk-cache: ${{ github.workflow }}-ios
           repository-cache: true
-      - uses: ./.github/actions/buildbuddy
+      - uses: $/.github/actions/buildbuddy
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         with:
           api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
@@ -354,7 +354,7 @@ jobs:
           bazelisk-cache: true
           disk-cache: ${{ github.workflow }}-android
           repository-cache: true
-      - uses: ./.github/actions/buildbuddy
+      - uses: $/.github/actions/buildbuddy
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         with:
           api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
