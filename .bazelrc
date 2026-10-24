@@ -67,3 +67,11 @@ common --java_language_version=17
 common --java_runtime_version=remotejdk_21
 common --tool_java_language_version=17
 common --tool_java_runtime_version=remotejdk_21
+
+# BuildBuddy remote cache. CI enables it (see .github/actions/buildbuddy), which
+# adds the API key; locally, opt in with `--config=buildbuddy` (reads work
+# without a key; to write, put `build --remote_header=x-buildbuddy-api-key=...`
+# in user.bazelrc).
+common:buildbuddy --remote_cache=grpcs://remote.buildbuddy.io
+common:buildbuddy --remote_timeout=3600
+common:buildbuddy --experimental_remote_cache_compression
