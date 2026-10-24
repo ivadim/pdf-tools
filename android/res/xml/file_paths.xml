@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Outputs shared with other apps (Share, Open with). -->
+<paths>
+    <cache-path name="workspace" path="Workspace/" />
+</paths>

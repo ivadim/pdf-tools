@@ -4,9 +4,20 @@ module(name = "pdftools")
 
 bazel_dep(name = "rules_rust", version = "0.74.0")
 bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "rules_cc", version = "0.2.25")
 # Xcode's toolchain and the iOS platforms, for the iOS app's engine.
 bazel_dep(name = "apple_support", version = "2.8.0")
 bazel_dep(name = "llvm", version = "0.8.24")
+# The Android app (//android): Android and Kotlin rules, and a pinned SDK, NDK,
+# emulator and system image that Bazel downloads, so nothing needs installing.
+bazel_dep(name = "rules_android", version = "0.8.0")
+bazel_dep(name = "rules_android_ndk", version = "0.1.5")
+bazel_dep(name = "rules_kotlin", version = "2.4.21")
+bazel_dep(name = "rules_jvm_external", version = "7.2")
+bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0")
+# rules_android's build tools are written in Go; its own Go 1.22 is too old for
+# the gazelle they're built with.
+bazel_dep(name = "rules_go", version = "0.62.0")
 
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
 rust.toolchain(
@@ -20,6 +31,9 @@ rust.toolchain(
         # The iOS app's engine (//crates/pdftools-ffi), for devices and the simulator.
         "aarch64-apple-ios",
         "aarch64-apple-ios-sim",
+        # The Android app's engine, for devices and emulators.
+        "aarch64-linux-android",
+        "x86_64-linux-android",
     ],
     versions = ["1.98.0"],
 )
@@ -41,6 +55,8 @@ crate.from_cargo(
         "wasm32-wasip1",
         "aarch64-apple-ios",
         "aarch64-apple-ios-sim",
+        "aarch64-linux-android",
+        "x86_64-linux-android",
     ],
 )
 
@@ -87,3 +103,84 @@ toolchain.target(arch = "aarch64", os = "linux")
 use_repo(toolchain, "llvm_toolchains")
 
 register_toolchains("@llvm_toolchains//:all")
+
+# The Android SDK and NDK (a dev dependency, as the extension requires). The licence versions accepted for them are in .bazelrc.
+android = use_extension("@hermetic_android_toolchains//:extensions.bzl", "android", dev_dependency = True)
+android.sdk(
+    build_tools_version = "36.0.0",
+    version = "36",
+)
+android.ndk(version = "r29")
+# android/run.sh starts the emulator, with the system image below.
+android.emulator(version = "37.1.11")
+use_repo(android, "androidndk", "androidsdk")
+
+# The emulator's system images: arm64 for Apple silicon, x86_64 for Intel
+# and CI (Linux with KVM). Not android.system_image(): those download with
+# the SDK, which rules_android loads in every build; these only download when
+# android/run.sh needs one.
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+[http_archive(
+    name = "android_system_image_36_" + arch,
+    build_file_content = 'filegroup(name = "files", srcs = glob(["**"]), visibility = ["//visibility:public"])',
+    sha256 = sha256,
+    strip_prefix = abi,
+    urls = ["https://dl.google.com/android/repository/sys-img/android/%s-36_r02.zip" % abi],
+) for arch, abi, sha256 in [
+    ("arm64", "arm64-v8a", "c6194eb8ace128b174ea86b5fbc0c78204147123b3b5ce6d0e3d615a06ad31d1"),
+    ("x86_64", "x86_64", "e1b9d9fb665001ef27b16e57d8762a2d54aec6bff617e17506edb8676667b9da"),
+]]
+
+# rules_android and rules_android_ndk use the downloaded SDK and NDK.
+android_sdk = use_extension("@rules_android//rules/android_sdk_repository:rule.bzl", "android_sdk_repository_extension", dev_dependency = True)
+override_repo(android_sdk, "androidsdk")
+android_ndk = use_extension("@rules_android_ndk//:extension.bzl", "android_ndk_repository_extension", dev_dependency = True)
+override_repo(android_ndk, "androidndk")
+
+# The SDK, NDK and Kotlin toolchains are registered by `--config=android`
+# (.bazelrc), so other builds don't download the SDK.
+
+# The Android app's libraries (Jetpack Compose), pinned in android/maven_install.json:
+# `bazel run @android_maven//:pin` after changing them.
+maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+maven.install(
+    name = "android_maven",
+    aar_import_bzl_label = "@rules_android//rules:rules.bzl",
+    artifacts = [
+        "androidx.activity:activity-compose:1.13.0",
+        # Pinned to the versions activity-compose needs (Compose asks for older ones).
+        "androidx.activity:activity:1.13.0",
+        "androidx.activity:activity-ktx:1.13.0",
+        "androidx.compose.foundation:foundation",
+        "androidx.compose.material3:material3",
+        # Its last release; Compose's BOM no longer lists it.
+        "androidx.compose.material:material-icons-extended:1.7.8",
+        "androidx.core:core-ktx:1.19.1",
+        "androidx.compose.ui:ui",
+        "androidx.compose.ui:ui-tooling-preview",
+        "androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0",
+        "org.jetbrains.kotlin:kotlin-compose-compiler-plugin-embeddable:2.4.21",
+        "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0",
+    ],
+    # AndroidX pins exact versions of its siblings, which old and new libraries
+    # disagree on; take the newest instead, as Gradle does.
+    additional_coursier_options = ["--reconciliation=*:*:relaxed"],
+    boms = ["androidx.compose:compose-bom:2026.09.00"],
+    # The Kotlin standard library comes from rules_kotlin, matching the compiler.
+    excluded_artifacts = [
+        "org.jetbrains.kotlin:kotlin-stdlib",
+        "org.jetbrains.kotlin:kotlin-stdlib-jdk7",
+        "org.jetbrains.kotlin:kotlin-stdlib-jdk8",
+    ],
+    lock_file = "//android:maven_install.json",
+    repositories = [
+        "https://maven.google.com",
+        "https://repo1.maven.org/maven2",
+    ],
+    use_starlark_android_rules = True,
+)
+use_repo(maven, "android_maven")
+
+go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
+go_sdk.download(version = "1.26.10")

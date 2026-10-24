@@ -1,0 +1,73 @@
+# The Android app: Kotlin and Jetpack Compose, with the PDF engine
+# (//crates/pdftools-ffi:pdftools_jni) linked in through JNI. The targets are
+# manual (not in //...) and need --config=android, which registers the SDK:
+#
+#   bazel build --config=android //android:app   # bazel-bin/android/app.apk
+#   android/run.sh                               # build, start the emulator, install, open
+#   android/test.sh                              # every tool on the emulator
+
+load("@rules_android//rules:rules.bzl", "android_binary")
+load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_kotlin//kotlin:core.bzl", "define_kt_toolchain", "kt_compiler_plugin")
+
+# Kotlin compiled for Java 17, as AndroidX expects (registered by --config=android).
+define_kt_toolchain(
+    name = "kotlin_toolchain",
+    jvm_target = "17",
+)
+
+kt_compiler_plugin(
+    name = "compose_plugin",
+    id = "androidx.compose.compiler.plugins.kotlin",
+    target_embedded_compiler = True,
+    visibility = ["//visibility:private"],
+    deps = ["@android_maven//:org_jetbrains_kotlin_kotlin_compose_compiler_plugin_embeddable"],
+)
+
+kt_android_library(
+    name = "lib",
+    srcs = glob(["java/**/*.kt"]),
+    custom_package = "io.github.ivadim.pdftools",
+    manifest = "AndroidManifest.xml",
+    plugins = [":compose_plugin"],
+    resource_files = glob(["res/**"]),
+    tags = ["manual"],
+    deps = [
+        "@android_maven//:androidx_activity_activity_compose",
+        "@android_maven//:androidx_compose_foundation_foundation",
+        "@android_maven//:androidx_compose_material3_material3",
+        "@android_maven//:androidx_compose_material_material_icons_extended",
+        "@android_maven//:androidx_compose_ui_ui",
+        "@android_maven//:androidx_core_core_ktx",
+        "@android_maven//:androidx_lifecycle_lifecycle_viewmodel_compose",
+        "@android_maven//:org_jetbrains_kotlinx_kotlinx_coroutines_android",
+    ],
+)
+
+# The engine, packed into the APK as lib/<abi>/libpdftools_ffi.so.
+cc_library(
+    name = "engine",
+    srcs = ["//crates/pdftools-ffi:pdftools_jni"],
+    tags = ["manual"],
+)
+
+config_setting(
+    name = "release",
+    values = {"compilation_mode": "opt"},
+)
+
+android_binary(
+    name = "app",
+    manifest = "AndroidManifest.xml",
+    # Release builds (--config=release) are shrunk with R8; debug builds aren't, so they build fast.
+    proguard_specs = select({
+        ":release": ["proguard-rules.pro"],
+        "//conditions:default": [],
+    }),
+    tags = ["manual"],
+    deps = [
+        ":engine",
+        ":lib",
+    ],
+)
