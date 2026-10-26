@@ -31,10 +31,10 @@ It is a single native executable, about 10 MB, with no web view and no runtime t
 | --- | --- | --- |
 | Windows 10/11 (x64) | `pdftools-…-windows-x86_64-setup.exe` | Run the installer. It installs for your account without administrator rights (or for all users, if you choose), and adds PDF Tools to the Start menu and to *Settings → Apps* for uninstalling. It isn't code-signed, so SmartScreen may ask you to confirm: choose *More info* → *Run anyway*. |
 | Windows, portable | `pdftools-…-windows-x86_64.zip` | Unzip and run `pdftools.exe`; nothing is installed. |
-| macOS 11+ (Apple silicon) | `pdftools-…-macos-arm64.dmg` | Open the disk image and drag *PDF Tools* onto *Applications*. The first time, macOS blocks it: see below. |
+| macOS 11+ (Apple silicon) | `pdftools-…-macos-arm64.dmg` | Open the disk image and drag *PDF Tools* onto *Applications*. It's signed with a Developer ID and notarized by Apple (releases up to 0.3.0 aren't: see below). |
 | Linux (x86_64, glibc 2.35+) | `pdftools-…-linux-x86_64.tar.gz` | Extract and run `./pdftools`. Works on X11 and Wayland. File dialogs use the XDG desktop portal, which most desktops provide. |
 
-**First launch on macOS.** The app isn't notarized by Apple yet, so macOS says *"PDF Tools.app" Not Opened*. To allow it once:
+**First launch on macOS, releases up to 0.3.0.** These aren't notarized, so macOS says *"PDF Tools.app" Not Opened*. To allow it once:
 
 1. Click **Done** in that message.
 2. Open **System Settings → Privacy & Security**, scroll down to *Security* and click **Open Anyway** next to "PDF Tools.app was blocked".
@@ -253,7 +253,17 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-The tag must be on `main`. The tag's run builds without caches, then attaches all four packages to a new GitHub release with a `SHA256SUMS` file and a signed build-provenance attestation. Releases are immutable once published, and `v*` tags can't be moved or deleted.
+The tag must be on `main`. The tag's run builds without caches, then attaches all four packages to a new GitHub release with a `SHA256SUMS` file and a signed build-provenance attestation. Before that, a separate job signs the macOS app and disk image with the Developer ID certificate, has Apple notarize the disk image and staples the ticket to it. Releases are immutable once published, and `v*` tags can't be moved or deleted.
+
+The signing job runs in the `macos-signing` environment. It waits for the repository owner to approve each run, deploys only `v*` tags and `main`, and checks out no code and builds nothing, so no repository or dependency code runs where the keys are. Running the workflow by hand (*Actions → CI → Run workflow*) signs and notarizes too, to try it out without a release; other runs, pull requests and forks sign ad hoc. The keys are secrets of that environment (*Settings → Environments → macos-signing*), not repository secrets:
+
+| Secret | What it is |
+| --- | --- |
+| `MACOS_CERTIFICATE` | A *Developer ID Application* certificate with its private key, exported from Keychain Access as a `.p12` file, base64-encoded: `base64 -i certificate.p12 \| pbcopy`. Create the certificate in [Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/certificates/list) (account holder only). |
+| `MACOS_CERTIFICATE_PASSWORD` | The password chosen when exporting the `.p12`. |
+| `APPLE_API_KEY` | An [App Store Connect API key](https://appstoreconnect.apple.com/access/integrations/api) for notarization (Team key, *Developer* access, the least that can notarize): the contents of the downloaded `AuthKey_….p8` file. |
+| `APPLE_API_KEY_ID` | That key's ID. |
+| `APPLE_API_ISSUER_ID` | The issuer ID shown above the list of keys. |
 
 ## Notes
 
