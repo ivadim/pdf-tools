@@ -18,4 +18,4 @@ pdftools-core.workspace = true
 pdftools-render.workspace = true
 
 [target.'cfg(target_os = "android")'.dependencies]
-jni = "0.21"
+jni = "0.22"
