@@ -9,6 +9,12 @@ on:
   schedule:
     - cron: "17 5 * * 2"
   workflow_dispatch:
+    inputs:
+      sign_macos:
+        description: Sign and notarize the macOS package
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -293,15 +299,15 @@ jobs:
           archive: false
           if-no-files-found: error
 
-  # Release builds (tags, and manual runs to try it out) are signed with the
-  # Developer ID certificate and notarized, replacing the build's ad-hoc
+  # Release tags, and manual runs that explicitly request it, are signed with
+  # the Developer ID certificate and notarized, replacing the build's ad-hoc
   # signed disk image. The keys are secrets of the macos-signing environment,
   # which waits for the owner's approval and only deploys v* tags and main.
   # The job checks out no code and builds nothing: nothing from the
   # repository or its dependencies runs where the keys are.
   sign-macos:
     name: Sign and notarize (macOS)
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'workflow_dispatch' && inputs.sign_macos == true) || startsWith(github.ref, 'refs/tags/v')
     needs: [build]
     runs-on: macos-latest
     timeout-minutes: 45
