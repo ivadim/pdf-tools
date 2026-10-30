@@ -27,6 +27,12 @@ pub use metadata::Metadata;
 pub use parallel::{max_threads, set_max_threads, DEFAULT_THREADS};
 pub use stamp::{Anchor, HAlign, VAlign};
 
+/// Builds the numbered filename for one part of a split PDF.
+pub fn split_output_filename(base: &str, part: usize, count: usize) -> String {
+    let width = count.to_string().len();
+    format!("{base}-{part:0width$}.pdf")
+}
+
 /// Loads a PDF from disk, rejecting documents we cannot read the content of.
 ///
 /// Files that only restrict permissions (an owner password without a user
