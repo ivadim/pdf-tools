@@ -1,26 +1,37 @@
 name: BuildBuddy remote cache
 description: >-
   Points Bazel at the BuildBuddy remote cache (--config=buildbuddy, see
-  .bazelrc). With an API key the build reads and writes the cache; without one
-  (pull requests from forks) it only reads.
+  .bazelrc). Builds with an API key read and write the cache; builds without
+  one (such as pull requests from forks) continue without BuildBuddy.
 inputs:
   api-key:
-    description: BuildBuddy API key (empty for read-only access).
+    description: BuildBuddy API key (empty disables BuildBuddy).
     required: false
     default: ""
+  download-mode:
+    description: Which remote outputs Bazel downloads (all, minimal, or toplevel).
+    required: false
+    default: all
 runs:
   using: composite
   steps:
     - shell: bash
       env:
         BUILDBUDDY_API_KEY: ${{ inputs.api-key }}
+        DOWNLOAD_MODE: ${{ inputs.download-mode }}
       run: |
-        echo "common:ci --config=buildbuddy" >> user.bazelrc
-        if [[ -n "$BUILDBUDDY_API_KEY" ]]; then
-          echo "::add-mask::$BUILDBUDDY_API_KEY"
-          echo "common:buildbuddy --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY" >> user.bazelrc
-          echo "common:buildbuddy --bes_backend=grpcs://remote.buildbuddy.io" >> user.bazelrc
-          echo "common:buildbuddy --bes_results_url=https://app.buildbuddy.io/invocation/" >> user.bazelrc
-        else
-          echo "common:buildbuddy --noremote_upload_local_results" >> user.bazelrc
+        if [[ -z "$BUILDBUDDY_API_KEY" ]]; then
+          echo "BuildBuddy disabled because no API key is available"
+          exit 0
         fi
+        echo "common:ci --config=buildbuddy" >> user.bazelrc
+        case "$DOWNLOAD_MODE" in
+          all) ;;
+          minimal) echo "common:ci --remote_download_minimal" >> user.bazelrc ;;
+          toplevel) echo "common:ci --remote_download_toplevel" >> user.bazelrc ;;
+          *) echo "unsupported BuildBuddy download mode: $DOWNLOAD_MODE" >&2; exit 2 ;;
+        esac
+        echo "::add-mask::$BUILDBUDDY_API_KEY"
+        echo "common:buildbuddy --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY" >> user.bazelrc
+        echo "common:buildbuddy --bes_backend=grpcs://remote.buildbuddy.io" >> user.bazelrc
+        echo "common:buildbuddy --bes_results_url=https://app.buildbuddy.io/invocation/" >> user.bazelrc
