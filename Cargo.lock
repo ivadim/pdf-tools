@@ -2583,7 +2583,7 @@ dependencies = [
 
 [[package]]
 name = "pdftools-app"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "iced",
  "iced_test",
@@ -2598,7 +2598,7 @@ dependencies = [
 
 [[package]]
 name = "pdftools-cli"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "lopdf",
  "pdftools-core",
@@ -2607,7 +2607,7 @@ dependencies = [
 
 [[package]]
 name = "pdftools-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "aes",
  "flate2",
@@ -2620,7 +2620,7 @@ dependencies = [
 
 [[package]]
 name = "pdftools-ffi"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "jni",
  "pdftools-cli",
@@ -2630,7 +2630,7 @@ dependencies = [
 
 [[package]]
 name = "pdftools-render"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "fontique",
  "hayro",
