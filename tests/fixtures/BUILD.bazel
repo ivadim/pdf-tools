@@ -1,5 +1,7 @@
 load("@rules_apple//apple:resources.bzl", "apple_resource_bundle")
 
+exports_files(["pdfjs/tracemonkey.pdf"], visibility = ["//visibility:public"])
+
 filegroup(
     name = "pdfjs",
     srcs = glob(["pdfjs/*.pdf"]),

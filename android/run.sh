@@ -43,6 +43,7 @@ esac
 # One set of flags for every Bazel command, so none of them discards
 # another's analysis or moves bazel-bin.
 flags="--config=android --android_platforms=$platforms $config"
+[ -n "${CI:-}" ] && flags="$flags --config=ci"
 # The app (first, so its build doesn't compete with a booting emulator) and
 # the emulator with its system image.
 image=@android_system_image_36_$arch//:files

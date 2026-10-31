@@ -10,6 +10,7 @@ load("@rules_android//rules:rules.bzl", "android_binary")
 load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_kotlin//kotlin:core.bzl", "define_kt_toolchain", "kt_compiler_plugin")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 # Kotlin compiled for Java 17, as AndroidX expects (registered by --config=android).
 define_kt_toolchain(
@@ -70,4 +71,33 @@ android_binary(
         ":engine",
         ":lib",
     ],
+)
+
+# The test owns a clean emulator and declares the app, emulator, image, scripts,
+# and fixtures as inputs so successful results can be shared by the remote cache.
+sh_test(
+    name = "ui_test",
+    srcs = ["bazel-ui-test.sh"],
+    args = [
+        "$(rlocationpath :app.apk)",
+        "$(rlocationpath @androidsdk//:adb)",
+        "$(rlocationpath @androidsdk//:emulator)",
+        "$(rlocationpath @android_system_image_36_x86_64//:source.properties)",
+        "$(rlocationpath :test.sh)",
+        "$(rlocationpath //tests/fixtures:pdfjs/tracemonkey.pdf)",
+    ],
+    data = [
+        ":app.apk",
+        ":test.sh",
+        "//tests/fixtures:encrypted",
+        "//tests/fixtures:pdfjs",
+        "//tests/fixtures:pdfjs/tracemonkey.pdf",
+        "@androidsdk//:adb",
+        "@androidsdk//:emulator",
+        "@androidsdk//:emulator_runtime",
+        "@android_system_image_36_x86_64//:files",
+        "@android_system_image_36_x86_64//:source.properties",
+    ],
+    tags = ["manual", "no-remote-exec", "no-sandbox", "requires-kvm"],
+    timeout = "eternal",
 )
