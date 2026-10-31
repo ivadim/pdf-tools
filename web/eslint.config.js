@@ -26,7 +26,7 @@ export default [
     languageOptions: { globals: { ...globals.worker, ...globals.serviceworker } },
   },
   {
-    files: ["eslint.config.js"],
+    files: ["eslint.config.js", "playwright.config.js", "e2e/**/*.js"],
     languageOptions: { globals: globals.node },
   },
 ];

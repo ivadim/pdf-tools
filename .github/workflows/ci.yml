@@ -91,6 +91,43 @@ jobs:
           npm ci --no-fund
           npm run lint
 
+  web-ui:
+    name: Web UI
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: bazel-contrib/setup-bazel@104e3eea9447cdaa4b00d0fb46191a3985d26ab3 # 0.19.1
+        with:
+          bazelisk-cache: true
+      - uses: $/.github/actions/buildbuddy
+        with:
+          api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
+          download-mode: minimal
+      - name: Build the WebAssembly site
+        run: bazel build --config=ci --config=release //web:site
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Browser UI tests
+        working-directory: web
+        run: |
+          npm ci --no-fund
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+      - name: Browser test artifacts
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-ui-test-results
+          path: |
+            web/test-results
+            web/playwright-report
+          if-no-files-found: ignore
+
   security:
     name: Security
     runs-on: ubuntu-latest
@@ -147,6 +184,42 @@ jobs:
           awk -F: '/^SF:/ { test = ($2 ~ /\/tests\//) } /^LF:/ && !test { found += $2 } /^LH:/ && !test { hit += $2 }
             END { pct = 100 * hit / found; printf "Line coverage: %d/%d = %.1f%%\n", hit, found, pct; exit pct < 80 }' \
             bazel-out/_coverage/_coverage_report.dat
+
+  # Full PDF workflows and visual capture run once on Linux in every CI
+  # workflow. Visual output is retained on failure for design diagnosis.
+  acceptance:
+    name: Desktop acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: bazel-contrib/setup-bazel@104e3eea9447cdaa4b00d0fb46191a3985d26ab3 # 0.19.1
+        with:
+          bazelisk-cache: true
+      - uses: $/.github/actions/buildbuddy
+        with:
+          api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
+          download-mode: minimal
+      - name: Install Linux dependencies
+        run: |
+          read -ra deps <<< "$LINUX_DEPS"
+          sudo apt-get update && sudo apt-get install -y "${deps[@]}"
+      - name: Full PDF workflows and visual capture
+        run: |
+          bazel test --config=ci --nocache_test_results \
+            //crates/pdftools-app:acceptance_main \
+            //crates/pdftools-app:acceptance_visuals
+      - name: Acceptance outputs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-acceptance-results
+          path: |
+            bazel-testlogs/crates/pdftools-app/acceptance_main/test.outputs
+            bazel-testlogs/crates/pdftools-app/acceptance_visuals/test.outputs
+          if-no-files-found: ignore
 
   build:
     name: Build (${{ matrix.name }})
@@ -552,7 +625,7 @@ jobs:
   ci-passed:
     name: CI passed
     if: always()
-    needs: [test, lint, security, coverage, build, sign-macos, ios, ios-tests, android]
+    needs: [test, lint, web-ui, security, coverage, acceptance, build, sign-macos, ios, ios-tests, android]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

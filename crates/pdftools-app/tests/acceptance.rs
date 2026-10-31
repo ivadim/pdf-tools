@@ -5,9 +5,15 @@
 //! with a `manifest.tsv` of what an independent PDF reader should find in
 //! them, so they can be checked with another engine too.
 //!
-//!     bazel test //crates/pdftools-app:acceptance --test_arg=--ignored
+//!     bazel test //crates/pdftools-app:acceptance_main
 //!
-//! Ignored by default: they take a while and write outside the temp folder.
+//! The functional scenarios run together and in a defined order. Screenshot
+//! capture is separate because contact sheets consume the images it creates:
+//!
+//!     bazel test //crates/pdftools-app:acceptance_visuals
+//!
+//! Individual scenarios remain ignored so they can still be selected while
+//! debugging without turning `bazel test //...` into an extended test suite.
 
 mod common;
 
@@ -107,6 +113,25 @@ fn files_in(dir: &Path) -> Vec<PathBuf> {
     let mut files: Vec<_> = std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().path()).collect();
     files.sort();
     files
+}
+
+/// The extended functional suite. It deliberately calls the scenarios in one
+/// test so process-wide settings and generated files cannot race with another
+/// libtest worker. It is compiled only into the main-only Bazel target.
+#[cfg(feature = "ci_acceptance")]
+#[test]
+fn main_scenarios() {
+    merge();
+    split();
+    compress();
+    protect_and_unlock();
+    rotate_and_rearrange();
+    stamps();
+    metadata_and_grayscale();
+    images_to_pdf();
+    awkward_files();
+    large_document();
+    settings_persist();
 }
 
 // ── Merge ────────────────────────────────────────────────────────────────
@@ -886,8 +911,7 @@ fn walk(dir: &Path) -> Vec<PathBuf> {
 }
 
 /// Joins the `screens` screenshots into 3×3 contact sheets for review.
-#[test]
-#[ignore]
+#[cfg(feature = "visual_capture")]
 fn contact_sheets() {
     let dir = saved("acceptance/screens");
     let out = dir.join("sheets");
@@ -911,4 +935,14 @@ fn contact_sheets() {
             println!("{group}-{n}: {}", names.join(", "));
         }
     }
+}
+
+/// Produces the screenshot corpus and its contact sheets in a defined order.
+/// This is intentionally a manual Bazel target: the generated images are for
+/// design review, not an assertion-based visual-regression gate.
+#[cfg(feature = "visual_capture")]
+#[test]
+fn visual_capture() {
+    screens();
+    contact_sheets();
 }
