@@ -5,7 +5,7 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
-  # Weekly, for advisories published since the last push (Security job only).
+  # Weekly, for advisories and fresh simulator runs.
   schedule:
     - cron: "17 5 * * 2"
   workflow_dispatch:
@@ -438,19 +438,47 @@ jobs:
         run: |
           xcodebuild -project PDFTools.xcodeproj -scheme PDFTools -destination "generic/platform=iOS" \
             -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
-      - name: Unit and UI tests (iPhone and iPad simulators)
-        run: ios/test.sh
-      - name: Test results
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+
+  ios-tests:
+    name: iOS tests (${{ matrix.device }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - device: iPhone
+            unit: //ios:unit_iphone
+            ui: //ios:ui_iphone
+          - device: iPad
+            unit: //ios:unit_ipad
+            ui: //ios:ui_ipad
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          name: ios-test-results
-          path: ios/build/TestResults/*.xcresult
-          if-no-files-found: ignore
+          persist-credentials: false
+      - uses: bazel-contrib/setup-bazel@104e3eea9447cdaa4b00d0fb46191a3985d26ab3 # 0.19.1
+        with:
+          bazelisk-cache: true
+      - uses: $/.github/actions/buildbuddy
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        with:
+          api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
+          download-mode: minimal
+      - name: Unit and UI tests
+        env:
+          UNIT_TARGET: ${{ matrix.unit }}
+          UI_TARGET: ${{ matrix.ui }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = schedule ]; then
+            sh ios/bazel-test.sh --nocache_test_results "$UNIT_TARGET" "$UI_TARGET"
+          else
+            sh ios/bazel-test.sh "$UNIT_TARGET" "$UI_TARGET"
+          fi
 
   android:
     name: Build and test (Android)
-    if: github.event_name != 'schedule'
     # x86_64 Linux: the only hosted runner with KVM, which the emulator needs
     # (macOS and arm64 Linux runners can't run it accelerated).
     runs-on: ubuntu-latest
@@ -479,6 +507,7 @@ jobs:
       # Before the emulator starts: R8 and the emulator together run the
       # runner out of memory.
       - name: Release app (R8)
+        if: github.event_name != 'schedule'
         run: |
           bazel build --config=ci --config=android --config=release //android:app
           cp bazel-bin/android/app.apk pdftools-release.apk
@@ -488,12 +517,21 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Every tool on the emulator (debug app)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RUNNER_IMAGE: ${{ runner.os }}-${{ runner.arch }}
         run: |
-          android/test.sh
-          cp android/build/app.apk pdftools-debug.apk
+          bazel build --config=ci --config=android --android_platforms=@rules_android//:x86_64 //android:app
+          cp bazel-bin/android/app.apk pdftools-debug.apk
+          if [ "$EVENT_NAME" = schedule ]; then force=--nocache_test_results; else force=; fi
+          bazel test --config=ci --config=android --android_platforms=@rules_android//:x86_64 \
+            --test_env="PDFTOOLS_ANDROID_KERNEL=$(uname -r)" \
+            --test_env="PDFTOOLS_ANDROID_IMAGE=$RUNNER_IMAGE-${ImageOS:-unknown}-${ImageVersion:-unknown}" \
+            $force //android:ui_test
       # Not published yet (they're signed with Bazel's debug key), so the name
       # is outside the release job's pdftools-* pattern.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.event_name != 'schedule'
         with:
           name: android-apks
           path: pdftools-*.apk
@@ -504,8 +542,8 @@ jobs:
         with:
           name: android-test-results
           path: |
-            android/build/test
-            ~/.cache/pdftools-android/avd/emulator.log
+            bazel-testlogs/android/ui_test/test.log
+            bazel-testlogs/android/ui_test/test.outputs
           if-no-files-found: ignore
 
   # The one check pull requests must pass: fails if any job above failed or
@@ -514,7 +552,7 @@ jobs:
   ci-passed:
     name: CI passed
     if: always()
-    needs: [test, lint, security, coverage, build, sign-macos, ios, android]
+    needs: [test, lint, security, coverage, build, sign-macos, ios, ios-tests, android]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

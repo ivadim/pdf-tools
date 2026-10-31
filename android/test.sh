@@ -11,10 +11,17 @@
 set -eu
 
 cd "$(dirname "$0")/.."
-android/run.sh --install
-adb="${XDG_CACHE_HOME:-$HOME/.cache}/pdftools-android/sdk/platform-tools/adb"
+if [ -n "${PDFTOOLS_TEST_ADB:-}" ]; then
+    adb=$PDFTOOLS_TEST_ADB
+    fixtures=$PDFTOOLS_TEST_FIXTURES
+    out=${TEST_UNDECLARED_OUTPUTS_DIR:-${TEST_TMPDIR:?}/results}
+else
+    android/run.sh --install
+    adb="${XDG_CACHE_HOME:-$HOME/.cache}/pdftools-android/sdk/platform-tools/adb"
+    fixtures=tests/fixtures
+    out=android/build/test
+fi
 pkg=io.github.ivadim.pdftools
-out=android/build/test
 mkdir -p "$out"
 # No animations: screens settle at once, so taps land where the dump said.
 for scale in window_animation_scale transition_animation_scale animator_duration_scale; do
@@ -25,7 +32,7 @@ done
 dir=/data/data/$pkg/files/fixtures
 "$adb" shell run-as $pkg mkdir -p $dir
 put() { "$adb" shell run-as $pkg sh -c "'cat > $dir/$(basename "$1")'" <"$1"; }
-for f in tests/fixtures/pdfjs/tracemonkey.pdf tests/fixtures/pdfjs/rotation.pdf tests/fixtures/encrypted/aes256-password-test.pdf; do
+for f in "$fixtures/pdfjs/tracemonkey.pdf" "$fixtures/pdfjs/rotation.pdf" "$fixtures/encrypted/aes256-password-test.pdf"; do
     put "$f"
 done
 # Two plain PNGs (landscape and portrait) for Images to PDF.
