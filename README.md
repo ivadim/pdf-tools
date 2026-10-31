@@ -144,9 +144,11 @@ open ios/PDFTools.xcodeproj         # then run the PDFTools scheme on a simulato
 
 ```bash
 ios/test.sh                         # unit and UI tests on the newest iPhone and iPad simulators
+sh ios/bazel-test.sh //ios:unit_iphone //ios:ui_iphone  # cacheable Bazel tests
+sh ios/bazel-test.sh //ios:unit_ipad //ios:ui_ipad      # iPad
 ```
 
-`ios/PDFToolsTests` runs every tool end to end on the PDFs in `tests/fixtures`, as the screens drive them, and checks the outputs with the engine (Swift Testing). `ios/PDFToolsUITests` launches the app and goes through Merge, Split, Watermark, Signature, Unlock, Images to PDF and the page viewer by tapping and typing (XCUITest). The system's Files picker can't be scripted reliably, so in debug builds the UI tests hand the app their files in `PDFTOOLS_TEST_FILES` instead. `IOS_TEST_DEVICES` picks other simulators. CI builds the app for devices, unsigned, and runs both suites on an iPhone and an iPad; when they fail, the results are attached to the run.
+`ios/PDFToolsTests` runs every tool end to end on the PDFs in `tests/fixtures`, as the screens drive them, and checks the outputs with the engine (Swift Testing). `ios/PDFToolsUITests` launches the app and goes through Merge, Split, Watermark, Signature, Unlock, Images to PDF and the page viewer by tapping and typing (XCUITest). The system's Files picker can't be scripted reliably, so in debug builds the UI tests hand the app their files in `PDFTOOLS_TEST_FILES` instead. `IOS_TEST_DEVICES` picks other simulators for `ios/test.sh`. CI builds the app for devices, unsigned, and runs the Bazel suites separately on an iPhone 17 and iPad (A16). The wrapper selects a compatible installed simulator runtime and includes its build, Xcode, and macOS versions in the test cache key. Successful results can be reused through BuildBuddy; CI forces a fresh run weekly. Pass `--nocache_test_results` to the wrapper to force a local run.
 
 ### Android app (experimental)
 

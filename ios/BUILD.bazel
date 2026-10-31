@@ -1,0 +1,90 @@
+load("@rules_apple//apple:ios.bzl", "ios_application", "ios_ui_test", "ios_unit_test", "ios_xctestrun_runner")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+swift_library(
+    name = "app_sources",
+    srcs = glob(["PDFTools/**/*.swift"]),
+    copts = [
+        "-DDEBUG",
+        "-enable-testing",
+        "-swift-version", "6",
+        "-default-isolation", "MainActor",
+        "-enable-upcoming-feature", "InferIsolatedConformances",
+        "-enable-upcoming-feature", "NonisolatedNonsendingByDefault",
+    ],
+    module_name = "PDFTools",
+    tags = ["manual"],
+    deps = ["//crates/pdftools-ffi:ios_engine"],
+)
+
+ios_application(
+    name = "app",
+    app_icons = glob(["PDFTools/Assets.xcassets/AppIcon.appiconset/**"]),
+    bundle_id = "io.github.ivadim.pdftools",
+    families = ["iphone", "ipad"],
+    infoplists = ["Info.plist"],
+    minimum_os_version = "18.0",
+    resources = glob(["PDFTools/Assets.xcassets/AccentColor.colorset/**"]),
+    tags = ["manual"],
+    deps = [":app_sources"],
+)
+
+swift_library(
+    name = "ui_test_sources",
+    testonly = True,
+    srcs = glob(["PDFToolsUITests/*.swift", "TestSupport/*.swift"]),
+    module_name = "PDFToolsUITests",
+    tags = ["manual"],
+)
+
+swift_library(
+    name = "unit_test_sources",
+    testonly = True,
+    srcs = glob(["PDFToolsTests/*.swift", "TestSupport/*.swift"]),
+    copts = ["-swift-version", "6", "-default-isolation", "MainActor"],
+    module_name = "PDFToolsTests",
+    tags = ["manual"],
+    deps = [":app_sources"],
+)
+
+ios_xctestrun_runner(
+    name = "iphone_runner",
+    device_type = "iPhone 17",
+    reuse_simulator = False,
+    tags = ["manual"],
+)
+
+ios_xctestrun_runner(
+    name = "ipad_runner",
+    device_type = "iPad (A16)",
+    reuse_simulator = False,
+    tags = ["manual"],
+)
+
+[ios_ui_test(
+    name = name,
+    minimum_os_version = "18.0",
+    resources = ["//tests/fixtures:ios_fixtures"],
+    runner = runner,
+    tags = ["manual"],
+    test_host = ":app",
+    timeout = "long",
+    deps = [":ui_test_sources"],
+) for name, runner in [
+    ("ui_iphone", ":iphone_runner"),
+    ("ui_ipad", ":ipad_runner"),
+]]
+
+[ios_unit_test(
+    name = name,
+    minimum_os_version = "18.0",
+    resources = ["//tests/fixtures:ios_fixtures"],
+    runner = runner,
+    tags = ["manual"],
+    test_host = ":app",
+    timeout = "long",
+    deps = [":unit_test_sources"],
+) for name, runner in [
+    ("unit_iphone", ":iphone_runner"),
+    ("unit_ipad", ":ipad_runner"),
+]]

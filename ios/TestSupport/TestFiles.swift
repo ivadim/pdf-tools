@@ -6,7 +6,8 @@ import UIKit
 private final class BundleToken {}
 
 enum TestFiles {
-    static let fixtures = Bundle(for: BundleToken.self).url(forResource: "fixtures", withExtension: nil)!
+    static let fixtures = Bundle(for: BundleToken.self).url(forResource: "fixtures", withExtension: nil)
+        ?? Bundle(for: BundleToken.self).url(forResource: "fixtures", withExtension: "bundle")!
 
     /// tracemonkey.pdf (14 pages), rotation.pdf (2), sizes.pdf…
     static func pdf(_ name: String) -> URL { fixtures.appendingPathComponent("pdfjs/\(name).pdf") }

@@ -1,3 +1,5 @@
+load("@rules_apple//apple:resources.bzl", "apple_resource_bundle")
+
 filegroup(
     name = "pdfjs",
     srcs = glob(["pdfjs/*.pdf"]),
@@ -14,5 +16,13 @@ filegroup(
 filegroup(
     name = "fuzz",
     srcs = glob(["fuzz/*.pdf"]),
+    visibility = ["//visibility:public"],
+)
+
+apple_resource_bundle(
+    name = "ios_fixtures",
+    bundle_name = "fixtures",
+    structured_resources = glob(["pdfjs/*.pdf", "encrypted/*.pdf"]),
+    tags = ["manual"],
     visibility = ["//visibility:public"],
 )
