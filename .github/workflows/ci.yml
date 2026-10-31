@@ -9,6 +9,12 @@ on:
   schedule:
     - cron: "17 5 * * 2"
   workflow_dispatch:
+    inputs:
+      sign_macos:
+        description: Sign and notarize the macOS package
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -40,12 +46,11 @@ jobs:
       - uses: bazel-contrib/setup-bazel@104e3eea9447cdaa4b00d0fb46191a3985d26ab3 # 0.19.1
         with:
           bazelisk-cache: true
-          disk-cache: ${{ github.workflow }}-test
-          repository-cache: true
       - uses: $/.github/actions/buildbuddy
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         with:
           api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
+          download-mode: minimal
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
@@ -66,12 +71,11 @@ jobs:
       - uses: bazel-contrib/setup-bazel@104e3eea9447cdaa4b00d0fb46191a3985d26ab3 # 0.19.1
         with:
           bazelisk-cache: true
-          disk-cache: ${{ github.workflow }}-lint
-          repository-cache: true
       - uses: $/.github/actions/buildbuddy
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         with:
           api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
+          download-mode: minimal
       - name: Formatting (rustfmt)
         run: bazel build --config=ci --config=rustfmt //...
       - name: Rust lints (Clippy, warnings are errors)
@@ -128,8 +132,6 @@ jobs:
       - uses: bazel-contrib/setup-bazel@104e3eea9447cdaa4b00d0fb46191a3985d26ab3 # 0.19.1
         with:
           bazelisk-cache: true
-          disk-cache: ${{ github.workflow }}-coverage
-          repository-cache: true
       - uses: $/.github/actions/buildbuddy
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         with:
@@ -148,7 +150,7 @@ jobs:
 
   build:
     name: Build (${{ matrix.name }})
-    needs: [test, lint]
+    if: github.event_name != 'schedule'
     strategy:
       fail-fast: false
       matrix:
@@ -172,12 +174,11 @@ jobs:
       - uses: bazel-contrib/setup-bazel@104e3eea9447cdaa4b00d0fb46191a3985d26ab3 # 0.19.1
         with:
           bazelisk-cache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          disk-cache: ${{ !startsWith(github.ref, 'refs/tags/') && format('{0}-release', github.workflow) }}
-          repository-cache: ${{ !startsWith(github.ref, 'refs/tags/') }}
       - uses: $/.github/actions/buildbuddy
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         with:
           api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
+          download-mode: toplevel
 
       - name: Version
         shell: bash
@@ -293,15 +294,15 @@ jobs:
           archive: false
           if-no-files-found: error
 
-  # Release builds (tags, and manual runs to try it out) are signed with the
-  # Developer ID certificate and notarized, replacing the build's ad-hoc
+  # Release tags, and manual runs that explicitly request it, are signed with
+  # the Developer ID certificate and notarized, replacing the build's ad-hoc
   # signed disk image. The keys are secrets of the macos-signing environment,
   # which waits for the owner's approval and only deploys v* tags and main.
   # The job checks out no code and builds nothing: nothing from the
   # repository or its dependencies runs where the keys are.
   sign-macos:
     name: Sign and notarize (macOS)
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'workflow_dispatch' && inputs.sign_macos == true) || startsWith(github.ref, 'refs/tags/v')
     needs: [build]
     runs-on: macos-latest
     timeout-minutes: 45
@@ -412,7 +413,6 @@ jobs:
   ios:
     name: Build and test (iOS)
     if: github.event_name != 'schedule'
-    needs: [test, lint]
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -422,12 +422,11 @@ jobs:
       - uses: bazel-contrib/setup-bazel@104e3eea9447cdaa4b00d0fb46191a3985d26ab3 # 0.19.1
         with:
           bazelisk-cache: true
-          disk-cache: ${{ github.workflow }}-ios
-          repository-cache: true
       - uses: $/.github/actions/buildbuddy
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         with:
           api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
+          download-mode: toplevel
       - name: Signing team (from the APPLE_TEAM_ID secret; empty on forks)
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -452,7 +451,6 @@ jobs:
   android:
     name: Build and test (Android)
     if: github.event_name != 'schedule'
-    needs: [test, lint]
     # x86_64 Linux: the only hosted runner with KVM, which the emulator needs
     # (macOS and arm64 Linux runners can't run it accelerated).
     runs-on: ubuntu-latest
@@ -469,12 +467,11 @@ jobs:
       - uses: bazel-contrib/setup-bazel@104e3eea9447cdaa4b00d0fb46191a3985d26ab3 # 0.19.1
         with:
           bazelisk-cache: true
-          disk-cache: ${{ github.workflow }}-android
-          repository-cache: true
       - uses: $/.github/actions/buildbuddy
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         with:
           api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
+          download-mode: toplevel
       - name: Engine lints (Clippy and rustfmt, for Android)
         run: |
           bazel build --config=ci --config=android --config=clippy --config=rustfmt \
@@ -532,7 +529,7 @@ jobs:
   release:
     name: Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, sign-macos, coverage, security]
+    needs: [ci-passed, build, sign-macos]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
