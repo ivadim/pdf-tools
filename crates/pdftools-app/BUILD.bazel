@@ -54,25 +54,74 @@ rust_test(
     deps = all_crate_deps(normal_dev = True),
 )
 
-[rust_test(
-    name = test,
+ACCEPTANCE_DATA = [
+    "//crates/pdftools-core:sample_photos",
+    "//tests/fixtures:encrypted",
+    "//tests/fixtures:pdfjs",
+]
+
+rust_test(
+    name = "acceptance",
     srcs = [
-        "tests/%s.rs" % test,
+        "tests/acceptance.rs",
         "tests/common/mod.rs",
     ],
-    crate_root = "tests/%s.rs" % test,
-    data = [
-        "//crates/pdftools-core:sample_photos",
-        "//tests/fixtures:encrypted",
-        "//tests/fixtures:pdfjs",
+    crate_root = "tests/acceptance.rs",
+    data = ACCEPTANCE_DATA,
+    rustc_env = RUSTC_ENV,
+    tags = ["manual"],
+    version = VERSION,
+    deps = [":pdftools_app"] + APP_DEPS + all_crate_deps(normal_dev = True),
+)
+
+# Full PDF workflows, run explicitly on pushes to main. Keeping it manual
+# leaves normal `bazel test //...` fast and avoids tripling the work in the
+# cross-platform unit-test matrix.
+rust_test(
+    name = "acceptance_main",
+    srcs = [
+        "tests/acceptance.rs",
+        "tests/common/mod.rs",
     ],
+    crate_features = ["ci_acceptance"],
+    crate_root = "tests/acceptance.rs",
+    data = ACCEPTANCE_DATA,
+    rustc_env = RUSTC_ENV,
+    tags = ["manual"],
+    timeout = "long",
+    version = VERSION,
+    deps = [":pdftools_app"] + APP_DEPS + all_crate_deps(normal_dev = True),
+)
+
+# Screenshot capture and contact-sheet assembly must happen sequentially.
+rust_test(
+    name = "acceptance_visuals",
+    srcs = [
+        "tests/acceptance.rs",
+        "tests/common/mod.rs",
+    ],
+    crate_features = ["visual_capture"],
+    crate_root = "tests/acceptance.rs",
+    data = ACCEPTANCE_DATA,
+    rustc_env = RUSTC_ENV,
+    tags = ["manual"],
+    timeout = "long",
+    version = VERSION,
+    deps = [":pdftools_app"] + APP_DEPS + all_crate_deps(normal_dev = True),
+)
+
+rust_test(
+    name = "ui",
+    srcs = [
+        "tests/ui.rs",
+        "tests/common/mod.rs",
+    ],
+    crate_root = "tests/ui.rs",
+    data = ACCEPTANCE_DATA,
     rustc_env = RUSTC_ENV,
     version = VERSION,
     deps = [":pdftools_app"] + APP_DEPS + all_crate_deps(normal_dev = True),
-) for test in [
-    "acceptance",
-    "ui",
-]]
+)
 
 rust_binary(
     name = "render_icons",

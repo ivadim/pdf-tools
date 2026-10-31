@@ -109,6 +109,8 @@ Third-party crates are still declared in the crates' `Cargo.toml` files and pinn
 
 The UI tests save screenshots of the main screens, in both themes, to `bazel-testlogs/crates/pdftools-app/ui/test.outputs/iced-shots`, which is handy for checking layout changes. `bazel test //crates/pdftools-app:ui --test_arg=--ignored --test_arg=tour` adds more of them.
 
+The extended desktop acceptance suite drives each PDF workflow on real files, including a 504-page document. Its functional and ordered screenshot/contact-sheet targets run once on Linux in every CI workflow; run them locally with `bazel test //crates/pdftools-app:acceptance_main //crates/pdftools-app:acceptance_visuals`.
+
 Helper examples (`bazel run` starts them in Bazel's own directory, so give them absolute paths):
 
 ```bash
@@ -125,9 +127,10 @@ bazel run --config=release //crates/pdftools-core:try_file -- "$PWD/some.pdf" "$
 ```bash
 bazel run --config=release //web:serve      # http://localhost:8080 (needs python3)
 bazel build --config=release //web:site     # the static site, in bazel-bin/web/site
+(cd web && npm ci && npx playwright install chromium && npm run test:e2e)  # Chromium E2E test
 ```
 
-`web/wasi.js` is a small WASI loader with an in-memory file system. A Web Worker (`web/worker.js`) copies each file in once and runs one command per action: `info`, `render` (page previews) and one command per tool. Files never leave the browser. Text watermarks and typed signatures are drawn with the browser's fonts, because WebAssembly can't see the system's.
+`web/wasi.js` is a small WASI loader with an in-memory file system. A Web Worker (`web/worker.js`) copies each file in once and runs one command per action: `info`, `render` (page previews) and one command per tool. Files never leave the browser. Text watermarks and typed signatures are drawn with the browser's fonts, because WebAssembly can't see the system's. Playwright runs Chromium against the Bazel-built site in CI: it verifies routing and a real fixture-PDF merge through the WebAssembly worker, including the generated download.
 
 ### iOS app (experimental)
 
