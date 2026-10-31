@@ -4,27 +4,30 @@
 
 use std::path::{Path, PathBuf};
 
+use jni::errors::ThrowRuntimeExAndDefault;
 use jni::objects::JIntArray;
 use jni::objects::{JClass, JObject, JObjectArray, JString};
+use jni::strings::JNIString;
 use jni::sys::{jboolean, jint, jobject, jstring, JNI_FALSE};
-use jni::JNIEnv;
+use jni::{jni_sig, jni_str, Env, EnvUnowned};
 use pdftools_render::pages::{render, PreviewRequest};
 
 use super::{guarded, parse_groups, DOCS};
 
-const EXCEPTION: &str = "io/github/ivadim/pdftools/EngineException";
-const PAGE: &str = "io/github/ivadim/pdftools/NativePage";
+fn text(env: &mut Env, string: &JString) -> Result<String, String> {
+    string.try_to_string(env).map_err(|e| e.to_string())
+}
 
-fn text(env: &mut JNIEnv, string: &JString) -> Result<String, String> {
-    env.get_string(string).map(Into::into).map_err(|e| e.to_string())
+fn throw(env: &mut Env, message: String) {
+    let _ = env.throw_new(jni_str!("io/github/ivadim/pdftools/EngineException"), JNIString::new(message));
 }
 
 /// Returns `result` as a Java string, or throws its error and returns null.
-fn finish(env: &mut JNIEnv, result: Result<String, String>) -> jstring {
+fn finish(env: &mut Env, result: Result<String, String>) -> jstring {
     match result.and_then(|text| env.new_string(text).map_err(|e| e.to_string())) {
         Ok(string) => string.into_raw(),
         Err(message) => {
-            let _ = env.throw_new(EXCEPTION, message);
+            throw(env, message);
             std::ptr::null_mut()
         }
     }
@@ -33,26 +36,30 @@ fn finish(env: &mut JNIEnv, result: Result<String, String>) -> jstring {
 /// `Engine.nativeRun(args)`: a `pdftools-cli` command's JSON result.
 #[no_mangle]
 pub extern "system" fn Java_io_github_ivadim_pdftools_Engine_nativeRun<'l>(
-    mut env: JNIEnv<'l>,
+    mut unowned_env: EnvUnowned<'l>,
     _: JClass<'l>,
-    args: JObjectArray<'l>,
+    args: JObjectArray<'l, JString<'l>>,
 ) -> jstring {
-    let result = (|| {
-        let count = env.get_array_length(&args).map_err(|e| e.to_string())?;
-        let mut strings = Vec::with_capacity(count as usize);
-        for i in 0..count {
-            let item = JString::from(env.get_object_array_element(&args, i).map_err(|e| e.to_string())?);
-            strings.push(text(&mut env, &item)?);
-        }
-        guarded(|| pdftools_cli::run(&strings))
-    })();
-    finish(&mut env, result)
+    unowned_env
+        .with_env(|env| -> jni::errors::Result<_> {
+            let result = (|| {
+                let count = args.len(env).map_err(|e| e.to_string())?;
+                let mut strings = Vec::with_capacity(count);
+                for i in 0..count {
+                    let item = args.get_element(env, i).map_err(|e| e.to_string())?;
+                    strings.push(text(env, &item)?);
+                }
+                guarded(|| pdftools_cli::run(&strings))
+            })();
+            Ok(finish(env, result))
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
 }
 
 /// `Engine.nativeRender(path, page, width, rotation, gray)`: a `NativePage`.
 #[no_mangle]
 pub extern "system" fn Java_io_github_ivadim_pdftools_Engine_nativeRender<'l>(
-    mut env: JNIEnv<'l>,
+    mut unowned_env: EnvUnowned<'l>,
     _: JClass<'l>,
     path: JString<'l>,
     page: jint,
@@ -60,77 +67,99 @@ pub extern "system" fn Java_io_github_ivadim_pdftools_Engine_nativeRender<'l>(
     rotation: jint,
     gray: jboolean,
 ) -> jobject {
-    let result = text(&mut env, &path)
-        .and_then(|path| {
-            let request = PreviewRequest {
-                path: PathBuf::from(path),
-                page: page.max(0) as usize,
-                width: width.max(1) as u32,
-                rotation,
-                gray: gray != JNI_FALSE,
-            };
-            guarded(|| render(&request, &DOCS))
+    unowned_env
+        .with_env(|env| -> jni::errors::Result<_> {
+            let result = text(env, &path)
+                .and_then(|path| {
+                    let request = PreviewRequest {
+                        path: PathBuf::from(path),
+                        page: page.max(0) as usize,
+                        width: width.max(1) as u32,
+                        rotation,
+                        gray: gray != JNI_FALSE,
+                    };
+                    guarded(|| render(&request, &DOCS))
+                })
+                .and_then(|rendered| {
+                    let pixels = JObject::from(env.byte_array_from_slice(&rendered.pixels).map_err(|e| e.to_string())?);
+                    let args = [
+                        (rendered.width as jint).into(),
+                        (rendered.height as jint).into(),
+                        rendered.page_size.0.into(),
+                        rendered.page_size.1.into(),
+                        (&pixels).into(),
+                    ];
+                    env.new_object(jni_str!("io/github/ivadim/pdftools/NativePage"), jni_sig!("(IIFF[B)V"), &args)
+                        .map_err(|e| e.to_string())
+                });
+            Ok(match result {
+                Ok(page) => page.into_raw(),
+                Err(message) => {
+                    throw(env, message);
+                    std::ptr::null_mut()
+                }
+            })
         })
-        .and_then(|rendered| {
-            let pixels = JObject::from(env.byte_array_from_slice(&rendered.pixels).map_err(|e| e.to_string())?);
-            let args = [
-                (rendered.width as jint).into(),
-                (rendered.height as jint).into(),
-                rendered.page_size.0.into(),
-                rendered.page_size.1.into(),
-                (&pixels).into(),
-            ];
-            env.new_object(PAGE, "(IIFF[B)V", &args).map_err(|e| e.to_string())
-        });
-    match result {
-        Ok(page) => page.into_raw(),
-        Err(message) => {
-            let _ = env.throw_new(EXCEPTION, message);
-            std::ptr::null_mut()
-        }
-    }
+        .resolve::<ThrowRuntimeExAndDefault>()
 }
 
 /// `Engine.nativeForget(path)`: drops a cached document, e.g. after its file changed.
 #[no_mangle]
-pub extern "system" fn Java_io_github_ivadim_pdftools_Engine_nativeForget<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, path: JString<'l>) {
-    if let Ok(path) = text(&mut env, &path) {
-        DOCS.forget(Path::new(&path));
-    }
+pub extern "system" fn Java_io_github_ivadim_pdftools_Engine_nativeForget<'l>(
+    mut unowned_env: EnvUnowned<'l>,
+    _: JClass<'l>,
+    path: JString<'l>,
+) {
+    unowned_env
+        .with_env(|env| -> jni::errors::Result<_> {
+            if let Ok(path) = text(env, &path) {
+                DOCS.forget(Path::new(&path));
+            }
+            Ok(())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>();
 }
 
 /// `Engine.nativeParseGroups(text, total)`: page ranges as JSON groups.
 #[no_mangle]
 pub extern "system" fn Java_io_github_ivadim_pdftools_Engine_nativeParseGroups<'l>(
-    mut env: JNIEnv<'l>,
+    mut unowned_env: EnvUnowned<'l>,
     _: JClass<'l>,
     ranges: JString<'l>,
     total: jint,
 ) -> jstring {
-    let result = text(&mut env, &ranges).and_then(|ranges| guarded(|| parse_groups(&ranges, total.max(0) as usize)));
-    finish(&mut env, result)
+    unowned_env
+        .with_env(|env| -> jni::errors::Result<_> {
+            let result = text(env, &ranges).and_then(|ranges| guarded(|| parse_groups(&ranges, total.max(0) as usize)));
+            Ok(finish(env, result))
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
 }
 
 /// `Engine.nativeSetThreads(threads)`: caps the threads tools use for images
 /// and streams; fewer saves memory.
 #[no_mangle]
-pub extern "system" fn Java_io_github_ivadim_pdftools_Engine_nativeSetThreads<'l>(_: JNIEnv<'l>, _: JClass<'l>, threads: jint) {
+pub extern "system" fn Java_io_github_ivadim_pdftools_Engine_nativeSetThreads<'l>(_: EnvUnowned<'l>, _: JClass<'l>, threads: jint) {
     pdftools_core::set_max_threads(threads.max(1) as usize);
 }
 
 /// `Engine.nativeFormatList(pages)`: [1, 2, 3, 5] → "1-3, 5".
 #[no_mangle]
 pub extern "system" fn Java_io_github_ivadim_pdftools_Engine_nativeFormatList<'l>(
-    mut env: JNIEnv<'l>,
+    mut unowned_env: EnvUnowned<'l>,
     _: JClass<'l>,
     pages: JIntArray<'l>,
 ) -> jstring {
-    let result = (|| {
-        let count = env.get_array_length(&pages).map_err(|e| e.to_string())? as usize;
-        let mut values = vec![0; count];
-        env.get_int_array_region(&pages, 0, &mut values).map_err(|e| e.to_string())?;
-        let values: Vec<usize> = values.into_iter().map(|v| v.max(0) as usize).collect();
-        Ok(pdftools_render::ranges::format_list(&values))
-    })();
-    finish(&mut env, result)
+    unowned_env
+        .with_env(|env| -> jni::errors::Result<_> {
+            let result = (|| {
+                let count = pages.len(env).map_err(|e| e.to_string())?;
+                let mut values = vec![0; count];
+                pages.get_region(env, 0, &mut values).map_err(|e| e.to_string())?;
+                let values: Vec<usize> = values.into_iter().map(|v| v.max(0) as usize).collect();
+                Ok(pdftools_render::ranges::format_list(&values))
+            })();
+            Ok(finish(env, result))
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
 }
