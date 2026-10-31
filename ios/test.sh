@@ -6,7 +6,7 @@
 #   ios/test.sh                                  # newest iPhone and iPad simulators
 #   IOS_TEST_DEVICES="iPhone 17 Pro" ios/test.sh # by name or UDID, one per line
 #
-# Results go to ios/build/TestResults/<device>.xcresult (open them in Xcode).
+# Results go to ios/build/TestResults/ios.xcresult (open it in Xcode).
 set -eu
 
 cd "$(dirname "$0")"
@@ -26,26 +26,28 @@ for kind in ("iPhone", "iPad"):
 ')}
 [ -n "$devices" ] || { echo "no iOS simulators found" >&2; exit 1; }
 
-status=0
-echo "$devices" | while IFS= read -r device; do
+set --
+while IFS= read -r device; do
     case $device in
         *-*-*-*-*) destination="id=$device" ;;
         *) destination="platform=iOS Simulator,name=$device" ;;
     esac
     name=$(xcrun simctl list devices | sed -n "s/^ *\(.*\) ($device) .*/\1/p" | head -n 1)
     echo "Testing on ${name:-$device}"
-    # Only this run's results may be read below (an older passing bundle must
-    # not stand in for a run that failed before writing one).
-    rm -rf build/Logs/Test
-    xcodebuild test -project PDFTools.xcodeproj -scheme PDFTools -destination "$destination" \
-        -derivedDataPath build CODE_SIGNING_ALLOWED=NO 2>&1 | grep -v invalidDigitCount || true
-    results=$(ls -d build/Logs/Test/*.xcresult 2>/dev/null | head -n 1)
-    [ -n "$results" ] || { echo "no test results for ${name:-$device}: the build or launch failed" >&2; exit 1; }
-    mkdir -p build/TestResults
-    kept="build/TestResults/$(echo "${name:-$device}" | tr -c 'A-Za-z0-9\n' '-').xcresult"
-    rm -rf "$kept"
-    mv "$results" "$kept"
-    # The pipe hides xcodebuild's status; the result bundle has it.
-    xcrun xcresulttool get test-results summary --path "$kept" | grep -q '"result" : "Passed"' || exit 1
-done || status=1
-exit $status
+    set -- "$@" -destination "$destination"
+done <<EOF
+$devices
+EOF
+
+# One xcodebuild invocation compiles once, then tests all simulator destinations
+# concurrently. Only this run's result bundle may be read below.
+results=build/TestResults/ios.xcresult
+rm -rf build/Logs/Test "$results"
+mkdir -p build/TestResults
+xcodebuild test -project PDFTools.xcodeproj -scheme PDFTools "$@" \
+    -parallel-testing-enabled YES -maximum-concurrent-test-simulator-destinations 2 \
+    -derivedDataPath build -resultBundlePath "$results" CODE_SIGNING_ALLOWED=NO \
+    2>&1 | grep -v invalidDigitCount || true
+[ -d "$results" ] || { echo "no test results: the build or launch failed" >&2; exit 1; }
+# The pipe hides xcodebuild's status; the result bundle has the authoritative result.
+xcrun xcresulttool get test-results summary --path "$results" | grep -q '"result" : "Passed"'

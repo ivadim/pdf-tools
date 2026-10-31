@@ -1,5 +1,7 @@
 load("@crates//:defs.bzl", "all_crate_deps")
+load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_shared_library", "rust_static_library", "rust_test")
+load("@rules_swift//swift:swift.bzl", "swift_interop_hint")
 load("//:version.bzl", "RUSTC_ENV", "VERSION")
 
 FFI_DEPS = [
@@ -17,6 +19,21 @@ rust_static_library(
     version = VERSION,
     visibility = ["//visibility:public"],
     deps = FFI_DEPS,
+)
+
+swift_interop_hint(
+    name = "swift_module",
+    module_name = "PdftoolsFFI",
+    tags = ["manual"],
+)
+
+cc_library(
+    name = "ios_engine",
+    hdrs = ["include/pdftools.h"],
+    aspect_hints = [":swift_module"],
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+    deps = [":pdftools_ffi"],
 )
 
 # The engine for the Android app (//android), with its JNI functions

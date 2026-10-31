@@ -144,9 +144,11 @@ open ios/PDFTools.xcodeproj         # then run the PDFTools scheme on a simulato
 
 ```bash
 ios/test.sh                         # unit and UI tests on the newest iPhone and iPad simulators
+sh ios/bazel-test.sh //ios:unit_iphone //ios:ui_iphone  # cacheable Bazel tests
+sh ios/bazel-test.sh //ios:unit_ipad //ios:ui_ipad      # iPad
 ```
 
-`ios/PDFToolsTests` runs every tool end to end on the PDFs in `tests/fixtures`, as the screens drive them, and checks the outputs with the engine (Swift Testing). `ios/PDFToolsUITests` launches the app and goes through Merge, Split, Watermark, Signature, Unlock, Images to PDF and the page viewer by tapping and typing (XCUITest). The system's Files picker can't be scripted reliably, so in debug builds the UI tests hand the app their files in `PDFTOOLS_TEST_FILES` instead. `IOS_TEST_DEVICES` picks other simulators. CI builds the app for devices, unsigned, and runs both suites on an iPhone and an iPad; when they fail, the results are attached to the run.
+`ios/PDFToolsTests` runs every tool end to end on the PDFs in `tests/fixtures`, as the screens drive them, and checks the outputs with the engine (Swift Testing). `ios/PDFToolsUITests` launches the app and goes through Merge, Split, Watermark, Signature, Unlock, Images to PDF and the page viewer by tapping and typing (XCUITest). The system's Files picker can't be scripted reliably, so in debug builds the UI tests hand the app their files in `PDFTOOLS_TEST_FILES` instead. `IOS_TEST_DEVICES` picks other simulators for `ios/test.sh`. CI builds the app for devices, unsigned, and runs the Bazel suites separately on an iPhone 17 and iPad (A16). The wrapper selects a compatible installed simulator runtime and includes its build, Xcode, and macOS versions in the test cache key. Successful results can be reused through BuildBuddy; CI forces a fresh run weekly. Pass `--nocache_test_results` to the wrapper to force a local run.
 
 ### Android app (experimental)
 
@@ -165,7 +167,7 @@ bazel run @android_maven//:pin       # after changing the AndroidX libraries in 
 
 `android/run.sh` starts the emulator with an Android 16 image for the host: arm64 on Apple silicon, x86_64 elsewhere (on Linux it needs KVM). A phone with USB debugging on is used instead when one is connected. With `CI` set, the emulator runs without a window and cold-boots each time. Debug and release builds are signed with Bazel's debug key. Other builds don't download the SDK, apart from its 65 MB platform files, which `rules_android` loads in every build.
 
-`android/test.sh` goes through every tool on the emulator by tapping and typing (UI Automator) and checks each result's message; failures leave a screenshot in `android/build/test`. As on iOS, the system's document picker runs outside the app, so in debug builds the tests start the app with the tool and the fixture paths in its launch intent. CI runs `android/test.sh` on an x86_64 emulator on Linux with KVM, the only GitHub-hosted runner that can run it accelerated (macOS and arm64 Linux runners can't), then builds the release APK. Both APKs are attached to the run, and when a test fails, its screenshot and the emulator's log are too.
+`android/test.sh` goes through every tool on the emulator by tapping and typing (UI Automator) and checks each result's message; failures leave a screenshot in `android/build/test`. As on iOS, the system's document picker runs outside the app, so in debug builds the tests start the app with the tool and the fixture paths in its launch intent. CI runs the same suite as `bazel test --config=ci --config=android --android_platforms=@rules_android//:x86_64 //android:ui_test`, using an x86_64 emulator on Linux with KVM. Bazel tracks the APK, test script, fixtures, emulator, and system image; unchanged successful tests can use the BuildBuddy cache, and a weekly run forces execution. Failures retain the test log, emulator log, and screenshots. CI also builds release and debug APKs and attaches them to the run.
 
 ### Lints and security checks
 

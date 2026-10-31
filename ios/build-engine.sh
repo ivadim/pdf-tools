@@ -10,6 +10,7 @@ set -eu
 cd "$(dirname "$0")/.."
 config=--config=release
 [ "${1:-}" = "--debug" ] && config=--compilation_mode=fastbuild
+[ -n "${CI:-}" ] && config="$config --config=ci"
 
 out=ios/Engine
 work=$(mktemp -d)
@@ -17,7 +18,10 @@ trap 'rm -rf "$work"' EXIT
 
 for platform in ios_arm64 ios_sim_arm64; do
     flags="$config --platforms=@apple_support//platforms:$platform"
+    # flags contains separate Bazel options.
+    # shellcheck disable=SC2086
     bazel build $flags //crates/pdftools-ffi:pdftools_ffi
+    # shellcheck disable=SC2086
     lib=$(bazel cquery $flags --output=files //crates/pdftools-ffi:pdftools_ffi 2>/dev/null)
     mkdir -p "$work/$platform"
     cp "$lib" "$work/$platform/libpdftools_ffi.a"

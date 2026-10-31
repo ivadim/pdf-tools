@@ -6,7 +6,10 @@ bazel_dep(name = "rules_rust", version = "0.74.0")
 bazel_dep(name = "platforms", version = "1.1.0")
 bazel_dep(name = "rules_cc", version = "0.2.25")
 # Xcode's toolchain and the iOS platforms, for the iOS app's engine.
-bazel_dep(name = "apple_support", version = "2.8.0")
+bazel_dep(name = "apple_support", version = "2.9.1")
+bazel_dep(name = "rules_apple", version = "5.3.0")
+bazel_dep(name = "rules_swift", version = "4.2.2")
+bazel_dep(name = "rules_shell", version = "0.8.0")
 bazel_dep(name = "llvm", version = "0.8.24")
 # The Android app (//android): Android and Kotlin rules, and a pinned SDK, NDK,
 # emulator and system image that Bazel downloads, so nothing needs installing.
@@ -123,7 +126,7 @@ http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "ht
 
 [http_archive(
     name = "android_system_image_36_" + arch,
-    build_file_content = 'filegroup(name = "files", srcs = glob(["**"]), visibility = ["//visibility:public"])',
+    build_file_content = 'exports_files(["source.properties"], visibility = ["//visibility:public"])\nfilegroup(name = "files", srcs = glob(["**"]), visibility = ["//visibility:public"])',
     sha256 = sha256,
     strip_prefix = abi,
     urls = ["https://dl.google.com/android/repository/sys-img/android/%s-36_r02.zip" % abi],
