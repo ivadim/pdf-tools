@@ -22,7 +22,18 @@ def _web_site_impl(ctx):
     for src in ctx.files.icons:
         add(src, "icons/" + src.basename)
     add(ctx.file.favicon, "icon.png")
-    add(ctx.files.wasm[0], "pdftools-cli.wasm")
+    # A symlink to a built WASM output dangles when Bazel downloads only
+    # declared outputs from the remote cache. Copy it into the site so the
+    # static server always has the module it advertises.
+    wasm = ctx.actions.declare_file(ctx.label.name + "/pdftools-cli.wasm")
+    ctx.actions.run_shell(
+        inputs = [ctx.files.wasm[0]],
+        outputs = [wasm],
+        command = "cp \"$1\" \"$2\"",
+        arguments = [ctx.files.wasm[0].path, wasm.path],
+        mnemonic = "CopyWebAssemblyModule",
+    )
+    outputs.append(wasm)
     return [DefaultInfo(files = depset(outputs), runfiles = ctx.runfiles(files = outputs))]
 
 web_site = rule(
