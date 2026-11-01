@@ -105,7 +105,9 @@ jobs:
       - uses: $/.github/actions/buildbuddy
         with:
           api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
-          download-mode: minimal
+          # Playwright serves the built site directly, so materialize each
+          # top-level asset (especially pdftools-cli.wasm) on clean tag runs.
+          download-mode: toplevel
       - name: Build the WebAssembly site
         run: bazel build --config=ci --config=release //web:site
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
