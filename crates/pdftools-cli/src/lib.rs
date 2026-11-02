@@ -466,11 +466,7 @@ mod tests {
     fn version_returns_json_string() {
         let expected = format!("\"{}\"", env!("CARGO_PKG_VERSION"));
         for cmd in ["version", "--version", "-V"] {
-            assert_eq!(
-                run(&[cmd.to_string()]).unwrap(),
-                expected,
-                "wrong output for {cmd}"
-            );
+            assert_eq!(run(&[cmd.to_string()]).unwrap(), expected, "wrong output for {cmd}");
         }
         assert!(USAGE.contains("--version") && USAGE.contains("-V"));
     }
