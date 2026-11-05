@@ -22,6 +22,7 @@ else
     out=android/build/test
 fi
 pkg=io.github.ivadim.pdftools
+capture_dir=${PDFTOOLS_SCREENSHOT_DIR:-}
 mkdir -p "$out"
 # No animations: screens settle at once, so taps land where the dump said.
 for scale in window_animation_scale transition_animation_scale animator_duration_scale; do
@@ -90,6 +91,12 @@ hide_keyboard() {
         sleep 0.5
     fi
 }
+capture() {
+    [ -z "$capture_dir" ] || {
+        mkdir -p "$(dirname "$capture_dir/$1.png")"
+        "$adb" exec-out screencap -p >"$capture_dir/$1.png"
+    }
+}
 # Waits up to 60 s for the result's message and checks it starts with `$1`.
 expect() {
     for _ in $(seq 120); do
@@ -116,6 +123,7 @@ open_tool() {
     "$adb" shell am force-stop $pkg
     "$adb" shell am start -n $pkg/.MainActivity --es tool "$1" --es files "$2" >/dev/null
     tap choose
+    capture "tools/$1-configured"
 }
 
 merge() {
@@ -140,6 +148,7 @@ unlock() {
     # A locked file opened in another tool offers Unlock.
     open_tool protect "$dir/aes256-password-test.pdf"
     tap "Unlock it" && tap password && type_text test && hide_keyboard
+    capture "tools/unlock-configured"
     tap run && expect "Removed the protection."
 }
 rotate() {
@@ -180,8 +189,28 @@ images() {
 
 tools=${*:-merge split compress protect unlock rotate rearrange numbers watermark metadata signature grayscale images}
 failed=""
+if [ -n "$capture_dir" ]; then
+    if [ "${PDFTOOLS_THEME:-light}" = dark ]; then
+        "$adb" shell cmd uimode night yes
+    else
+        "$adb" shell cmd uimode night no
+    fi
+    "$adb" shell am force-stop $pkg
+    "$adb" shell am start -n $pkg/.MainActivity >/dev/null
+    sleep 1
+    capture home
+    tap About
+    capture about
+    "$adb" shell input keyevent KEYCODE_BACK
+fi
 for tool in $tools; do
     echo "$tool"
+    if [ -n "$capture_dir" ]; then
+        "$adb" shell am force-stop $pkg
+        "$adb" shell am start -n $pkg/.MainActivity --es tool "$tool" >/dev/null
+        sleep 1
+        capture "tools/$tool-empty"
+    fi
     if ! $tool; then
         failed="$failed $tool"
         "$adb" exec-out screencap -p >"$out/$tool.png"

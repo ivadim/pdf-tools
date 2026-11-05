@@ -9,6 +9,59 @@ final class PDFToolsUITests: XCTestCase {
 
     // MARK: Flows
 
+    /// Capture the review matrix used to keep the iOS screenshot set current.
+    /// Export the named attachments from the xcresult bundle after this test.
+    @MainActor func testCaptureReviewScreenshots() throws {
+        let imageA = try image(width: 800, height: 600, name: "review-landscape.png")
+        let imageB = try image(width: 600, height: 900, name: "review-portrait.png")
+
+        for appearance in ["Light", "Dark"] {
+            let screenshotApp = XCUIApplication()
+            screenshotApp.launchArguments += ["-uiUserInterfaceStyle", appearance]
+            screenshotApp.launchEnvironment["PDFTOOLS_TEST_FILES"] = [pdf("tracemonkey").path, pdf("rotation").path].joined(separator: "\n")
+            screenshotApp.launch()
+            app = screenshotApp
+            capture("\(appearance.lowercased())-home")
+
+            let about = app.buttons["About"]
+            tapWhenReady(about)
+            capture("\(appearance.lowercased())-about")
+
+            let tools: [(id: String, name: String, kind: String)] = [
+                ("merge", "Merge", "merge"), ("split", "Split", "single"), ("compress", "Compress", "single"),
+                ("protect", "Protect", "single"), ("unlock", "Unlock", "single"), ("rotate", "Rotate", "single"),
+                ("rearrange", "Rearrange", "single"), ("numbers", "Page numbers", "single"),
+                ("watermark", "Watermark", "single"), ("metadata", "Metadata", "single"),
+                ("signature", "Signature", "single"), ("grayscale", "Grayscale", "single"), ("images", "Images to PDF", "images"),
+            ]
+            for tool in tools {
+                app.terminate()
+                let toolApp = XCUIApplication()
+                toolApp.launchArguments += ["-uiUserInterfaceStyle", appearance]
+                let files: [URL]
+                switch tool.id {
+                case "merge": files = [pdf("tracemonkey"), pdf("rotation")]
+                case "images": files = [imageA, imageB]
+                case "unlock": files = [TestFiles.locked]
+                default: files = [pdf("tracemonkey")]
+                }
+                toolApp.launchEnvironment["PDFTOOLS_TEST_FILES"] = files.map(\.path).joined(separator: "\n")
+                toolApp.launch()
+                app = toolApp
+                openTool(tool.id)
+                capture("\(appearance.lowercased())-tools-\(tool.id)-empty")
+                let chooser: String = switch tool.kind {
+                case "merge": "Choose PDFs"
+                case "images": "Choose image files"
+                default: "Choose a PDF"
+                }
+                tapWhenReady(app.buttons[chooser])
+                capture("\(appearance.lowercased())-tools-\(tool.id)-configured")
+            }
+            app.terminate()
+        }
+    }
+
     @MainActor func testMergeTwoFiles() {
         launch(with: [pdf("tracemonkey"), pdf("rotation")])
         openTool("merge")
@@ -112,6 +165,13 @@ final class PDFToolsUITests: XCTestCase {
         app.launch()
     }
 
+    @MainActor private func capture(_ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     @MainActor private func pdf(_ name: String) -> URL { TestFiles.pdf(name) }
 
     @MainActor private var locked: URL { TestFiles.locked }
@@ -125,6 +185,7 @@ final class PDFToolsUITests: XCTestCase {
 
     @MainActor private func openTool(_ id: String) {
         let tile = app.buttons["tool.\(id)"]
+        for _ in 0..<10 where !tile.exists { app.swipeUp() }
         XCTAssertTrue(tile.waitForExistence(timeout: 10))
         scrollTo(tile)
         // Done when the tool's screen has replaced the grid.
