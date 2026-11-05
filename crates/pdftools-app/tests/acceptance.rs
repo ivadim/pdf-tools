@@ -815,26 +815,18 @@ type Shot = (String, Box<dyn Fn(&mut Harness)>);
 fn screens() {
     let mut s = Scenario::new("screens");
     for (theme, choice) in [("light", ThemeChoice::Light), ("dark", ThemeChoice::Dark)] {
+        // Start each appearance from a fresh app: tool state is retained when
+        // navigating, so reusing the light pass would make dark empty captures
+        // inherit the loaded PDFs from their configured counterparts.
+        s.h = Harness::new("acc-screens");
         let h = &mut s.h;
         h.send(Message::Theme(choice));
         let shots: Vec<Shot> = vec![
             ("home".into(), Box::new(|h| h.send(Message::Navigate(Screen::Home)))),
             ("about".into(), Box::new(|h| h.send(Message::Navigate(Screen::About)))),
-            (
-                "merge".into(),
-                Box::new(|h| {
-                    h.send(Message::Navigate(Screen::Tool(ToolId::Merge)));
-                    h.dialogs.open(&[&fixture("tracemonkey.pdf"), &fixture("sizes.pdf"), &encrypted("aes256-password-test.pdf")]);
-                    h.send(Message::Merge(merge::Msg::Clear));
-                    h.send(Message::Merge(merge::Msg::Add));
-                    for i in 0..17 {
-                        h.send(Message::Merge(merge::Msg::Tile(i, TileEvent::Shown)));
-                    }
-                }),
-            ),
-            ("images-empty".into(), Box::new(|h| h.send(Message::Navigate(Screen::Tool(ToolId::Images))))),
         ];
         let tools = [
+            ToolId::Merge,
             ToolId::Split,
             ToolId::Compress,
             ToolId::Protect,
@@ -846,23 +838,66 @@ fn screens() {
             ToolId::Metadata,
             ToolId::Signature,
             ToolId::Grayscale,
+            ToolId::Images,
         ];
         let mut all = shots;
         for tool in tools {
+            let name = match tool {
+                ToolId::PageNumbers => "page-numbers",
+                ToolId::Images => "images",
+                other => match other {
+                    ToolId::Merge => "merge",
+                    ToolId::Split => "split",
+                    ToolId::Compress => "compress",
+                    ToolId::Protect => "protect",
+                    ToolId::Unlock => "unlock",
+                    ToolId::Rotate => "rotate",
+                    ToolId::Rearrange => "rearrange",
+                    ToolId::Watermark => "watermark",
+                    ToolId::Metadata => "metadata",
+                    ToolId::Signature => "signature",
+                    ToolId::Grayscale => "grayscale",
+                    ToolId::PageNumbers | ToolId::Images => unreachable!(),
+                },
+            };
             all.push((
-                format!("{tool:?}-empty"),
+                format!("{name}-empty"),
                 Box::new(move |h: &mut Harness| {
                     h.send(Message::Navigate(Screen::Tool(tool)));
                 }),
             ));
             all.push((
-                format!("{tool:?}"),
+                format!("{name}"),
                 Box::new(move |h: &mut Harness| {
-                    h.choose(
-                        tool,
-                        &fixture(if tool == ToolId::Unlock { "../encrypted/aes256-password-test.pdf" } else { "tracemonkey.pdf" }),
-                    );
-                    h.render_pages(tool, 14);
+                    match tool {
+                        ToolId::Merge => {
+                            h.send(Message::Navigate(Screen::Tool(tool)));
+                            h.dialogs.open(&[&fixture("tracemonkey.pdf"), &fixture("sizes.pdf")]);
+                            h.send(Message::Merge(merge::Msg::Add));
+                            h.render_pages(tool, 17);
+                        }
+                        ToolId::Images => {
+                            let first = h.out("screenshot-image-a.png");
+                            let second = h.out("screenshot-image-b.png");
+                            image::RgbImage::from_fn(160, 100, |x, _| {
+                                if x < 80 { image::Rgb([230, 20, 20]) } else { image::Rgb([20, 20, 230]) }
+                            })
+                            .save(&first)
+                            .unwrap();
+                            image::RgbImage::from_pixel(80, 120, image::Rgb([20, 150, 60])).save(&second).unwrap();
+                            h.send(Message::Navigate(Screen::Tool(tool)));
+                            h.dialogs.open(&[&first, &second]);
+                            h.click("Add images…");
+                            h.render_pages(tool, 2);
+                        }
+                        _ => {
+                            h.choose(
+                                tool,
+                                &fixture(if tool == ToolId::Unlock { "../encrypted/aes256-password-test.pdf" } else { "tracemonkey.pdf" }),
+                            );
+                            h.render_pages(tool, 14);
+                        }
+                    }
                 }),
             ));
         }
