@@ -3,7 +3,7 @@
 // and the copy is used when the network isn't there.
 //
 // Bump VERSION to make browsers reinstall the worker and start a fresh cache.
-const VERSION = 2;
+const VERSION = 3;
 
 const CACHE = `pdftools-v${VERSION}`;
 const APP = [
