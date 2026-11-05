@@ -786,7 +786,7 @@ impl App {
         let right: Element<'_, Message> = match (tool.stage_page(), single.path()) {
             // Before there's a file, the big area is where to put one.
             _ if matches!(single.state, FileState::Empty) => {
-                drop_zone("Drop a PDF here", "or anywhere on the window", "Choose a PDF…", (!busy).then_some(Message::PickFile(id)))
+                drop_zone("Drop a PDF here", "or anywhere on the window", "Choose a PDF", (!busy).then_some(Message::PickFile(id)))
             }
             (Some(page), Some(path)) => {
                 let request = PreviewRequest { path: path.to_path_buf(), page, width: crate::tools::STAGE_WIDTH, rotation: 0, gray: false };
@@ -964,7 +964,7 @@ fn file_card<'a>(id: ToolId, single: &'a Single, previews: &'a Previews, busy: b
         FileState::Failed { path, message, locked } => {
             let mut problem = column![text(message.clone()).size(13).color(theme::c().error)].spacing(8);
             if *locked && id != ToolId::Unlock {
-                problem = problem.push(action("Unlock…", Some(icons::unlock()), false, Some(Message::OpenInUnlock(id))));
+                problem = problem.push(action("Unlock file", Some(icons::unlock()), false, Some(Message::OpenInUnlock(id))));
             }
             card(text(file_name(path)).font(BOLD).into(), muted("Can’t be used"), None, Some(problem.into()), id, busy)
         }

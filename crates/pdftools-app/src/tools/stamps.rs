@@ -355,7 +355,7 @@ impl ToolOptions for PageNumbers {
     }
 
     fn run_label(&self) -> &'static str {
-        "Add page numbers…"
+        "Add page numbers"
     }
 
     fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {
@@ -505,7 +505,7 @@ impl ToolOptions for Watermark {
             let choose = Message::Option(t, "choose-image", String::new());
             let chooser: Element<'a, Message> = match self.image_path.as_deref().map(file_name) {
                 None => iced::widget::button(
-                    row![crate::widgets::icon(icons::image(), 16.0, Color::WHITE), text("Choose image…").font(crate::widgets::BOLD)]
+                    row![crate::widgets::icon(icons::image(), 16.0, Color::WHITE), text("Choose image").font(crate::widgets::BOLD)]
                         .spacing(7)
                         .align_y(iced::Alignment::Center),
                 )
@@ -514,7 +514,7 @@ impl ToolOptions for Watermark {
                 .style(theme::primary)
                 .on_press(choose)
                 .into(),
-                Some(name) => row![text(name).font(crate::widgets::BOLD).width(Length::Fill), action("Change…", None, false, Some(choose))]
+                Some(name) => row![text(name).font(crate::widgets::BOLD).width(Length::Fill), action("Change", None, false, Some(choose))]
                     .spacing(10)
                     .align_y(iced::Alignment::Center)
                     .into(),
@@ -658,7 +658,7 @@ impl ToolOptions for Watermark {
     }
 
     fn run_label(&self) -> &'static str {
-        "Add watermark…"
+        "Add watermark"
     }
 
     fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {

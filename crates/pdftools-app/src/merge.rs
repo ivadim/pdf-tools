@@ -396,12 +396,12 @@ impl Merge {
         }
         if !self.entries.is_empty() {
             actions.push(("Clear", icons::trash(), false, (!busy).then_some(wrap(Msg::Clear))));
-            actions.push(("Add files…", icons::plus(), true, (!busy).then_some(wrap(Msg::Add))));
+            actions.push(("Add files", icons::plus(), true, (!busy).then_some(wrap(Msg::Add))));
         }
         let header = widgets::tool_header_with(catalog::info(ToolId::Merge), actions);
         if self.entries.is_empty() {
             // One place to start: a single drop zone across both panels.
-            let zone = crate::app::drop_zone("Drop PDF files here", "or anywhere on the window", "Add PDF files…", Some(wrap(Msg::Add)));
+            let zone = crate::app::drop_zone("Drop PDF files here", "or anywhere on the window", "Add PDF files", Some(wrap(Msg::Add)));
             return column![
                 container(header).padding(Padding { top: 20.0, right: 24.0, bottom: 0.0, left: 24.0 }),
                 container(container(zone).style(theme::panel))
@@ -484,7 +484,7 @@ impl Merge {
         right = right.push(widgets::page_grid_sized(tiles, caps, busy, empty, 230.0, move |i, e| wrap(Msg::Tile(i, e))));
         let right = container(right).width(Length::Fill).height(Length::Fill).style(theme::panel);
 
-        let label = "Merge PDFs…";
+        let label = "Merge PDFs";
         column![
             container(header).padding(Padding { top: 20.0, right: 24.0, bottom: 0.0, left: 24.0 }),
             row![left, right].spacing(16).padding(Padding { top: 0.0, right: 24.0, bottom: 0.0, left: 24.0 }).height(Length::Fill),
@@ -523,7 +523,7 @@ fn file_row<'a>(index: usize, count: usize, entry: &'a Entry, previews: &'a Prev
     .spacing(8)
     .align_y(Alignment::Center);
     if matches!(entry.state, EntryState::Failed { locked: true, .. }) {
-        row = row.push(action("Unlock…", None, false, Some(wrap(Msg::Unlock(index)))));
+        row = row.push(action("Unlock file", None, false, Some(wrap(Msg::Unlock(index)))));
     }
     // Move and remove appear on hover, keeping the list calm.
     let buttons = iced::widget::row![

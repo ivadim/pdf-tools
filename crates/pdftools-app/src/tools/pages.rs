@@ -259,9 +259,9 @@ impl ToolOptions for Split {
 
     fn run_label(&self) -> &'static str {
         if self.mode == Mode::Extract {
-            "Extract pages…"
+            "Save extracted pages"
         } else {
-            "Split PDF…"
+            "Split PDF"
         }
     }
 
@@ -405,7 +405,7 @@ impl ToolOptions for Rearrange {
     }
 
     fn run_label(&self) -> &'static str {
-        "Save rearranged PDF…"
+        "Save rearranged PDF"
     }
 
     fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {
@@ -496,7 +496,7 @@ impl ToolOptions for Metadata {
     }
 
     fn run_label(&self) -> &'static str {
-        "Save metadata…"
+        "Save metadata"
     }
 
     fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {

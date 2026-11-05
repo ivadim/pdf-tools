@@ -147,11 +147,11 @@ fn merge() {
     let notes = s.dir.join("notes.txt");
     std::fs::write(&notes, "not a pdf").unwrap();
     h.dialogs.open(&[&fixture("tracemonkey.pdf"), &fixture("sizes.pdf"), &fixture("rotation.pdf"), &notes]);
-    h.click("Add PDF files…");
+    h.click("Add PDF files");
     assert_eq!(h.app.merge.entries.len(), 3);
     assert!(h.shows("19 pages"));
     let out = s.dir.join("MRG-1 three files.pdf");
-    ok(&h.run("Merge PDFs…", Some(&out)), "Saved 19 pages from 3 files");
+    ok(&h.run("Merge PDFs", Some(&out)), "Saved 19 pages from 3 files");
     assert_eq!(page_count(&out), 19);
     s.expect(&out, "pages 19");
     s.expect(&out, "text 1 Trace-based Just-in-Time");
@@ -164,7 +164,7 @@ fn merge() {
     h.send(Message::Merge(merge::Msg::Tile(0, TileEvent::RotateRight)));
     h.send(Message::Merge(merge::Msg::Tile(1, TileEvent::ToggleInclude)));
     let out = s.dir.join("MRG-2 reordered.pdf");
-    ok(&h.run("Merge PDFs…", Some(&out)), "Saved 18 pages from 3 files (1 page left out)");
+    ok(&h.run("Merge PDFs", Some(&out)), "Saved 18 pages from 3 files (1 page left out)");
     assert_eq!(rotations(&out)[0], 90);
     s.expect(&out, "pages 18");
     s.expect(&out, "text 1 Normal");
@@ -178,11 +178,11 @@ fn merge() {
     h.dialogs.open(&[&fixture("sizes.pdf"), &encrypted("aes256-password-test.pdf")]);
     h.send(Message::Merge(merge::Msg::Add));
     assert!(matches!(h.app.merge.entries[1].state, merge::EntryState::Failed { locked: true, .. }));
-    assert!(h.shows("Unlock…"));
+    assert!(h.shows("Unlock file"));
     let blocked = s.dir.join("MRG-3 blocked.pdf");
-    let status = h.run("Merge PDFs…", Some(&blocked));
+    let status = h.run("Merge PDFs", Some(&blocked));
     assert!(!blocked.exists(), "merged despite a locked file: {status}");
-    h.click("Unlock…");
+    h.click("Unlock file");
     assert_eq!(h.app.screen, Screen::Tool(ToolId::Unlock));
 
     // MRG-4: a file that only restricts permissions merges, unrestricted.
@@ -192,7 +192,7 @@ fn merge() {
     h.dialogs.open(&[&encrypted("aes256-restrictions-only.pdf"), &fixture("rotation.pdf")]);
     h.send(Message::Merge(merge::Msg::Add));
     let out = s.dir.join("MRG-4 restricted input.pdf");
-    ok(&h.run("Merge PDFs…", Some(&out)), "Saved 5 pages from 2 files");
+    ok(&h.run("Merge PDFs", Some(&out)), "Saved 5 pages from 2 files");
     assert!(!is_encrypted(&out));
     s.expect(&out, "pages 5");
     s.finish();
@@ -213,7 +213,7 @@ fn split() {
     let folder = s.dir.join("SPL-1 ranges");
     std::fs::create_dir_all(&folder).unwrap();
     h.dialogs.open(&[&folder]);
-    ok(&h.run("Split PDF…", None), "Created 3 files");
+    ok(&h.run("Split PDF", None), "Created 3 files");
     let parts = files_in(&folder);
     assert_eq!(parts.iter().map(|p| page_count(p)).collect::<Vec<_>>(), [2, 3, 9]);
     assert_eq!(parts[0].file_name().unwrap(), "tracemonkey-1.pdf");
@@ -226,7 +226,7 @@ fn split() {
     let folder = s.dir.join("SPL-2 every 5");
     std::fs::create_dir_all(&folder).unwrap();
     h.dialogs.open(&[&folder]);
-    ok(&h.run("Split PDF…", None), "Created 3 files");
+    ok(&h.run("Split PDF", None), "Created 3 files");
     let parts = files_in(&folder);
     assert_eq!(parts.iter().map(|p| page_count(p)).collect::<Vec<_>>(), [5, 5, 4]);
     assert!(parts[0].file_name().unwrap().to_string_lossy().starts_with("chunk"));
@@ -237,7 +237,7 @@ fn split() {
     let folder = s.dir.join("SPL-3 each");
     std::fs::create_dir_all(&folder).unwrap();
     h.dialogs.open(&[&folder]);
-    ok(&h.run("Split PDF…", None), "Created 14 files");
+    ok(&h.run("Split PDF", None), "Created 14 files");
     assert_eq!(files_in(&folder).len(), 14);
 
     // SPL-4: extract pages 2 and 4 into one file.
@@ -246,7 +246,7 @@ fn split() {
     h.send(Message::Tile(ToolId::Split, 1, TileEvent::View));
     h.send(Message::Tile(ToolId::Split, 3, TileEvent::View));
     let out = s.dir.join("SPL-4 extract.pdf");
-    ok(&h.run("Extract pages…", Some(&out)), "Extracted 2 pages");
+    ok(&h.run("Save extracted pages", Some(&out)), "Extracted 2 pages");
     s.expect(&out, "pages 2");
     s.expect(&out, "notext 1 Trace-based Just-in-Time");
 
@@ -257,7 +257,7 @@ fn split() {
         h.option(ToolId::Split, "ranges", bad);
         let folder = s.dir.join("SPL-5 never");
         h.dialogs.open(&[&folder]);
-        let status = h.run("Split PDF…", None);
+        let status = h.run("Split PDF", None);
         assert!(!folder.exists(), "split ran with ranges {bad:?}: {status}");
         h.dialogs.files.borrow_mut().clear();
     }
@@ -276,7 +276,7 @@ fn compress() {
             h.choose(ToolId::Compress, &fixture(file));
             h.option(ToolId::Compress, "level", level);
             let out = s.dir.join(format!("CMP-{level} {file}"));
-            ok(&h.run("Compress PDF…", Some(&out)), "Saved as");
+            ok(&h.run("Compress PDF", Some(&out)), "Saved as");
             let (before, after) = (pdftools_core::file_size(&fixture(file)), pdftools_core::file_size(&out));
             println!("CMP {file} {level}: {before} -> {after} bytes");
             assert!(after <= before, "{file} {level} grew from {before} to {after}");
@@ -293,7 +293,7 @@ fn compress() {
     let h = &mut s.h;
     h.choose(ToolId::Compress, &input);
     h.dialogs.answer(true);
-    ok(&h.run("Compress PDF…", Some(&input)), "Saved as");
+    ok(&h.run("Compress PDF", Some(&input)), "Saved as");
     assert_eq!(page_count(&input), 14);
     s.expect(&input, "text 1 Trace-based Just-in-Time");
     assert!(!files_in(&s.dir).iter().any(|p| p.extension().is_some_and(|e| e == "part")), "temporary file left behind");
@@ -313,7 +313,7 @@ fn protect_and_unlock() {
     h.option(ToolId::Protect, "password", "Correct-Horse-9");
     h.option(ToolId::Protect, "confirm", "Correct-Horse-9");
     let out = s.dir.join("PRT-1 password.pdf");
-    ok(&h.run("Protect PDF…", Some(&out)), "Password-protected copy saved as");
+    ok(&h.run("Protect PDF", Some(&out)), "Password-protected copy saved as");
     assert!(pdftools_core::inspect(&out).unwrap().needs_password);
     s.expect(&out, "password Correct-Horse-9");
     s.expect(&out, "text 1 Trace-based Just-in-Time");
@@ -327,7 +327,7 @@ fn protect_and_unlock() {
     h.option(ToolId::Protect, "print", "0");
     h.option(ToolId::Protect, "copy", "0");
     let out = s.dir.join("PRT-2 restricted.pdf");
-    ok(&h.run("Protect PDF…", Some(&out)), "Password-protected copy saved as");
+    ok(&h.run("Protect PDF", Some(&out)), "Password-protected copy saved as");
     s.expect(&out, "ownerpassword Owner-Pass-77");
 
     // PRT-3: a non-ASCII password round-trips through Unlock.
@@ -336,13 +336,13 @@ fn protect_and_unlock() {
     h.option(ToolId::Protect, "password", "пароль-密码-9");
     h.option(ToolId::Protect, "confirm", "пароль-密码-9");
     let unicode = s.dir.join("PRT-3 unicode password.pdf");
-    ok(&h.run("Protect PDF…", Some(&unicode)), "Password-protected copy saved as");
+    ok(&h.run("Protect PDF", Some(&unicode)), "Password-protected copy saved as");
     s.expect(&unicode, "password пароль-密码-9");
     let h = &mut s.h;
     h.choose(ToolId::Unlock, &unicode);
     h.option(ToolId::Unlock, "password", "пароль-密码-9");
     let out = s.dir.join("PRT-3 unlocked.pdf");
-    ok(&h.run("Unlock PDF…", Some(&out)), "Unlocked copy");
+    ok(&h.run("Unlock PDF", Some(&out)), "Unlocked copy");
     s.expect(&out, "pages 3");
 
     // PRT-4: mismatched passwords block the run.
@@ -351,23 +351,23 @@ fn protect_and_unlock() {
     h.option(ToolId::Protect, "password", "Correct-Horse-9");
     h.option(ToolId::Protect, "confirm", "Correct-Horse-8");
     let never = s.dir.join("PRT-4 never.pdf");
-    h.run("Protect PDF…", Some(&never));
+    h.run("Protect PDF", Some(&never));
     assert!(!never.exists());
     h.dialogs.saves.borrow_mut().clear();
 
     // UNL-1: a file encrypted by qpdf, with its password.
     h.choose(ToolId::Unlock, &encrypted("aes256-password-test.pdf"));
-    assert!(h.shows("This file needs its password to open. Enter it on the left and choose “Unlock PDF…” to save an unlocked copy."));
+    assert!(h.shows("This file needs its password to open. Enter it on the left and choose “Unlock PDF” to save an unlocked copy."));
     // UNL-2: a wrong password fails clearly and writes nothing.
     h.option(ToolId::Unlock, "password", "wrong");
     let never = s.dir.join("UNL-2 never.pdf");
-    let status = h.run("Unlock PDF…", Some(&never));
+    let status = h.run("Unlock PDF", Some(&never));
     println!("UNL-2 wrong password: {status}");
     assert!(!never.exists());
     h.dialogs.saves.borrow_mut().clear();
     h.option(ToolId::Unlock, "password", "test");
     let out = s.dir.join("UNL-1 unlocked.pdf");
-    ok(&h.run("Unlock PDF…", Some(&out)), "Unlocked copy");
+    ok(&h.run("Unlock PDF", Some(&out)), "Unlocked copy");
     assert!(!is_encrypted(&out));
     s.expect(&out, "pages 3");
     s.expect(&out, "text 1 Normal");
@@ -377,7 +377,7 @@ fn protect_and_unlock() {
     h.choose(ToolId::Unlock, &encrypted("aes256-restrictions-only.pdf"));
     assert!(h.shows("This file restricts printing, copying or editing. Unlocking removes those restrictions."));
     let out = s.dir.join("UNL-3 unrestricted.pdf");
-    ok(&h.run("Unlock PDF…", Some(&out)), "Unlocked copy");
+    ok(&h.run("Unlock PDF", Some(&out)), "Unlocked copy");
     assert!(!is_encrypted(&out));
     s.expect(&out, "pages 3");
     s.finish();
@@ -396,7 +396,7 @@ fn rotate_and_rearrange() {
     let before = rotations(&fixture("rotation.pdf"));
     h.send(Message::GridAction(ToolId::Rotate, "rotate-all-right"));
     let out = s.dir.join("ROT-1 all right.pdf");
-    ok(&h.run("Save rotated PDF…", Some(&out)), "Rotated 2 pages");
+    ok(&h.run("Save rotated PDF", Some(&out)), "Rotated 2 pages");
     assert_eq!(rotations(&out), before.iter().map(|r| (r + 90) % 360).collect::<Vec<_>>());
 
     // ROT-2: forms survive rotation.
@@ -404,7 +404,7 @@ fn rotate_and_rearrange() {
     h.choose(ToolId::Rotate, &fixture("annotation-text-widget.pdf"));
     h.send(Message::Tile(ToolId::Rotate, 0, TileEvent::RotateLeft));
     let out = s.dir.join("ROT-2 forms.pdf");
-    ok(&h.run("Save rotated PDF…", Some(&out)), "Rotated 1 page");
+    ok(&h.run("Save rotated PDF", Some(&out)), "Rotated 1 page");
     assert!(has_forms(&out), "the form was dropped");
 
     // REA-1: reverse, delete, duplicate; bookmarks kept.
@@ -414,7 +414,7 @@ fn rotate_and_rearrange() {
     h.send(Message::Tile(ToolId::Rearrange, 0, TileEvent::Delete));
     h.send(Message::Tile(ToolId::Rearrange, 0, TileEvent::Duplicate));
     let out = s.dir.join("REA-1 rearranged.pdf");
-    ok(&h.run("Save rearranged PDF…", Some(&out)), "Saved 23 pages");
+    ok(&h.run("Save rearranged PDF", Some(&out)), "Saved 23 pages");
     assert!(has_outlines(&out), "bookmarks were dropped");
     s.expect(&out, "pages 23");
     s.expect(&out, "samepage 1 2");
@@ -437,7 +437,7 @@ fn stamps() {
     h.option(ToolId::PageNumbers, "start", "10");
     h.option(ToolId::PageNumbers, "anchor", "bottom center");
     let out = s.dir.join("PGN-1 numbers.pdf");
-    ok(&h.run("Add page numbers…", Some(&out)), "Numbered 3 pages");
+    ok(&h.run("Add page numbers", Some(&out)), "Numbered 3 pages");
     s.expect(&out, "text 2 Page 10 of 12");
     s.expect(&out, "text 4 Page 12 of 12");
     s.expect(&out, "notext 1 Page ");
@@ -450,7 +450,7 @@ fn stamps() {
         h.option(ToolId::PageNumbers, "which", "all");
         h.option(ToolId::PageNumbers, "anchor", anchor);
         let out = s.dir.join(format!("PGN-2 {anchor}.pdf"));
-        ok(&h.run("Add page numbers…", Some(&out)), "Numbered 2 pages");
+        ok(&h.run("Add page numbers", Some(&out)), "Numbered 2 pages");
         s.expect(&out, "text 2 Page 11 of 11");
     }
 
@@ -461,7 +461,7 @@ fn stamps() {
     h.option(ToolId::Watermark, "which", "custom");
     h.option(ToolId::Watermark, "pages", "1,3");
     let out = s.dir.join("WMK-1 scripts.pdf");
-    ok(&h.run("Add watermark…", Some(&out)), "Watermarked 2 pages");
+    ok(&h.run("Add watermark", Some(&out)), "Watermarked 2 pages");
     s.expect(&out, "text 1 Trace-based Just-in-Time");
     s.expect(&out, "pages 14");
 
@@ -477,7 +477,7 @@ fn stamps() {
     h.option(ToolId::Watermark, "under", "1");
     h.option(ToolId::Watermark, "opacity", "60");
     let out = s.dir.join("WMK-2 image under.pdf");
-    ok(&h.run("Add watermark…", Some(&out)), "Watermarked 14 pages");
+    ok(&h.run("Add watermark", Some(&out)), "Watermarked 14 pages");
     s.expect(&out, "text 1 Trace-based Just-in-Time");
 
     // SIG-1: typed, on every page.
@@ -487,7 +487,7 @@ fn stamps() {
     h.option(ToolId::Signature, "name", "Zoë Ångström");
     h.click("Add to all 3 pages");
     let out = s.dir.join("SIG-1 typed.pdf");
-    ok(&h.run("Sign PDF…", Some(&out)), "");
+    ok(&h.run("Sign PDF", Some(&out)), "");
     println!("SIG-1: {}", h.status());
     s.expect(&out, "pages 3");
     s.expect(&out, "text 1 Normal");
@@ -501,7 +501,7 @@ fn stamps() {
     h.click("Add to this page");
     h.option(ToolId::Signature, "box", "1,0.6,0.85,0.3");
     let out = s.dir.join("SIG-2 drawn.pdf");
-    ok(&h.run("Sign PDF…", Some(&out)), "");
+    ok(&h.run("Sign PDF", Some(&out)), "");
     println!("SIG-2: {}", h.status());
     assert!(out.exists());
 
@@ -513,7 +513,7 @@ fn stamps() {
     h.option(ToolId::Signature, "choose-image", "");
     h.click("Add to this page");
     let out = s.dir.join("SIG-3 image.pdf");
-    ok(&h.run("Sign PDF…", Some(&out)), "");
+    ok(&h.run("Sign PDF", Some(&out)), "");
     assert!(out.exists());
     s.finish();
 }
@@ -540,7 +540,7 @@ fn metadata_and_grayscale() {
         h.option(ToolId::Metadata, key, value);
     }
     let out = s.dir.join("MET-1 metadata.pdf");
-    ok(&h.run("Save metadata…", Some(&out)), "Updated properties");
+    ok(&h.run("Save metadata", Some(&out)), "Updated properties");
     let meta = pdftools_core::inspect(&out).unwrap().metadata;
     assert_eq!(meta.title.as_deref(), Some(fields[0].1));
     assert_eq!(meta.author.as_deref(), Some(fields[1].1));
@@ -553,7 +553,7 @@ fn metadata_and_grayscale() {
     h.choose(ToolId::Metadata, &out);
     h.option(ToolId::Metadata, "subject", "");
     let cleared = s.dir.join("MET-2 cleared.pdf");
-    ok(&h.run("Save metadata…", Some(&cleared)), "Updated properties");
+    ok(&h.run("Save metadata", Some(&cleared)), "Updated properties");
     assert_eq!(pdftools_core::inspect(&cleared).unwrap().metadata.subject.filter(|s| !s.is_empty()), None);
 
     // GRY-1: no colour left on colourful pages.
@@ -562,7 +562,7 @@ fn metadata_and_grayscale() {
         let h = &mut s.h;
         h.choose(ToolId::Grayscale, &fixture(file));
         let out = s.dir.join(format!("GRY-1 {file}"));
-        ok(&h.run("Convert to grayscale…", Some(&out)), "Grayscale copy");
+        ok(&h.run("Convert to grayscale", Some(&out)), "Grayscale copy");
         let before = max_chroma(&fixture(file), 1);
         let after = max_chroma(&out, 1);
         // The grey copy should look like the original seen in grey.
@@ -627,18 +627,18 @@ fn images_to_pdf() {
     let h = &mut s.h;
     h.click("Images to PDF");
     h.dialogs.open(&[&wide, &alpha, &exif, &bogus]);
-    h.click("Add images…");
+    h.click("Add images");
     println!("IMG entries: {:?}", h.app.images.entries.iter().map(|e| (&e.name, format!("{:?}", e.state))).collect::<Vec<_>>());
 
     assert!(h.shows("Remove the image that can’t be read to continue."));
     let blocked = s.dir.join("IMG-0 blocked.pdf");
-    assert_eq!(h.run("Create PDF…", Some(&blocked)), "idle");
+    assert_eq!(h.run("Create PDF", Some(&blocked)), "idle");
     h.send(Message::Images(images::Msg::Tile(3, TileEvent::Delete)));
 
     // IMG-1: fit image — each page the shape of its (upright) image.
     h.send(Message::Images(images::Msg::Option("size", "fit")));
     let out = s.dir.join("IMG-1 fit.pdf");
-    let status = h.run("Create PDF…", Some(&out));
+    let status = h.run("Create PDF", Some(&out));
     println!("IMG-1: {status}");
     let pages = page_count(&out);
     let boxes: Vec<_> = (1..=pages as u32).map(|p| media_box(&out, p)).collect();
@@ -651,7 +651,7 @@ fn images_to_pdf() {
     h.send(Message::Images(images::Msg::Option("size", "a4")));
     h.send(Message::Images(images::Msg::Option("margin", "small")));
     let out = s.dir.join("IMG-2 a4.pdf");
-    h.run("Create PDF…", Some(&out));
+    h.run("Create PDF", Some(&out));
     let a4: Vec<_> = (1..=page_count(&out) as u32).map(|p| media_box(&out, p)).collect();
     println!("IMG-2 page sizes: {a4:?}");
     assert!((a4[0].0 - 842.0).abs() < 2.0 && (a4[0].1 - 595.0).abs() < 2.0, "wide image should get landscape A4");
@@ -663,7 +663,7 @@ fn images_to_pdf() {
     h.send(Message::Images(images::Msg::Option("orientation", "portrait")));
     h.send(Message::Images(images::Msg::Tile(0, TileEvent::RotateRight)));
     let out = s.dir.join("IMG-3 letter.pdf");
-    h.run("Create PDF…", Some(&out));
+    h.run("Create PDF", Some(&out));
     let letter = media_box(&out, 1);
     assert!((letter.0 - 612.0).abs() < 2.0 && (letter.1 - 792.0).abs() < 2.0);
     s.expect(&out, "opens");
@@ -686,7 +686,7 @@ fn awkward_files() {
     h.choose(ToolId::Compress, &input);
     assert!(h.shows("Résumé #1 & файл.pdf"));
     let out = folder.join("результат 結果.pdf");
-    ok(&h.run("Compress PDF…", Some(&out)), "Saved as");
+    ok(&h.run("Compress PDF", Some(&out)), "Saved as");
     assert_eq!(page_count(&out), 3);
 
     // X-2: damaged, fake and empty files: a clear message, no crash.
@@ -716,7 +716,7 @@ fn awkward_files() {
     h.choose(ToolId::Compress, &s.dir.join("truncated.pdf"));
     assert!(h.shows("This file is damaged. These are the pages that could be recovered; only they will be saved."));
     let out = s.dir.join("X-2 truncated saved.pdf");
-    ok(&h.run("Compress PDF…", Some(&out)), "Saved as");
+    ok(&h.run("Compress PDF", Some(&out)), "Saved as");
     let recovered = page_count(&out);
     println!("X-2 truncated: recovered {recovered} of 14 pages");
     assert!(recovered >= 8, "only {recovered} pages recovered");
@@ -728,13 +728,13 @@ fn awkward_files() {
     h.choose(ToolId::Rotate, &fixture("sizes.pdf"));
     h.send(Message::Tile(ToolId::Rotate, 0, TileEvent::RotateRight));
     let before = files_in(&s.dir).len();
-    assert_eq!(h.run("Save rotated PDF…", None), "idle");
+    assert_eq!(h.run("Save rotated PDF", None), "idle");
     assert_eq!(files_in(&s.dir).len(), before);
 
     // X-4: saving into a folder that doesn't exist fails with a message.
     let h = &mut s.h;
     let nowhere = s.dir.join("missing folder").join("out.pdf");
-    let status = h.run("Save rotated PDF…", Some(&nowhere));
+    let status = h.run("Save rotated PDF", Some(&nowhere));
     println!("X-4 missing folder: {status}");
     assert!(status.starts_with("failed"), "{status}");
 
@@ -745,7 +745,7 @@ fn awkward_files() {
     h.choose(ToolId::Grayscale, &gone);
     std::fs::remove_file(&gone).unwrap();
     let out = s.dir.join("X-5 never.pdf");
-    let status = h.run("Convert to grayscale…", Some(&out));
+    let status = h.run("Convert to grayscale", Some(&out));
     println!("X-5 input deleted: {status}");
     assert!(status.starts_with("failed"), "{status}");
     s.finish();
@@ -776,29 +776,29 @@ fn large_document() {
         h.option(ToolId::Split, "mode", "every");
         h.option(ToolId::Split, "every", "100");
         h.dialogs.open(&[&folder]);
-        ok(&h.run("Split PDF…", None), "Created 6 files");
+        ok(&h.run("Split PDF", None), "Created 6 files");
     });
     let out = s.dir.join("numbered.pdf");
     timed("page numbers on 504 pages", &mut |h| {
         h.choose(ToolId::PageNumbers, &big);
-        ok(&h.run("Add page numbers…", Some(&out)), "Numbered 504 pages");
+        ok(&h.run("Add page numbers", Some(&out)), "Numbered 504 pages");
     });
     let out2 = s.dir.join("compressed.pdf");
     timed("compress (balanced)", &mut |h| {
         h.choose(ToolId::Compress, &big);
-        ok(&h.run("Compress PDF…", Some(&out2)), "Saved as");
+        ok(&h.run("Compress PDF", Some(&out2)), "Saved as");
     });
     let out3 = s.dir.join("gray.pdf");
     timed("grayscale", &mut |h| {
         h.choose(ToolId::Grayscale, &big);
-        ok(&h.run("Convert to grayscale…", Some(&out3)), "Grayscale copy");
+        ok(&h.run("Convert to grayscale", Some(&out3)), "Grayscale copy");
     });
     let out4 = s.dir.join("merged.pdf");
     timed("merge 504 + 14 pages", &mut |h| {
         h.click("Merge");
         h.dialogs.open(&[&big, &fixture("tracemonkey.pdf")]);
         h.send(Message::Merge(merge::Msg::Add));
-        ok(&h.run("Merge PDFs…", Some(&out4)), "Saved 518 pages");
+        ok(&h.run("Merge PDFs", Some(&out4)), "Saved 518 pages");
     });
     s.expect(&out, "text 504 504");
     s.expect(&out4, "pages 518");
@@ -887,7 +887,7 @@ fn screens() {
                             image::RgbImage::from_pixel(80, 120, image::Rgb([20, 150, 60])).save(&second).unwrap();
                             h.send(Message::Navigate(Screen::Tool(tool)));
                             h.dialogs.open(&[&first, &second]);
-                            h.click("Add images…");
+                            h.click("Add images");
                             h.render_pages(tool, 2);
                         }
                         _ => {

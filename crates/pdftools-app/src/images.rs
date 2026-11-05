@@ -324,7 +324,7 @@ impl Images {
         }
         if !self.entries.is_empty() {
             actions.push(("Clear", icons::trash(), false, (!busy).then_some(wrap(Msg::Clear))));
-            actions.push(("Add images…", icons::plus(), true, (!busy).then_some(wrap(Msg::Add))));
+            actions.push(("Add images", icons::plus(), true, (!busy).then_some(wrap(Msg::Add))));
         }
         let header = widgets::tool_header_with(catalog::info(ToolId::Images), actions);
 
@@ -377,7 +377,7 @@ impl Images {
         let summary = if count == 0 { String::new() } else { plural(count, "image") };
         let grid_header = widgets::grid_header("Pages", summary, actions);
         let body: Element<'_, Message> = if tiles.is_empty() {
-            crate::app::drop_zone("Drop JPEG or PNG images here", "or anywhere on the window", "Add images…", Some(wrap(Msg::Add)))
+            crate::app::drop_zone("Drop JPEG or PNG images here", "or anywhere on the window", "Add images", Some(wrap(Msg::Add)))
         } else {
             let caps = Caps { rotate: true, delete: true, reorder: true, ..Default::default() };
             widgets::page_grid(tiles, caps, busy, "", move |i, e| wrap(Msg::Tile(i, e)))
@@ -389,7 +389,7 @@ impl Images {
             row![left, right].spacing(16).padding(Padding { top: 0.0, right: 24.0, bottom: 0.0, left: 24.0 }).height(Length::Fill),
         ];
         if count > 0 {
-            page = page.push(run_bar(&self.run, self.validate(), "Create PDF…", icons::images(), wrap(Msg::Run), wrap(Msg::Reveal)));
+            page = page.push(run_bar(&self.run, self.validate(), "Create PDF", icons::images(), wrap(Msg::Run), wrap(Msg::Reveal)));
         }
         page.spacing(16).into()
     }

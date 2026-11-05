@@ -72,7 +72,7 @@ impl ToolOptions for Compress {
     }
 
     fn run_label(&self) -> &'static str {
-        "Compress PDF…"
+        "Compress PDF"
     }
 
     fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {
@@ -165,7 +165,7 @@ impl ToolOptions for Grayscale {
     }
 
     fn run_label(&self) -> &'static str {
-        "Convert to grayscale…"
+        "Convert to grayscale"
     }
 
     fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {
@@ -251,7 +251,7 @@ impl ToolOptions for Rotate {
     }
 
     fn run_label(&self) -> &'static str {
-        "Save rotated PDF…"
+        "Save rotated PDF"
     }
 
     fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {
@@ -361,7 +361,7 @@ impl ToolOptions for Protect {
     }
 
     fn run_label(&self) -> &'static str {
-        "Protect PDF…"
+        "Protect PDF"
     }
 
     fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {
@@ -466,7 +466,7 @@ impl ToolOptions for Unlock {
     fn empty_text(&self, file: &Single) -> Option<&'static str> {
         let info = &file.loaded()?.info;
         Some(if info.needs_password {
-            "This file needs its password to open. Enter it on the left and choose “Unlock PDF…” to save an unlocked copy."
+            "This file needs its password to open. Enter it on the left and choose “Unlock PDF” to save an unlocked copy."
         } else if info.encrypted {
             "This file opens without a password but restricts printing, copying or editing."
         } else {
@@ -486,7 +486,7 @@ impl ToolOptions for Unlock {
     }
 
     fn run_label(&self) -> &'static str {
-        "Unlock PDF…"
+        "Unlock PDF"
     }
 
     fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {

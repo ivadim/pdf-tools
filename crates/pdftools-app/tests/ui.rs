@@ -30,12 +30,12 @@ fn screens_render() {
     h.click("Compress");
     h.screenshot("compress-empty");
     h.dialogs.open(&[&fixture("tracemonkey.pdf")]);
-    h.click("Choose a PDF…");
+    h.click("Choose a PDF");
     h.render_pages(ToolId::Compress, 14);
     h.screenshot("compress");
     assert!(h.shows("Images are only 98 KB of this file (10%), so even Strong won’t shrink it much."));
     let out = h.out("small.pdf");
-    assert!(h.run("Compress PDF…", Some(&out)).contains("Saved as"));
+    assert!(h.run("Compress PDF", Some(&out)).contains("Saved as"));
     assert_eq!(page_count(&out), 14);
 }
 
@@ -55,14 +55,14 @@ fn single_file_tools() {
     let folder = h.out("parts");
     std::fs::create_dir_all(&folder).unwrap();
     h.dialogs.open(&[&folder]);
-    assert!(h.run("Split PDF…", None).contains("Created 2 files"));
+    assert!(h.run("Split PDF", None).contains("Created 2 files"));
     assert_eq!(page_count(&folder.join("tracemonkey-1.pdf")), 2);
     h.option(ToolId::Split, "mode", "extract");
     assert!(h.shows("Select the pages to extract."));
     h.send(Message::Tile(ToolId::Split, 1, TileEvent::View));
     h.send(Message::Tile(ToolId::Split, 3, TileEvent::View));
     let out = h.out("extract.pdf");
-    assert!(h.run("Extract pages…", Some(&out)).contains("Extracted 2 pages"));
+    assert!(h.run("Save extracted pages", Some(&out)).contains("Extracted 2 pages"));
     assert_eq!(page_count(&out), 2);
 
     // Rotate pages and save; the viewer rotates too.
@@ -79,7 +79,7 @@ fn single_file_tools() {
     assert!(h.shows("Put this page back"));
     h.send(Message::CloseViewer);
     let out = h.out("rotated.pdf");
-    assert!(h.run("Save rotated PDF…", Some(&out)).contains("Rotated 2 pages (1 page removed)"));
+    assert!(h.run("Save rotated PDF", Some(&out)).contains("Rotated 2 pages (1 page removed)"));
     assert_eq!(rotations(&out), [90, 270]);
 
     // Rearrange: move, duplicate, delete.
@@ -88,7 +88,7 @@ fn single_file_tools() {
     h.send(Message::Tile(ToolId::Rearrange, 0, TileEvent::Duplicate));
     h.send(Message::Tile(ToolId::Rearrange, 3, TileEvent::Delete));
     let out = h.out("rearranged.pdf");
-    assert!(h.run("Save rearranged PDF…", Some(&out)).contains("Saved 3 pages"));
+    assert!(h.run("Save rearranged PDF", Some(&out)).contains("Saved 3 pages"));
     assert_eq!(page_count(&out), 3);
 
     // Protect, then Unlock with the password.
@@ -99,16 +99,16 @@ fn single_file_tools() {
     assert!(h.shows("The passwords don’t match."));
     h.option(ToolId::Protect, "confirm", "s3cret");
     let locked = h.out("locked.pdf");
-    assert!(h.run("Protect PDF…", Some(&locked)).contains("Password-protected copy saved as"));
+    assert!(h.run("Protect PDF", Some(&locked)).contains("Password-protected copy saved as"));
     assert!(pdftools_core::inspect(&locked).unwrap().needs_password);
     h.choose(ToolId::Compress, &locked);
     assert!(h.shows("This file is password-protected."));
-    assert!(h.shows("Unlock the file first — use “Unlock…” above."));
-    h.click("Unlock…");
+    assert!(h.shows("Unlock the file first — use “Unlock file” above."));
+    h.click("Unlock file");
     assert_eq!(h.app.screen, Screen::Tool(ToolId::Unlock));
     h.option(ToolId::Unlock, "password", "s3cret");
     let unlocked = h.out("unlocked.pdf");
-    assert!(h.run("Unlock PDF…", Some(&unlocked)).contains("Unlocked copy"));
+    assert!(h.run("Unlock PDF", Some(&unlocked)).contains("Unlocked copy"));
     assert_eq!(page_count(&unlocked), 3);
 
     // Page numbers and watermark previews, then the real thing.
@@ -118,14 +118,14 @@ fn single_file_tools() {
     h.render_pages(ToolId::PageNumbers, 4);
     h.screenshot("page-numbers");
     let out = h.out("numbered.pdf");
-    assert!(h.run("Add page numbers…", Some(&out)).contains("Numbered 23 pages"));
+    assert!(h.run("Add page numbers", Some(&out)).contains("Numbered 23 pages"));
     assert!(content(&out, 2).contains("(Page 2 of 23)"));
 
     h.choose(ToolId::Watermark, &fixture("tracemonkey.pdf"));
     h.render_pages(ToolId::Watermark, 6);
     h.screenshot("watermark");
     let out = h.out("watermarked.pdf");
-    assert!(h.run("Add watermark…", Some(&out)).contains("Watermarked 14 pages"));
+    assert!(h.run("Add watermark", Some(&out)).contains("Watermarked 14 pages"));
     assert!(content(&out, 1).contains("/PdfToolsWm0 Do"));
 
     // Metadata and grayscale.
@@ -133,12 +133,12 @@ fn single_file_tools() {
     assert!(h.shows("Edit a field to save new metadata."));
     h.option(ToolId::Metadata, "title", "A new title");
     let out = h.out("meta.pdf");
-    assert!(h.run("Save metadata…", Some(&out)).contains("Updated properties"));
+    assert!(h.run("Save metadata", Some(&out)).contains("Updated properties"));
     assert_eq!(pdftools_core::inspect(&out).unwrap().metadata.title.as_deref(), Some("A new title"));
 
     h.choose(ToolId::Grayscale, &fixture("canvas.pdf"));
     let out = h.out("gray.pdf");
-    assert!(h.run("Convert to grayscale…", Some(&out)).contains("Grayscale copy"));
+    assert!(h.run("Convert to grayscale", Some(&out)).contains("Grayscale copy"));
 }
 
 #[test]
@@ -150,7 +150,7 @@ fn merge_and_images() {
     assert!(h.shows("Drop PDF files here"));
     std::fs::write(h.out("notes.txt"), "text").unwrap();
     h.dialogs.open(&[&fixture("sizes.pdf"), &fixture("rotation.pdf"), &h.out("notes.txt")]);
-    h.click("Add PDF files…");
+    h.click("Add PDF files");
     assert_eq!(h.app.merge.entries.len(), 2, "only PDFs are added");
     for i in 0..5 {
         h.send(Message::Merge(merge::Msg::Tile(i, TileEvent::Shown)));
@@ -161,7 +161,7 @@ fn merge_and_images() {
     h.send(Message::Merge(merge::Msg::Tile(0, TileEvent::RotateRight)));
     h.send(Message::Merge(merge::Msg::Tile(1, TileEvent::ToggleInclude)));
     let out = h.out("merged.pdf");
-    assert!(h.run("Merge PDFs…", Some(&out)).contains("Saved 4 pages from 2 files (1 page left out)"));
+    assert!(h.run("Merge PDFs", Some(&out)).contains("Saved 4 pages from 2 files (1 page left out)"));
     assert_eq!(page_count(&out), 4);
 
     h.click("Images to PDF");
@@ -170,7 +170,7 @@ fn merge_and_images() {
     let tall = h.out("a-tall.png");
     RgbImage::from_pixel(50, 100, Rgb([0, 150, 0])).save(&tall).unwrap();
     h.dialogs.open(&[&wide, &tall]);
-    h.click("Add images…");
+    h.click("Add images");
     assert_eq!(h.app.images.entries.len(), 2);
     h.click("Sort by name");
     assert_eq!(h.app.images.entries[0].name, "a-tall.png");
@@ -181,7 +181,7 @@ fn merge_and_images() {
     assert_eq!(h.app.images.entries[1].rotation, 90);
     h.send(Message::CloseViewer);
     let out = h.out("images.pdf");
-    assert!(h.run("Create PDF…", Some(&out)).contains("Saved 2 pages"));
+    assert!(h.run("Create PDF", Some(&out)).contains("Saved 2 pages"));
     assert_eq!(page_count(&out), 2);
 }
 
@@ -205,7 +205,7 @@ fn signature() {
     assert!(h.shows("Page 2 of 3 · 1 signature"));
     h.option(ToolId::Signature, "remove", "2");
     let out = h.out("signed.pdf");
-    assert!(h.run("Sign PDF…", Some(&out)).contains("Signed 2 pages"));
+    assert!(h.run("Sign PDF", Some(&out)).contains("Signed 2 pages"));
     assert!(content(&out, 1).contains("PdfToolsSig") && !content(&out, 2).contains("PdfToolsSig"));
 }
 
@@ -235,11 +235,11 @@ fn tour() {
     h.choose(ToolId::Protect, &fixture("sizes.pdf"));
     h.option(ToolId::Protect, "password", "pw");
     h.option(ToolId::Protect, "confirm", "pw");
-    h.run("Protect PDF…", Some(&locked));
+    h.run("Protect PDF", Some(&locked));
     h.screenshot("tour-protect-done");
     h.choose(ToolId::Compress, &locked);
     h.screenshot("tour-locked-file");
-    h.click("Unlock…");
+    h.click("Unlock file");
     h.screenshot("tour-unlock");
     h.choose(ToolId::Split, &fixture("tracemonkey.pdf"));
     h.option(ToolId::Split, "mode", "extract");
@@ -303,7 +303,7 @@ fn readme_screenshots() {
 
     h.click("Merge");
     h.dialogs.open(&[&fixture("tracemonkey.pdf"), &fixture("sizes.pdf"), &fixture("rotation.pdf")]);
-    h.click("Add PDF files…");
+    h.click("Add PDF files");
     for i in 0..19 {
         h.send(Message::Merge(merge::Msg::Tile(i, TileEvent::Shown)));
     }
@@ -322,7 +322,7 @@ fn readme_screenshots() {
     let samples = if std::env::var_os("TEST_SRCDIR").is_some() { repo("crates/pdftools-core/samples") } else { repo("target/samples") };
     h.click("Images to PDF");
     h.dialogs.open(&[&samples.join("photo-1-sunset.jpg"), &samples.join("photo-2-meadow.jpg"), &samples.join("photo-10-logo.png")]);
-    h.click("Add images…");
+    h.click("Add images");
     h.screenshot("readme-images");
 
     h.send(Message::Theme(pdftools_app::settings::ThemeChoice::Dark));
@@ -345,7 +345,7 @@ fn shift_click_leaves_out_a_range() {
     h.send(Message::Modifiers(iced::keyboard::Modifiers::default()));
     h.click("Merge");
     h.dialogs.open(&[&fixture("tracemonkey.pdf"), &fixture("sizes.pdf")]);
-    h.click("Add PDF files…");
+    h.click("Add PDF files");
     h.send(Message::Merge(merge::Msg::Tile(12, TileEvent::ToggleInclude)));
     h.send(Message::Modifiers(iced::keyboard::Modifiers::SHIFT));
     h.send(Message::Merge(merge::Msg::Tile(15, TileEvent::ToggleInclude)));
