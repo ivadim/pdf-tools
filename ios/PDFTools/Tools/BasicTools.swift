@@ -98,14 +98,15 @@ private struct ProtectPanel: View {
     var body: some View {
         LabeledField("Password to open") { SecureField("Password", text: $options.password).textContentType(.newPassword) }
         LabeledField("Repeat the password") { SecureField("Password", text: $options.confirm).textContentType(.newPassword) }
-        Text("Allow").font(.headline)
+        Text("Allowed after opening").font(.headline)
         Toggle("Printing", isOn: $options.print)
         Toggle("Copying text and images", isOn: $options.copy)
         Toggle("Editing", isOn: $options.modify)
         Toggle("Comments and forms", isOn: $options.annotate)
         LabeledField("Owner password (optional)") {
-            SecureField("Lifts the restrictions", text: $options.owner).textContentType(.newPassword)
+            SecureField("Owner password", text: $options.owner).textContentType(.newPassword)
         }
+        Note("An owner password can lift these restrictions.")
     }
 }
 

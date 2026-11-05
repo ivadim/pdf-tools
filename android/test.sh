@@ -133,6 +133,7 @@ merge() {
 split() {
     open_tool split "$dir/tracemonkey.pdf"
     tap split.ranges && type_text "1-3,4-8" && hide_keyboard
+    capture "tools/split-configured"
     tap run && expect "Created 2 files."
 }
 compress() {
@@ -142,6 +143,7 @@ compress() {
 protect() {
     open_tool protect "$dir/rotation.pdf"
     tap password && type_text secret && tap confirm && type_text secret && hide_keyboard
+    capture "tools/protect-configured"
     tap run && expect "Protected with a password."
 }
 unlock() {

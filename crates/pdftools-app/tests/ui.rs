@@ -17,7 +17,7 @@ use pdftools_app::{images, merge};
 fn screens_render() {
     let mut h = Harness::new("screens");
     h.screenshot("home");
-    assert!(h.shows("MORE TOOLS") && h.shows("What would you like to do?"));
+    assert!(h.shows("MORE TOOLS") && h.shows("Choose a tool"));
 
     h.click("About");
     assert_eq!(h.app.screen, Screen::About);

@@ -26,7 +26,7 @@ fn input<'a>(placeholder: &'a str, value: &'a str, on_input: impl Fn(String) -> 
 // ── Split ────────────────────────────────────────────────────────────────
 
 const PART_COLORS: [Color; 8] = [
-    color!(0x3b82f6),
+    color!(0x0d8c9c),
     color!(0xf97316),
     color!(0x22c55e),
     color!(0xa855f7),

@@ -5,6 +5,12 @@ import SwiftUI
 
 @main
 struct PDFToolsApp: App {
+    private var reviewColorScheme: ColorScheme? {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "-uiUserInterfaceStyle"), index + 1 < arguments.count else { return nil }
+        return arguments[index + 1].lowercased() == "dark" ? .dark : .light
+    }
+
     init() {
         Workspace.clean()
         Engine.configure()
@@ -13,6 +19,7 @@ struct PDFToolsApp: App {
     var body: some Scene {
         WindowGroup {
             HomeView()
+                .preferredColorScheme(reviewColorScheme)
         }
     }
 }

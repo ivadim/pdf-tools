@@ -374,6 +374,16 @@ class Reorder(private val session: ToolSession) {
 @Composable
 private fun RunBar(session: ToolSession, scope: CoroutineScope) {
     val problem = session.problem
+    val summary = when (session.tool) {
+        Tool.Merge -> "${plural(session.files.size, "file")} · ${plural(session.kept.size, "page")}"
+        Tool.Split -> (session.options as? SplitOptions)?.let { options ->
+            runCatching { options.parts(session) }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { parts ->
+                "${plural(parts.size, "output file")} · ${plural(parts.sumOf { it.size }, "page")}"
+            }
+        }
+        Tool.Protect -> session.pdf?.let { "${plural(it.pageCount, "page")} · Password to open" }
+        else -> null
+    }
     Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
         Column {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -384,8 +394,8 @@ private fun RunBar(session: ToolSession, scope: CoroutineScope) {
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
-                    problem ?: "",
-                    Modifier.weight(1f).testTag("problem"),
+                    problem ?: summary ?: "",
+                    Modifier.weight(1f).testTag(if (problem == null) "summary" else "problem"),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,

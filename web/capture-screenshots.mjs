@@ -27,7 +27,7 @@ try {
     const dir = resolve(root, theme);
     await mkdir(resolve(dir, "tools"), { recursive: true });
     await page.goto(baseURL);
-    await page.getByRole("heading", { name: "PDF Tools" }).waitFor();
+    await page.getByRole("heading", { name: "Choose a tool" }).waitFor();
     await page.screenshot({ path: resolve(dir, "home.png") });
 
     for (const [id, title] of tools) {
@@ -51,7 +51,19 @@ try {
         }
         document.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: transfer }));
       }, dropped);
-      await page.locator(".pages").waitFor();
+      if (id === "split") await page.getByPlaceholder("1-3, 4-6, 7-").fill("1-7, 8-14");
+      if (id === "protect") {
+        await page.locator('input[type="password"]').first().fill("review-password");
+        await page.locator('input[type="password"]').nth(1).fill("review-password");
+      }
+      if (id === "unlock") {
+        await page.locator('.options input[type="password"]').waitFor();
+      } else {
+        await page.waitForFunction(() => {
+          const cards = [...document.querySelectorAll(".pages .card")].slice(0, 12);
+          return cards.length > 0 && cards.every((card) => card.querySelector(".thumb .sheet"));
+        });
+      }
       await page.screenshot({ path: resolve(dir, "tools", `${id}-configured.png`) });
     }
     await context.close();

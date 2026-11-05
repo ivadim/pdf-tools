@@ -19,7 +19,7 @@ use crate::tools::move_item;
 use crate::widgets::{self, action, icon_button, muted, run_bar, section_title, Caps, Run, Tile, TileEvent, BOLD};
 
 const SOURCE_COLORS: [Color; 8] = [
-    color!(0x3b6fe0),
+    color!(0x0d8c9c),
     color!(0xd9534f),
     color!(0x2e9d6a),
     color!(0xc77c12),
@@ -444,7 +444,7 @@ impl Merge {
             .align_y(Alignment::Center),
             files,
         ])
-        .width(360)
+        .width(280)
         .height(Length::Fill)
         .style(theme::panel);
 
@@ -482,7 +482,7 @@ impl Merge {
             "Pages of the merged PDF will appear here."
         };
         let caps = Caps { include: true, rotate: true, reorder: true, ..Default::default() };
-        right = right.push(widgets::page_grid(tiles, caps, busy, empty, move |i, e| wrap(Msg::Tile(i, e))));
+        right = right.push(widgets::page_grid_sized(tiles, caps, busy, empty, 230.0, move |i, e| wrap(Msg::Tile(i, e))));
         let right = container(right).width(Length::Fill).height(Length::Fill).style(theme::panel);
 
         let label = "Merge PDFs…";

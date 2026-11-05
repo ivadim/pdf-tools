@@ -25,7 +25,7 @@ struct PageCard: View {
                             GeometryReader { geometry in
                                 Color.clear.contentShape(Rectangle())
                                     .accessibilityElement()
-                                    .accessibilityLabel(decor.onTap == nil ? "View page \(item.page)" : "Page \(item.page)")
+                                    .accessibilityLabel(decor.onTap == nil ? "View page \(item.page) of \(item.file.name)" : "Page \(item.page) of \(item.file.name)")
                                     .accessibilityAddTraits(.isButton)
                                     .accessibilityIdentifier("page.\(index + 1)")
                                     .onTapGesture { location in
@@ -62,11 +62,27 @@ struct PageCard: View {
                 }
             }
             .buttonStyle(.borderless)
+            if session.tool == .merge {
+                Text(item.file.name)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else if session.tool == .split,
+                      let options = session.options as? SplitOptions,
+                      let parts = try? options.parts(session),
+                      let output = parts.firstIndex(where: { $0.contains(item.page) }) {
+                Text("File \(output + 1)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .contextMenu { menu }
         .modifier(Reorder(enabled: reorderable, session: session, item: item))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Page \(item.page)")
+        .accessibilityLabel("Page \(item.page) of \(item.file.name)")
     }
 
     /// Drag this onto another page to move the page there. Only the handle

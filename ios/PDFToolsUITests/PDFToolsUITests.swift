@@ -56,6 +56,21 @@ final class PDFToolsUITests: XCTestCase {
                 default: "Choose a PDF"
                 }
                 tapWhenReady(app.buttons[chooser])
+                if tool.id == "split" {
+                    let ranges = app.textFields["1-3, 4-6, 7-"]
+                    XCTAssertTrue(ranges.waitForExistence(timeout: 10))
+                    ranges.tap()
+                    ranges.typeText("1-7, 8-14\n")
+                } else if tool.id == "protect" {
+                    let passwords = app.secureTextFields.matching(identifier: "Password")
+                    let openPassword = passwords.element(boundBy: 0)
+                    let repeatedPassword = passwords.element(boundBy: 1)
+                    XCTAssertTrue(openPassword.waitForExistence(timeout: 10))
+                    openPassword.tap()
+                    openPassword.typeText("review-password")
+                    repeatedPassword.tap()
+                    repeatedPassword.typeText("review-password\n")
+                }
                 capture("\(appearance.lowercased())-tools-\(tool.id)-configured")
             }
             app.terminate()

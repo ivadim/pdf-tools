@@ -35,7 +35,7 @@ function showHome(message, { push = true } = {}) {
   setRoute(null, push);
   main.replaceChildren(
     ...[
-    h("header", { className: "page-head" }, h("h1", {}, "PDF Tools"), h("p", { className: "subtitle" }, "Everything runs on this device; nothing is uploaded.")),
+    h("header", { className: "page-head" }, h("h1", {}, "Choose a tool"), h("p", { className: "subtitle" }, "Everything runs on this device; nothing is uploaded.")),
     sharedPdf ? h("div", { className: "notice" }, `${sharedPdf.name} is open. Choose what to do with it.`) : null,
     typeof message === "string" ? h("div", { className: "notice" }, message) : null,
     h(
@@ -111,7 +111,7 @@ document.addEventListener("keydown", (event) => {
 let nextImage = 0;
 
 function openTool(tool, { push = true } = {}) {
-  const state = { tool, pdf: null, files: [], items: [], opts: {}, result: null, error: null, busy: false };
+  const state = { tool, pdf: null, files: [], items: [], opts: {}, result: null, error: null, busy: false, editedFields: new Set() };
   const pagesBox = h("div", { className: "workspace" });
   const optionsBox = h("div", { className: "options" });
   // Collapsible on small screens, where the options sit above the pages.
@@ -171,6 +171,7 @@ function usePdf(ctx, pdf) {
   sharedPdf = pdf;
   state.pdf = pdf;
   state.result = state.error = null;
+  state.editedFields.clear();
   state.items = [];
   // Before the pages are drawn: drawing checks the options.
   state.opts = !pdf.locked || tool.allowLocked ? tool.defaults(state) : {};
@@ -340,6 +341,12 @@ function pdfCard(ctx, item, index) {
   }
   if (tool.kind === "merge") label.push(h("span", { className: "swatch", style: { width: "9px", height: "9px", borderRadius: "2px", background: fileColor(state.files.indexOf(item.pdf)) } }));
   label.push(`Page ${item.n}`);
+  if (tool.id === "split") {
+    try {
+      const output = tool.parts(ctx).findIndex((pages) => pages.includes(item.n));
+      if (output >= 0) label.push(` · File ${output + 1}`);
+    } catch { /* The range field is incomplete; the preview has no output group yet. */ }
+  }
   return pageCard({
     picture: item.pdf.thumbs.get(item.n),
     rotation: item.rotation,
@@ -397,9 +404,17 @@ function drawFooter(ctx, hasInput) {
   document.body.classList.toggle("has-actions", !ctx.footer.hidden);
   if (ctx.footer.hidden) return;
   const problem = state.busy ? null : tool.problem(ctx);
-  const button = h("button", { type: "button", className: "primary", disabled: Boolean(problem) || state.busy, onClick: () => runTool(ctx) }, state.busy ? "Working…" : `Run ${tool.name}`);
+  const isFieldError = (tool.id === "split" && (state.editedFields.has("ranges") || state.editedFields.has("extract") || state.editedFields.has("base")))
+    || (tool.id === "protect" && (state.editedFields.has("password") || state.editedFields.has("confirm")));
+  const summary = tool.id === "split" && !problem
+      ? (() => { const parts = tool.parts(ctx); return `${parts.length} output files · ${parts.reduce((n, pages) => n + pages.length, 0)} pages`; })()
+      : tool.id === "protect" && state.pdf
+        ? `${state.pdf.pageCount} pages · Password to open`
+        : null;
+  const actionLabel = { numbers: "Add page numbers", images: "Create PDF", metadata: "Save metadata", signature: "Sign", grayscale: "Convert to grayscale" }[tool.id] ?? tool.name;
+  const button = h("button", { type: "button", className: "primary", disabled: Boolean(problem) || state.busy, onClick: () => runTool(ctx) }, state.busy ? `${actionLabel} in progress…` : actionLabel);
   fill(ctx.footer, 
-    h("div", { className: "field" }, problem ? h("p", { className: "problem" }, problem) : null, button),
+    h("div", { className: "field" }, summary ? h("p", { className: "status" }, summary) : null, problem ? h("p", { className: isFieldError ? "problem is-error" : "problem" }, problem) : null, button),
     state.result ? results(ctx) : null,
     state.runError ? h("p", { className: "error" }, state.runError) : null,
   );

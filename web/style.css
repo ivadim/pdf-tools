@@ -17,6 +17,7 @@
   --line: #dde1e8;
   --line-strong: #c6ccd6;
   --accent: #2f6fed;
+  --install-text: #245aca;
   --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
   --accent-text: #ffffff;
   --danger: #c93a3a;
@@ -25,7 +26,7 @@
   --radius: 10px;
   --sidebar: 228px;
   --side: 340px;
-  --card: 168px;
+  --card: 210px;
   --bar: 52px;
   --gutter: clamp(16px, 2.4vw, 36px);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -43,7 +44,8 @@
     --muted: #9aa3b5;
     --line: #2e3441;
     --line-strong: #3d4555;
-    --accent: #5b8dff;
+    --accent: #3a6ee0;
+    --install-text: #9bb8ff;
     --page-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
   }
 }
@@ -51,13 +53,13 @@
 /* Thumbnails grow with the screen. */
 @media (min-width: 1500px) {
   :root {
-    --card: 196px;
+    --card: 230px;
     --side: 360px;
   }
 }
 @media (min-width: 2200px) {
   :root {
-    --card: 236px;
+    --card: 260px;
     --side: 380px;
   }
 }
@@ -187,7 +189,7 @@ button {
   border: 1px solid var(--accent);
   border-radius: 8px;
   background: none;
-  color: var(--accent);
+  color: var(--install-text);
   font-weight: 600;
   cursor: pointer;
 }
@@ -271,19 +273,15 @@ h1 {
 
 .home button:hover {
   border-color: var(--accent);
-  box-shadow: 0 4px 14px rgb(0 0 0 / 0.08);
-  transform: translateY(-1px);
 }
 
 .tile-icon {
-  width: 42px;
-  height: 42px;
+  width: 24px;
+  height: 24px;
   flex: none;
   display: grid;
   place-items: center;
-  border-radius: 10px;
-  background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--muted);
 }
 
 .tile-icon .icon {
@@ -375,10 +373,8 @@ h1 {
 }
 
 .panel h2 {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted);
+  font-size: 14px;
+  color: var(--text);
   margin: 4px 0 -6px;
 }
 
@@ -464,6 +460,11 @@ h1 {
   font-weight: 550;
 }
 
+.split-modes .segmented {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .anchors {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -518,9 +519,13 @@ h1 {
 }
 
 .problem {
-  color: var(--danger);
+  color: var(--muted);
   font-size: 13px;
   margin: 0;
+}
+
+.problem.is-error {
+  color: var(--danger);
 }
 
 .status {
@@ -908,8 +913,7 @@ body.dragging .drop {
     gap: 6px;
     height: calc(var(--bar) + env(safe-area-inset-top));
     padding: env(safe-area-inset-top) max(8px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left));
-    background: color-mix(in srgb, var(--panel) 92%, transparent);
-    backdrop-filter: blur(10px);
+    background: var(--panel);
     border-bottom: 1px solid var(--line);
   }
 
@@ -978,9 +982,9 @@ body.dragging .drop {
     padding: 16px max(16px, env(safe-area-inset-right)) 32px max(16px, env(safe-area-inset-left));
   }
 
-  /* The app bar already names the page; keep its one-line description. */
+  /* Keep the page title in the canvas as a heading for orientation. */
   .page-head h1 {
-    display: none;
+    font-size: 20px;
   }
 
   .page-head {
@@ -1006,8 +1010,8 @@ body.dragging .drop {
   }
 
   .tile-icon {
-    width: 40px;
-    height: 40px;
+    width: 24px;
+    height: 24px;
   }
 
   /* One column: description, options, then the pages; Run stays at the bottom. */

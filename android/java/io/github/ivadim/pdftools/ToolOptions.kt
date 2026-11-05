@@ -112,7 +112,7 @@ class CardDecor(
 
 // Shared pieces
 
-val partColors = listOf(0xff2f6fed, 0xffe0752d, 0xff1f9d6a, 0xffb8459e, 0xffc9a227, 0xff3aa7c9, 0xffd24b4b, 0xff7a5cd6).map { Color(it) }
+val partColors = listOf(0xff0d8c9c, 0xffe0752d, 0xff1f9d6a, 0xffb8459e, 0xffc9a227, 0xffa85d37, 0xffd24b4b, 0xff806c9d).map { Color(it) }
 
 fun fileColor(index: Int) = partColors[index % partColors.size]
 

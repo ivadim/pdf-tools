@@ -708,8 +708,8 @@ impl App {
     }
 
     fn home(&self) -> Element<'_, Message> {
-        // Tall enough for four lines of description, so none is cut off.
-        const CARD_HEIGHT: f32 = 112.0;
+        // The home catalog is a compact list of tasks; previews lead inside tools.
+        const CARD_HEIGHT: f32 = 100.0;
         let card = |info: &'static catalog::ToolInfo| -> Element<'static, Message> {
             button(
                 row![widgets::chip(info, 40.0), column![text(info.name).size(15).font(BOLD), muted(info.description)].spacing(3)]
@@ -738,7 +738,7 @@ impl App {
         };
         let content = column![
             column![
-                text("What would you like to do?").size(28).font(BOLD),
+                text("Choose a tool").size(24).font(BOLD),
                 text("Everything runs on your computer — your files never leave it.").color(theme::c().muted),
             ]
             .spacing(6),
