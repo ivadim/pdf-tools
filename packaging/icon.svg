@@ -1,41 +1,29 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <!-- App icon. Follows the macOS grid: an 824 px rounded square centred on
-       a 1024 px canvas. After changing it, re-render the PNG and ICO files
-       with crates/pdftools-app/examples/render_icons.rs. -->
+  <!-- Paperform: a continuous folded-paper P. Full-bleed master; the renderer
+       adds the desktop tile and extracts the Android foreground from this file.
+       Keep the background ID: it identifies the removable background layer. -->
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#6375ff"/>
-      <stop offset="1" stop-color="#3442d6"/>
+    <linearGradient id="paper-top" x1="400" y1="200" x2="640" y2="360" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/><stop offset="1" stop-color="#f1ede7"/>
     </linearGradient>
-    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="1" stop-color="#eef1fb"/>
+    <linearGradient id="paper-inside" x1="248" y1="350" x2="412" y2="480" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#c5beb5"/><stop offset="0.45" stop-color="#d9d3cb"/><stop offset="1" stop-color="#ede8e1"/>
     </linearGradient>
-    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#0b1260" flood-opacity="0.35"/>
-    </filter>
+    <linearGradient id="paper-face" x1="410" y1="490" x2="520" y2="690" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/><stop offset="1" stop-color="#e5dfd7"/>
+    </linearGradient>
+    <linearGradient id="paper-turn" x1="655" y1="230" x2="735" y2="485" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/><stop offset="1" stop-color="#f4f0ea"/>
+    </linearGradient>
   </defs>
-
-  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#bg)"/>
-
-  <!-- A second page behind, turned slightly. -->
-  <rect x="318" y="262" width="300" height="500" rx="30" fill="#aeb8ff" transform="rotate(-9 508 512)"/>
-
-  <!-- The document, with a folded corner. -->
-  <g filter="url(#shadow)">
-    <path d="M382 232 H620 L744 356 V762 A30 30 0 0 1 714 792 H382 A30 30 0 0 1 352 762 V262 A30 30 0 0 1 382 232 Z" fill="url(#page)"/>
+  <rect id="background" width="1024" height="1024" fill="#e52b16"/>
+  <g id="mark" transform="translate(-61.44 -61.44) scale(1.12)">
+    <!-- The open counter is actual negative space, including on Android. -->
+    <path fill="#fffaf4" fill-rule="evenodd" d="M248 334 382 200H594C702 200 790 324 790 406 790 528 690 642 574 642H412V814H248V334ZM412 344V492H624L669 344H412Z"/>
+    <path fill="url(#paper-inside)" d="M248 344H412V492L248 656V344Z"/>
+    <path fill="#d9d2c9" d="M248 814 412 642V814H248Z"/>
+    <path fill="url(#paper-face)" d="M624 492C706 492 790 470 790 406 790 528 690 642 574 642H412L248 814V656L412 492H624Z"/>
+    <path fill="url(#paper-top)" d="M248 344V334L382 200H594C654 200 694 235 686 283L669 344H248Z"/>
+    <path fill="url(#paper-turn)" d="M594 200C702 200 790 324 790 406 790 470 706 492 624 492L680 306C697 250 667 211 594 200Z"/>
   </g>
-  <path d="M620 232 V326 A30 30 0 0 0 650 356 H744 Z" fill="#cdd4fb"/>
-
-  <!-- Lines of text. -->
-  <rect x="404" y="300" width="170" height="24" rx="12" fill="#c9cfe4"/>
-  <rect x="404" y="384" width="288" height="24" rx="12" fill="#c9cfe4"/>
-  <rect x="404" y="440" width="250" height="24" rx="12" fill="#c9cfe4"/>
-  <rect x="404" y="676" width="288" height="24" rx="12" fill="#c9cfe4"/>
-
-  <!-- The PDF tag, overhanging the page edge. -->
-  <g filter="url(#shadow)">
-    <rect x="282" y="508" width="330" height="136" rx="28" fill="#ef3b4f"/>
-  </g>
-  <text x="447" y="606" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="96" letter-spacing="4" fill="#ffffff">PDF</text>
 </svg>
