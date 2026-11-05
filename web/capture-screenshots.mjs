@@ -1,10 +1,11 @@
 import { chromium } from "@playwright/test";
 import { mkdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { env } from "node:process";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(fileURLToPath(new URL("../docs/design-reviews/screenshots/web/", import.meta.url)));
-const baseURL = process.env.PDFTOOLS_WEB_URL ?? "http://127.0.0.1:4173";
+const baseURL = env.PDFTOOLS_WEB_URL ?? "http://127.0.0.1:4173";
 const fixture = (path) => fileURLToPath(new URL(`../${path}`, import.meta.url));
 const asDropFile = async (path) => ({
   name: path.split("/").at(-1),
