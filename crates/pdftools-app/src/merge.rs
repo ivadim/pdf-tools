@@ -407,7 +407,6 @@ impl Merge {
                 container(container(zone).style(theme::panel))
                     .padding(Padding { top: 0.0, right: 24.0, bottom: 0.0, left: 24.0 })
                     .height(Length::Fill),
-                run_bar(&self.run, self.validate(), "Merge PDFs…", icons::merge(), wrap(Msg::Run), wrap(Msg::Reveal)),
             ]
             .spacing(16)
             .into();

@@ -147,7 +147,7 @@ fn merge_and_images() {
     let mut h = Harness::new("multi");
 
     h.click("Merge");
-    assert!(h.shows("Add PDF files to get started."));
+    assert!(h.shows("Drop PDF files here"));
     std::fs::write(h.out("notes.txt"), "text").unwrap();
     h.dialogs.open(&[&fixture("sizes.pdf"), &fixture("rotation.pdf"), &h.out("notes.txt")]);
     h.click("Add PDF files…");

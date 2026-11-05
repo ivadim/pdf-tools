@@ -800,13 +800,14 @@ impl App {
         let right = container(right).width(Length::Fill).height(Length::Fill).style(theme::panel);
 
         let hint = single.hint(caps).or_else(|| tool.validate(single));
-        column![
+        let mut page = column![
             container(widgets::tool_header(info)).padding(Padding { top: 20.0, right: 24.0, bottom: 0.0, left: 24.0 }),
             row![left, right].spacing(16).padding(Padding { top: 0.0, right: 24.0, bottom: 0.0, left: 24.0 }).height(Length::Fill),
-            run_bar(&single.run, hint, tool.run_label(), (info.icon)(), Message::Run(id), Message::Reveal(id)),
-        ]
-        .spacing(16)
-        .into()
+        ];
+        if !matches!(single.state, FileState::Empty) {
+            page = page.push(run_bar(&single.run, hint, tool.run_label(), (info.icon)(), Message::Run(id), Message::Reveal(id)));
+        }
+        page.spacing(16).into()
     }
 
     /// Whether the viewed page is left out (`None` if the tool can't).
@@ -931,7 +932,7 @@ fn not_ported<'a>(id: ToolId) -> Element<'a, Message> {
 pub fn drop_zone<'a>(heading: &'a str, hint: &'a str, button: &'a str, on_choose: Option<Message>) -> Element<'a, Message> {
     container(
         column![
-            icon(icons::upload(), 40.0, theme::c().accent),
+            icon(icons::upload(), 40.0, theme::c().muted),
             text(heading).size(18).font(BOLD),
             muted(hint),
             action(button, Some(icons::plus()), true, on_choose),
@@ -948,13 +949,9 @@ pub fn drop_zone<'a>(heading: &'a str, hint: &'a str, button: &'a str, on_choose
 fn file_card<'a>(id: ToolId, single: &'a Single, previews: &'a Previews, busy: bool) -> Element<'a, Message> {
     match &single.state {
         FileState::Empty => container(
-            row![
-                icon(icons::file(), 22.0, theme::c().muted),
-                text("No PDF chosen").color(theme::c().muted).width(Length::Fill),
-                action("Choose…", None, false, (!busy).then_some(Message::PickFile(id))),
-            ]
-            .spacing(10)
-            .align_y(Alignment::Center),
+            row![icon(icons::file(), 22.0, theme::c().muted), text("No PDF chosen").color(theme::c().muted).width(Length::Fill),]
+                .spacing(10)
+                .align_y(Alignment::Center),
         )
         .padding(10)
         .style(|_| container::Style {
