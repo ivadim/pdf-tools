@@ -1,9 +1,9 @@
-// The thirteen tools, in the desktop app's order.
+// The fourteen tools, in the desktop app's order.
 
 import SwiftUI
 
 enum Tool: String, CaseIterable, Identifiable, Hashable {
-    case merge, split, compress, protect, unlock, rotate, rearrange, numbers, watermark, metadata, signature, grayscale, images
+    case merge, split, compress, protect, unlock, rotate, rearrange, numbers, watermark, metadata, signature, redact, grayscale, images
 
     var id: String { rawValue }
 
@@ -30,6 +30,7 @@ enum Tool: String, CaseIterable, Identifiable, Hashable {
         case .watermark: "Watermark"
         case .metadata: "Metadata"
         case .signature: "Signature"
+        case .redact: "Redact"
         case .grayscale: "Grayscale"
         case .images: "Images to PDF"
         }
@@ -48,6 +49,7 @@ enum Tool: String, CaseIterable, Identifiable, Hashable {
         case .watermark: "Stamp text or a logo across your pages"
         case .metadata: "View and edit the title, author, keywords and other properties"
         case .signature: "Draw, type or upload your signature and place it on the page"
+        case .redact: "Permanently remove marked areas from a copy of a PDF"
         case .grayscale: "Convert colours to shades of grey; text stays sharp and selectable"
         case .images: "Turn photos and images into a PDF, one image per page"
         }
@@ -67,6 +69,7 @@ enum Tool: String, CaseIterable, Identifiable, Hashable {
         case .watermark: "Stamp text or an image on pages."
         case .metadata: "Edit document details."
         case .signature: "Sign a PDF page."
+        case .redact: "Remove sensitive areas from a PDF."
         case .grayscale: "Prepare pages for black-and-white printing."
         case .images: "Make a PDF from photos or images."
         }
@@ -85,6 +88,7 @@ enum Tool: String, CaseIterable, Identifiable, Hashable {
         case .watermark: "drop"
         case .metadata: "info.circle"
         case .signature: "signature"
+        case .redact: "pencil.tip.crop.circle"
         case .grayscale: "circle.lefthalf.filled"
         case .images: "photo.on.rectangle"
         }
@@ -103,6 +107,7 @@ enum Tool: String, CaseIterable, Identifiable, Hashable {
         case .watermark: Color(hex: 0xc084fc)
         case .metadata: Color(hex: 0x22d3ee)
         case .signature: Color(hex: 0xec4899)
+        case .redact: Color(hex: 0x2f5bd3)
         case .grayscale: Color(hex: 0xa1a1aa)
         case .images: Color(hex: 0x14b8a6)
         }
@@ -140,6 +145,7 @@ enum Tool: String, CaseIterable, Identifiable, Hashable {
         case .watermark: WatermarkOptions()
         case .metadata: MetadataOptions()
         case .signature: SignatureOptions()
+        case .redact: RedactOptions()
         case .grayscale: GrayscaleOptions()
         case .images: ImagesOptions()
         }

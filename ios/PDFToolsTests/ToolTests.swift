@@ -307,6 +307,19 @@ struct StampTests {
     }
 }
 
+struct RedactTests {
+    @Test func smallerCopyUsesLowerResolution() async throws {
+        let redact = await session(.redact, Fixtures.pdf("rotation"))
+        let options = try #require(redact.options as? RedactOptions)
+        options.marks.append(.init(page: 1, rect: CGRect(x: 0.1, y: 0.1, width: 0.4, height: 0.2)))
+        options.smaller = true
+        let result = try await run(redact)
+        let data = try Data(contentsOf: result.files[0])
+        #expect(data.range(of: Data("/Width 1400".utf8)) != nil)
+        #expect(try pageCount(result.files[0]) == 2)
+    }
+}
+
 struct SignatureTests {
     @Test func signsWithATypedName() async throws {
         let signature = await session(.signature, Fixtures.pdf("tracemonkey"))

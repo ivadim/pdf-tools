@@ -1,4 +1,4 @@
-// The thirteen tools as tiles, like the iOS app's home screen.
+// The fourteen tools as tiles, like the iOS app's home screen.
 
 package io.github.ivadim.pdftools
 

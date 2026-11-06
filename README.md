@@ -12,7 +12,7 @@ It is a single native executable, about 10 MB, with no web view and no runtime t
 
 **Try it in your browser: [ivadim.github.io/pdf-tools](https://ivadim.github.io/pdf-tools/)** (experimental). The same PDF engine runs as WebAssembly, so files still never leave your computer. In Chrome or Edge you can install it as an app (the install icon in the address bar, or *Install app* in the sidebar) to pin it to your desktop or dock and open PDFs with it; it then works offline too.
 
-![PDF Tools home screen with all thirteen tools](docs/screenshots/home.png)
+![PDF Tools home screen with all fourteen tools](docs/screenshots/home.png)
 
 <details>
 <summary>In the dark theme</summary>
@@ -69,6 +69,7 @@ Builds of the latest `main` are attached to each [CI run](https://github.com/iva
 | **Watermark** | Text in any installed font and script, or an image. Set size, angle, opacity, position, and draw above or behind the content. |
 | **Metadata** | Edit title, author, subject, keywords, creator and producer. |
 | **Signature** | Draw, type or upload a signature, then drag and resize it on one or more pages. |
+| **Redact** | Mark areas to permanently remove from a new copy. The exported PDF converts all pages to images; selectable text, links, forms and document metadata are removed. The default preserves image quality; **Smaller file** uses lower-resolution images and may use JPEG compression. Review the marks carefully before sharing the copy. |
 | **Grayscale** | Converts colours in page content, forms, annotations, palettes and images. Text stays real text. Gradients and spot colours are left as they are, and calibrated colours are converted as plain RGB. |
 | **Images to PDF** | Turn JPEG and PNG images into a PDF, one per page. Reorder and rotate them, and choose the page size (A4, Letter or the image's own size), orientation and margin. JPEGs are embedded without re-compression, camera rotation (EXIF) is honoured and PNG transparency is kept. |
 
@@ -122,7 +123,7 @@ bazel run --config=release //crates/pdftools-core:try_file -- "$PWD/some.pdf" "$
 
 ### Web version (experimental)
 
-`crates/pdftools-cli` runs every operation from the command line. Built for `wasm32-wasip1`, the same program is the engine of a web page in `web/`, which runs all 13 tools in the browser. It is published at **https://ivadim.github.io/pdf-tools/** by [`pages.yml`](.github/workflows/pages.yml).
+`crates/pdftools-cli` runs every operation from the command line. Built for `wasm32-wasip1`, the same program is the engine of a web page in `web/`, which runs all 14 tools in the browser. It is published at **https://ivadim.github.io/pdf-tools/** by [`pages.yml`](.github/workflows/pages.yml).
 
 ```bash
 bazel run --config=release //web:serve      # http://localhost:8080 (needs python3)
@@ -134,7 +135,7 @@ bazel build --config=release //web:site     # the static site, in bazel-bin/web/
 
 ### iOS app (experimental)
 
-`ios/` is a native SwiftUI app with all 13 tools, for iPhone and iPad (iOS 18+). It links the same engine as the other versions: `crates/pdftools-ffi` is a C interface that runs `pdftools-cli`'s commands in-process and renders page previews straight into memory, built with Bazel as a static library for devices and the simulator. Text watermarks and typed signatures are drawn with the system's fonts, and drawn signatures use PencilKit. Files are copied into the app's temporary folder while it works on them and never leave the device.
+`ios/` is a native SwiftUI app with all 14 tools, for iPhone and iPad (iOS 18+). It links the same engine as the other versions: `crates/pdftools-ffi` is a C interface that runs `pdftools-cli`'s commands in-process and renders page previews straight into memory, built with Bazel as a static library for devices and the simulator. Text watermarks and typed signatures are drawn with the system's fonts, and drawn signatures use PencilKit. Files are copied into the app's temporary folder while it works on them and never leave the device.
 
 It needs Xcode 16 or later on an Apple silicon Mac:
 
@@ -155,7 +156,7 @@ sh ios/bazel-test.sh //ios:unit_ipad //ios:ui_ipad      # iPad
 
 ### Android app (experimental)
 
-`android/` is a native Kotlin and Jetpack Compose app with all 13 tools, for phones and tablets (Android 10+). It follows Material 3 but keeps the iOS app's layout and colours: the same home screen of tiles, the options panel above the page cards (beside them on tablets), the run bar and the result sheet. It links the same engine: `crates/pdftools-ffi/src/android.rs` adds JNI functions to the crate, built with Bazel as `libpdftools_ffi.so`. Text watermarks and typed signatures are drawn with the device's fonts. Files are copied into the app's cache folder while it works on them and never leave the device; results are saved with the system's file picker or shared. PDFs are memory-mapped, and one too large for the memory the device has free fails with a message instead of the app being stopped.
+`android/` is a native Kotlin and Jetpack Compose app with all 14 tools, for phones and tablets (Android 10+). It follows Material 3 but keeps the iOS app's layout and colours: the same home screen of tiles, the options panel above the page cards (beside them on tablets), the run bar and the result sheet. It links the same engine: `crates/pdftools-ffi/src/android.rs` adds JNI functions to the crate, built with Bazel as `libpdftools_ffi.so`. Text watermarks and typed signatures are drawn with the device's fonts. Files are copied into the app's cache folder while it works on them and never leave the device; results are saved with the system's file picker or shared. PDFs are memory-mapped, and one too large for the memory the device has free fails with a message instead of the app being stopped.
 
 The whole build is Bazel and hermetic: [`hermetic_android_toolchains`](https://github.com/keith/hermetic_android_toolchains) downloads a pinned Android SDK, NDK and emulator, `rules_android` and `rules_kotlin` build the app, and the AndroidX libraries are pinned in `android/maven_install.json`. Nothing needs installing (no Android Studio, JDK or SDK). The Android targets are left out of `//...` and need `--config=android`, which registers the SDK, NDK and Kotlin toolchains. Building the app accepts the Android SDK and NDK licences named in `.bazelrc`.
 

@@ -21,6 +21,7 @@ use pdftools_core::stamps::{add_image_stamp, add_page_numbers, add_signature, Im
 use pdftools_core::{Anchor, HAlign, Metadata, PageSpec, VAlign};
 use pdftools_render::pages::{render, DocCache, PreviewRequest};
 use pdftools_render::ranges::parse_list;
+use pdftools_render::redact::{RedactQuality, Redaction};
 
 const USAGE: &str = "\
 usage: pdftools-cli <command> [arguments] [--option=value ...]
@@ -44,6 +45,8 @@ usage: pdftools-cli <command> [arguments] [--option=value ...]
   stamp       IN OUT --image=PNG [--position=middle-center] [--width=FRACTION]
               [--angle=DEG] [--opacity=0..1] [--under] [--pages=LIST] [--keep=LIST]
   signature   IN OUT --image=PNG --place=PAGE:X:Y:W:H,...   fractions of the page
+  redact      IN OUT --areas=PAGE:X:Y:W:H,... [--quality=higher|smaller]
+              Areas are fractions from the top left; all pages become images.
   images      OUT IMG[:ROT]... [--size=a4|letter|fit] [--orientation=auto|portrait|landscape]
               [--margin=PT]
 
@@ -219,6 +222,32 @@ pub fn run(args: &[String]) -> Result<String, String> {
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             let count = edit(&args, |doc| add_signature(doc, &image, &placements))?;
+            Ok(format!(r#"{{"pages":{count}}}"#))
+        }
+        "redact" => {
+            let (input, output) = (args.path(0, "input")?, args.path(1, "output")?);
+            let marks = args
+                .get("areas")
+                .unwrap_or_default()
+                .split(',')
+                .filter(|s| !s.trim().is_empty())
+                .map(|item| {
+                    let parts: Vec<_> = item.trim().split(':').collect();
+                    let n = |i: usize| parts.get(i).and_then(|v| v.parse::<f32>().ok());
+                    match (parts.first().and_then(|p| p.parse().ok()), n(1), n(2), n(3), n(4)) {
+                        (Some(page), Some(x), Some(y), Some(width), Some(height)) if parts.len() == 5 => {
+                            Ok(Redaction { page, x, y, width, height })
+                        }
+                        _ => Err(format!("--areas: “{item}” isn’t PAGE:X:Y:W:H")),
+                    }
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let quality = match args.get("quality").unwrap_or("higher") {
+                "higher" => RedactQuality::Higher,
+                "smaller" => RedactQuality::Smaller,
+                other => return Err(format!("--quality: unknown choice “{other}”")),
+            };
+            let count = pdftools_render::redact::redact_with_quality(&input, &output, &marks, quality)?;
             Ok(format!(r#"{{"pages":{count}}}"#))
         }
         "images" => images(&args),

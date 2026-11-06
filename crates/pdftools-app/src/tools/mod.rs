@@ -2,11 +2,13 @@
 
 mod basic;
 mod pages;
+mod redact;
 mod signature;
 mod stamps;
 
 pub use basic::{Compress, Grayscale, Protect, Rotate, Unlock};
 pub use pages::{move_item, Metadata, Rearrange, Split};
+pub use redact::Redact;
 pub use signature::{Signature, STAGE_WIDTH};
 pub use stamps::{PageNumbers, Watermark};
 

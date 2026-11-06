@@ -1,4 +1,4 @@
-// The thirteen tools. Each describes its options panel, what it adds to the
+// The fourteen tools. Each describes its options panel, what it adds to the
 // page cards, what's missing before it can run, and the command it runs.
 //
 // `ctx.state` holds the open file(s) and `items` (one per page card); tools
@@ -877,6 +877,135 @@ const signature = {
   },
 };
 
+// Each mark is defined on the displayed page, in fractions from its top left.
+// The editor works at inspection size so the user can cover the full content.
+const redact = {
+  id: "redact",
+  name: "Redact",
+  icon: "pen",
+  desc: "Permanently remove marked areas from a copy of a PDF.",
+  defaults: () => ({ marks: [], smaller: false }),
+  panel(ctx) {
+    const marks = ctx.state.opts.marks;
+    return [
+      h("p", { className: "status" }, "Choose a page, then drag over each area to remove. Review the marks before creating the copy."),
+      h("p", {}, "The exported PDF converts every page to an image. Text will not be selectable; links, forms and document details are removed."),
+      h("label", { className: "check" }, h("input", { type: "checkbox", checked: ctx.state.opts.smaller, disabled: ctx.state.busy,
+        onChange: (event) => { ctx.state.opts.smaller = event.target.checked; ctx.state.result = null; ctx.state.runError = null; ctx.rebuild(); } }), "Smaller file"),
+      h("p", { className: "status" }, "Smaller file lowers resolution and may use JPEG; text may be less sharp."),
+      h("p", { className: "status" }, `${plural(marks.length, "area")} marked.`),
+      h("button", { type: "button", className: "secondary", disabled: !marks.length || ctx.state.busy, onClick: () => {
+        if (ctx.state.busy) return;
+        marks.length = 0;
+        ctx.state.result = null;
+        ctx.rebuild();
+      } }, "Clear all marks"),
+    ];
+  },
+  card(ctx, item) {
+    return {
+      onSheetClick: () => { if (!ctx.state.busy) editRedactions(ctx, item); },
+      overlay: ({ width, height }) => ctx.state.opts.marks.filter((m) => m.page === item.n).map((m) => h("div", {
+        className: "redact-preview",
+        style: { left: `${m.x * width}cqw`, top: `${m.y * height}cqw`, width: `${m.width * width}cqw`, height: `${m.height * height}cqw` },
+      })),
+    };
+  },
+  problem: (ctx) => ctx.state.opts.marks.length ? null : "Choose a page and mark an area to remove.",
+  run(ctx) {
+    const { pdf, opts } = ctx.state;
+    const marks = opts.marks.map((m) => [m.page, m.x, m.y, m.width, m.height].join(":"));
+    return runToFile(["redact", pdf.path, "OUT", `--areas=${marks.join(",")}`, `--quality=${opts.smaller ? "smaller" : "higher"}`], `${pdf.baseName}-redacted.pdf`, (json) =>
+      `Created a redacted copy of ${plural(json.pages, "page")}.`);
+  },
+};
+
+async function editRedactions(ctx, item) {
+  const dialog = h("dialog", { className: "redact-dialog", ariaLabel: `Mark areas on page ${item.n}` });
+  const stage = h("div", { className: "redact-stage" });
+  const status = h("p", { className: "status", role: "status" }, "Drag across an area to mark it.");
+  const marks = ctx.state.opts.marks;
+  const changed = () => { ctx.state.result = null; ctx.state.runError = null; };
+  const fields = ["Left", "Top", "Width", "Height"].map((label) => {
+    const input = h("input", { type: "number", min: 0, max: 100, step: 0.1, value: label === "Width" || label === "Height" ? 10 : 0 });
+    return { input, label: h("label", { className: "field" }, `${label} (%)`, input) };
+  });
+  const redraw = () => {
+    stage.querySelectorAll(".redact-preview:not(.redact-draft)").forEach((el) => el.remove());
+    marks.filter((m) => m.page === item.n).forEach((m) => stage.append(h("div", { className: "redact-preview", style: {
+      left: `${m.x * 100}%`, top: `${m.y * 100}%`, width: `${m.width * 100}%`, height: `${m.height * 100}%`,
+    } })));
+    status.textContent = `${plural(marks.filter((m) => m.page === item.n).length, "area")} marked on this page.`;
+  };
+  const close = () => { dialog.close(); dialog.remove(); ctx.rebuild(); };
+  const addCoordinates = () => {
+    const [x, y, width, height] = fields.map(({ input }) => Number(input.value) / 100);
+    if (![x, y, width, height].every(Number.isFinite) || x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > 1 || y + height > 1) {
+      status.textContent = "Enter an area within the page, with a width and height greater than zero.";
+      return;
+    }
+    marks.push({ page: item.n, x, y, width, height });
+    changed();
+    redraw();
+  };
+  dialog.append(h("div", { className: "redact-toolbar" }, h("strong", {}, `Page ${item.n}`),
+    h("button", { type: "button", className: "secondary", onClick: () => {
+      const i = marks.findLastIndex((m) => m.page === item.n);
+      if (i >= 0) { marks.splice(i, 1); changed(); }
+      redraw();
+    } }, "Undo last mark"),
+    h("button", { type: "button", className: "primary", onClick: close }, "Done")), status, stage,
+    h("details", {}, h("summary", {}, "Enter an area using the keyboard"),
+      h("div", { className: "redact-coordinates" }, fields.map(({ label }) => label)),
+      h("button", { type: "button", className: "secondary", onClick: addCoordinates }, "Add area")));
+  dialog.addEventListener("cancel", (event) => { event.preventDefault(); close(); });
+  document.body.append(dialog);
+  dialog.showModal();
+  try {
+    const pic = (await item.pdf.render([item.n], Math.min(2500, Math.round(window.innerWidth * 1.5)))).get(item.n);
+    const canvas = h("canvas", { width: pic.width, height: pic.height, ariaLabel: `Page ${item.n}` });
+    canvas.getContext("2d").drawImage(pic.bitmap, 0, 0);
+    stage.append(canvas);
+    redraw();
+    let start;
+    const draft = h("div", { className: "redact-preview redact-draft", hidden: true });
+    stage.append(draft);
+    const point = (e) => {
+      const b = stage.getBoundingClientRect();
+      return [Math.max(0, Math.min(1, (e.clientX - b.left) / b.width)), Math.max(0, Math.min(1, (e.clientY - b.top) / b.height))];
+    };
+    stage.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      stage.setPointerCapture(e.pointerId);
+      start = point(e);
+      Object.assign(draft.style, { left: `${start[0] * 100}%`, top: `${start[1] * 100}%`, width: "0", height: "0" });
+      draft.hidden = false;
+    });
+    stage.addEventListener("pointermove", (e) => {
+      if (!start) return;
+      const end = point(e);
+      Object.assign(draft.style, {
+        left: `${Math.min(start[0], end[0]) * 100}%`, top: `${Math.min(start[1], end[1]) * 100}%`,
+        width: `${Math.abs(start[0] - end[0]) * 100}%`, height: `${Math.abs(start[1] - end[1]) * 100}%`,
+      });
+    });
+    stage.addEventListener("pointerup", (e) => {
+      if (!start) return;
+      const end = point(e);
+      const x = Math.min(start[0], end[0]), y = Math.min(start[1], end[1]);
+      const width = Math.abs(start[0] - end[0]), height = Math.abs(start[1] - end[1]);
+      if (width > 0.002 && height > 0.002) { marks.push({ page: item.n, x, y, width, height }); changed(); }
+      start = null;
+      draft.hidden = true;
+      redraw();
+    });
+    stage.addEventListener("pointercancel", () => { start = null; draft.hidden = true; });
+  } catch (error) {
+    status.textContent = `Could not render this page: ${error.message}`;
+  }
+}
+
 const grayscale = {
   id: "grayscale",
   name: "Grayscale",
@@ -903,4 +1032,4 @@ const grayscale = {
   },
 };
 
-export const TOOLS = [merge, split, compress, protect, unlock, rotate, rearrange, numbers, watermark, metadata, signature, grayscale, images];
+export const TOOLS = [merge, split, compress, protect, unlock, rotate, rearrange, numbers, watermark, metadata, signature, redact, grayscale, images];

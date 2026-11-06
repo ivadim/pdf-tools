@@ -351,3 +351,32 @@ fn shift_click_leaves_out_a_range() {
     h.send(Message::Merge(merge::Msg::Tile(15, TileEvent::ToggleInclude)));
     assert!(h.shows("13 of 17 pages kept"));
 }
+
+#[test]
+fn redact_creates_a_flattened_copy() {
+    let mut h = Harness::new("redact");
+    h.choose(ToolId::Redact, &fixture("rotation.pdf"));
+    assert!(h.shows("Mark an area to remove."));
+    h.option(ToolId::Redact, "area", "0.2,0.2,0.4,0.1");
+    let out = h.out("redacted.pdf");
+    h.dialogs.save(Some(&out));
+    h.send(Message::Run(ToolId::Redact));
+    assert!(h.status().contains("Created a redacted copy of 2 pages"), "{}", h.status());
+    assert_eq!(page_count(&out), 2);
+    let doc = lopdf::Document::load(out).unwrap();
+    assert!(doc.trailer.get(b"Info").is_err());
+    assert!(!content(&fixture("rotation.pdf"), 1).is_empty());
+    h.option(ToolId::Redact, "smaller", "1");
+    let small = h.out("smaller.pdf");
+    h.dialogs.save(Some(&small));
+    h.send(Message::Run(ToolId::Redact));
+    assert!(h.status().contains("Created a redacted copy of 2 pages"));
+    let output = lopdf::Document::load(small).unwrap();
+    assert!(output.objects.values().filter_map(|v| v.as_stream().ok()).any(|s| s
+        .dict
+        .get(b"Subtype")
+        .and_then(lopdf::Object::as_name)
+        .ok()
+        == Some(b"Image")
+        && s.dict.get(b"Width").and_then(lopdf::Object::as_i64).ok() == Some(1400)));
+}

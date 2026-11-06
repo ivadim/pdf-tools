@@ -837,6 +837,7 @@ fn screens() {
             ToolId::Watermark,
             ToolId::Metadata,
             ToolId::Signature,
+            ToolId::Redact,
             ToolId::Grayscale,
             ToolId::Images,
         ];
@@ -856,6 +857,7 @@ fn screens() {
                     ToolId::Watermark => "watermark",
                     ToolId::Metadata => "metadata",
                     ToolId::Signature => "signature",
+                    ToolId::Redact => "redact",
                     ToolId::Grayscale => "grayscale",
                     ToolId::PageNumbers | ToolId::Images => unreachable!(),
                 },
@@ -868,34 +870,43 @@ fn screens() {
             ));
             all.push((
                 format!("{name}"),
-                Box::new(move |h: &mut Harness| {
-                    match tool {
-                        ToolId::Merge => {
-                            h.send(Message::Navigate(Screen::Tool(tool)));
-                            h.dialogs.open(&[&fixture("tracemonkey.pdf"), &fixture("sizes.pdf")]);
-                            h.send(Message::Merge(merge::Msg::Add));
-                            h.render_pages(tool, 17);
-                        }
-                        ToolId::Images => {
-                            let first = h.out("screenshot-image-a.png");
-                            let second = h.out("screenshot-image-b.png");
-                            image::RgbImage::from_fn(160, 100, |x, _| {
-                                if x < 80 { image::Rgb([230, 20, 20]) } else { image::Rgb([20, 20, 230]) }
-                            })
-                            .save(&first)
-                            .unwrap();
-                            image::RgbImage::from_pixel(80, 120, image::Rgb([20, 150, 60])).save(&second).unwrap();
-                            h.send(Message::Navigate(Screen::Tool(tool)));
-                            h.dialogs.open(&[&first, &second]);
-                            h.click("Add images");
-                            h.render_pages(tool, 2);
-                        }
-                        _ => {
-                            h.choose(
-                                tool,
-                                &fixture(if tool == ToolId::Unlock { "../encrypted/aes256-password-test.pdf" } else { "tracemonkey.pdf" }),
-                            );
-                            h.render_pages(tool, 14);
+                Box::new(move |h: &mut Harness| match tool {
+                    ToolId::Merge => {
+                        h.send(Message::Navigate(Screen::Tool(tool)));
+                        h.dialogs.open(&[&fixture("tracemonkey.pdf"), &fixture("sizes.pdf")]);
+                        h.send(Message::Merge(merge::Msg::Add));
+                        h.render_pages(tool, 17);
+                    }
+                    ToolId::Images => {
+                        let first = h.out("screenshot-image-a.png");
+                        let second = h.out("screenshot-image-b.png");
+                        image::RgbImage::from_fn(
+                            160,
+                            100,
+                            |x, _| {
+                                if x < 80 {
+                                    image::Rgb([230, 20, 20])
+                                } else {
+                                    image::Rgb([20, 20, 230])
+                                }
+                            },
+                        )
+                        .save(&first)
+                        .unwrap();
+                        image::RgbImage::from_pixel(80, 120, image::Rgb([20, 150, 60])).save(&second).unwrap();
+                        h.send(Message::Navigate(Screen::Tool(tool)));
+                        h.dialogs.open(&[&first, &second]);
+                        h.click("Add images");
+                        h.render_pages(tool, 2);
+                    }
+                    _ => {
+                        h.choose(
+                            tool,
+                            &fixture(if tool == ToolId::Unlock { "../encrypted/aes256-password-test.pdf" } else { "tracemonkey.pdf" }),
+                        );
+                        h.render_pages(tool, 14);
+                        if tool == ToolId::Redact {
+                            h.option(tool, "area", "0.25,0.25,0.35,0.08");
                         }
                     }
                 }),

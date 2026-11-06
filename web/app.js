@@ -200,7 +200,7 @@ function openTool(tool, { push = true } = {}) {
   const ctx = {
     tool,
     state,
-    refresh: () => draw(ctx, { panel: tool.id === "merge" || tool.id === "rearrange" }),
+    refresh: () => draw(ctx, { panel: tool.id === "merge" || tool.id === "rearrange" || tool.id === "redact" }),
     rebuild: () => draw(ctx, { panel: true }),
     move(index, delta) {
       const [item] = state.items.splice(index, 1);
@@ -216,6 +216,7 @@ function openTool(tool, { push = true } = {}) {
       ctx.refresh();
     },
     async addFiles(list) {
+      if (tool.id === "redact" && state.busy) return;
       const files = list ?? (await pickFiles(tool.kind === "images" ? "image/png,image/jpeg" : "application/pdf,.pdf", tool.kind !== undefined));
       await addFiles(ctx, files);
     },
@@ -313,7 +314,13 @@ function dropZone(ctx) {
     "div",
     {},
     state.error ? h("p", { className: "error" }, state.error) : null,
-    h("div", { className: "drop", onClick: () => ctx.addFiles() }, h("strong", {}, `Choose ${what}`), h("span", { className: "drop-hint" }, "or drop them anywhere on this page")),
+    h("div", {
+      className: "drop", role: "button", tabIndex: 0,
+      onClick: () => ctx.addFiles(),
+      onKeyDown: (event) => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); ctx.addFiles(); }
+      },
+    }, h("strong", {}, `Choose ${what}`), h("span", { className: "drop-hint" }, "or drop them anywhere on this page")),
   );
 }
 

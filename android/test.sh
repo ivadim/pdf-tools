@@ -192,6 +192,35 @@ signature() {
     "$adb" shell input swipe 540 1900 540 900 300
     tap page.2 && tap run && expect "Signed 1 page."
 }
+redact() {
+    open_tool redact "$dir/rotation.pdf"
+    tap page.1
+    wait_for "Page marking area" || return 1
+    dump
+    coords=$(python3 -I - "$out/ui.xml" <<'PY'
+import re, sys
+xml = open(sys.argv[1]).read()
+for node in re.findall(r'<node [^>]*>', xml):
+    if 'content-desc="Page marking area"' in node:
+        x1, y1, x2, y2 = map(int, re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', node).groups())
+        print(int(x1+(x2-x1)*.2), int(y1+(y2-y1)*.2), int(x1+(x2-x1)*.7), int(y1+(y2-y1)*.3))
+        break
+PY
+)
+    [ -n "$coords" ] || return 1
+    "$adb" shell input swipe $coords 500
+    tap Done && capture "tools/redact-configured"
+    tap "Smaller file"
+    dump
+    python3 -I - "$out/ui.xml" <<'PY' || return 1
+import sys, xml.etree.ElementTree as ET
+root = ET.parse(sys.argv[1])
+assert any(node.get('checkable') == 'true' and node.get('checked') == 'true' and
+           any('Smaller file' in (child.get('text', '') + child.get('content-desc', '')) for child in node.iter('node'))
+           for node in root.iter('node')), 'Smaller file was not selected'
+PY
+    tap run && expect "Created a redacted copy of 2 pages."
+}
 grayscale() {
     open_tool grayscale "$dir/tracemonkey.pdf"
     tap run && expect "Converted"
@@ -201,7 +230,7 @@ images() {
     tap Rotate && tap run && expect "Created a PDF with 2 pages."
 }
 
-tools=${*:-merge split compress protect unlock rotate rearrange numbers watermark metadata signature grayscale images}
+tools=${*:-merge split compress protect unlock rotate rearrange numbers watermark metadata signature redact grayscale images}
 failed=""
 if [ -n "$capture_dir" ]; then
     if [ "${PDFTOOLS_THEME:-light}" = dark ]; then
@@ -209,13 +238,15 @@ if [ -n "$capture_dir" ]; then
     else
         "$adb" shell cmd uimode night no
     fi
-    "$adb" shell am force-stop $pkg
-    "$adb" shell am start -n $pkg/.MainActivity >/dev/null
-    wait_for "Everything runs on this device*"
-    capture home
-    tap About
-    capture about
-    "$adb" shell input keyevent KEYCODE_BACK
+    if [ "$#" -eq 0 ]; then
+        "$adb" shell am force-stop $pkg
+        "$adb" shell am start -n $pkg/.MainActivity >/dev/null
+        wait_for "Everything runs on this device*"
+        capture home
+        tap About
+        capture about
+        "$adb" shell input keyevent KEYCODE_BACK
+    fi
 fi
 for tool in $tools; do
     echo "$tool"
