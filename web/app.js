@@ -4,6 +4,7 @@
 import { ready, Pdf, put } from "./engine.js";
 import { TOOLS, fileColor } from "./tools.js";
 import { h, icon, pageCard, sheetStyle, zoom, pickFiles, download } from "./ui.js";
+import { VERSION } from "./version.js";
 
 const main = document.getElementById("main");
 const nav = document.getElementById("nav");
@@ -12,6 +13,7 @@ const nav = document.getElementById("nav");
 let sharedPdf = null;
 /** The open tool's ctx, or null on the home screen. */
 let current = null;
+let currentPage = "home";
 
 /** replaceChildren, skipping the nulls left by conditional parts. */
 const fill = (el, ...children) => el.replaceChildren(...children.flat().filter((c) => c !== null && c !== undefined && c !== false));
@@ -21,8 +23,9 @@ const isImage = (file) => /^image\/(png|jpeg)$/.test(file.type) || /\.(png|jpe?g
 
 function renderNav() {
   nav.replaceChildren(
-    navButton("home", "Home", !current, showHome),
+    navButton("home", "Home", currentPage === "home", showHome),
     ...TOOLS.map((tool) => navButton(tool.icon, tool.name, current?.tool === tool, () => openTool(tool))),
+    navButton("info", "About", currentPage === "about", showAbout),
   );
 }
 
@@ -32,25 +35,98 @@ function navButton(iconName, label, active, onClick) {
 
 function showHome(message, { push = true } = {}) {
   current = null;
-  setRoute(null, push);
+  currentPage = "home";
+  setRoute(null, push, "home");
+  const toolButton = (tool) => h(
+    "button",
+    { type: "button", onClick: () => openTool(tool) },
+    h("span", { className: "tile-icon" }, icon(tool.icon)),
+    h("span", { className: "tile-text" }, h("strong", {}, tool.name), h("span", { className: "desc" }, tool.desc)),
+  );
   main.replaceChildren(
     ...[
-    h("header", { className: "page-head" }, h("h1", {}, "PDF Tools"), h("p", { className: "subtitle" }, "Everything runs on this device; nothing is uploaded.")),
+    h("header", { className: "page-head" }, h("h1", {}, "Choose a tool"), h("p", { className: "subtitle" }, "Everything runs on this device; nothing is uploaded.")),
     sharedPdf ? h("div", { className: "notice" }, `${sharedPdf.name} is open. Choose what to do with it.`) : null,
     typeof message === "string" ? h("div", { className: "notice" }, message) : null,
-    h(
-      "div",
-      { className: "home" },
-      TOOLS.map((tool) =>
-        h(
-          "button",
-          { type: "button", onClick: () => openTool(tool) },
-          h("span", { className: "tile-icon" }, icon(tool.icon)),
-          h("span", { className: "tile-text" }, h("strong", {}, tool.name), h("span", { className: "desc" }, tool.desc)),
-        ),
-      ),
+    h("section", { className: "home-section" },
+      h("h2", {}, "Common tools"),
+      h("div", { className: "home" }, TOOLS.slice(0, 4).map(toolButton)),
+    ),
+    h("section", { className: "home-section" },
+      h("h2", {}, "More tools"),
+      h("div", { className: "home home-more" }, TOOLS.slice(4).map(toolButton)),
     ),
     ].filter(Boolean),
+  );
+}
+
+function showAbout({ push = true } = {}) {
+  current = null;
+  currentPage = "about";
+  setRoute(null, push, "about");
+  const copyText = `PDF Tools ${VERSION} (Web)`;
+  const copyStatus = h("span", { className: "about-copy-status", role: "status", "aria-live": "polite" });
+  const copyButton = h("button", {
+    type: "button",
+    className: "about-copy",
+    onClick: async () => {
+      try {
+        await navigator.clipboard.writeText(copyText);
+        copyButton.textContent = "Copied";
+        copyStatus.textContent = "Version copied to clipboard.";
+      } catch {
+        copyStatus.textContent = "Clipboard access isn't available in this browser.";
+      }
+    },
+  }, "Copy");
+  const externalLink = (label, url, iconName = "external") =>
+    h("a", { href: url, target: "_blank", rel: "noopener noreferrer" }, icon(iconName), label);
+  const credits = [
+    ["lopdf", "Reading, editing and writing PDF files", "https://crates.io/crates/lopdf"],
+    ["hayro", "Rendering page previews", "https://crates.io/crates/hayro"],
+    ["image", "Reading and writing JPEG and PNG images", "https://crates.io/crates/image"],
+    ["Parley", "Text layout for watermarks and signatures", "https://crates.io/crates/parley"],
+    ["tiny-skia", "Drawing and transforming document content", "https://crates.io/crates/tiny-skia"],
+  ];
+  main.replaceChildren(
+    h("article", { className: "about" },
+      h("header", { className: "about-header" },
+        h("img", { className: "about-logo", src: "icon.png", alt: "" }),
+        h("div", { className: "about-identity" },
+          h("h1", {}, "PDF Tools"),
+          h("div", { className: "about-version" }, `Version ${VERSION} · Web`, copyButton, copyStatus),
+          h("p", {}, "Merge, split, protect and edit PDFs — on your computer."),
+        ),
+      ),
+      h("div", { className: "about-actions" },
+        h("a", { className: "primary", href: "https://github.com/ivadim/pdf-tools", target: "_blank", rel: "noopener noreferrer" }, icon("github"), "GitHub"),
+        h("a", { className: "secondary", href: "https://github.com/ivadim/pdf-tools/releases", target: "_blank", rel: "noopener noreferrer" }, icon("external"), "Releases and updates"),
+        h("a", { className: "secondary", href: "https://github.com/ivadim/pdf-tools/issues/new", target: "_blank", rel: "noopener noreferrer" }, icon("external"), "Report a problem"),
+        h("a", { className: "secondary", href: "https://buymeacoffee.com/ivadim", target: "_blank", rel: "noopener noreferrer" }, icon("coffee"), "Buy me a coffee"),
+      ),
+      h("section", { className: "about-section" },
+        h("h2", {}, "Privacy"),
+        h("p", {}, "Everything runs on your computer. PDF Tools never uploads your files. The Web version uses WebAssembly to process documents in your browser; your browser connects to this site to load and update the app."),
+      ),
+      h("section", { className: "about-section" },
+        h("h2", {}, "Licence"),
+        h("p", {}, "PDF Tools is free and open-source software, released under the MIT licence. Copyright © 2026 Dmitry Ivanov."),
+        h("div", { className: "about-links" },
+          externalLink("MIT licence", "https://github.com/ivadim/pdf-tools/blob/main/LICENSE"),
+          externalLink("Source code", "https://github.com/ivadim/pdf-tools", "github"),
+        ),
+      ),
+      h("section", { className: "about-section" },
+        h("h2", {}, "Built with"),
+        h("p", {}, "PDF Tools stands on these open-source projects, among others:"),
+        h("dl", { className: "about-credits" }, credits.map(([name, purpose, url]) =>
+          h("div", { className: "about-credit" },
+            h("dt", {}, externalLink(name, url)),
+            h("dd", {}, purpose),
+          ),
+        )),
+      ),
+    ),
   );
 }
 
@@ -62,15 +138,16 @@ const menuButton = document.getElementById("menu");
 const scrim = document.getElementById("scrim");
 
 /** Each tool gets a history entry, so Back (browser, phone gesture or app bar) returns home. */
-function setRoute(tool, push) {
-  const url = tool ? `#${tool.id}` : location.pathname + location.search;
-  if (push && location.hash !== (tool ? `#${tool.id}` : "")) history.pushState({ fromHome: main.dataset.view === "home" }, "", url);
+function setRoute(tool, push, page = "tool") {
+  const hash = tool ? `#${tool.id}` : page === "about" ? "#about" : "";
+  const url = hash || location.pathname + location.search;
+  if (push && location.hash !== hash) history.pushState({ fromHome: main.dataset.view === "home" }, "", url);
   else history.replaceState(history.state, "", url);
-  document.title = tool ? `${tool.name} · PDF Tools` : "PDF Tools";
-  barTitle.textContent = tool ? tool.name : "PDF Tools";
-  back.hidden = !tool;
+  document.title = tool ? `${tool.name} · PDF Tools` : page === "about" ? "About · PDF Tools" : "PDF Tools";
+  barTitle.textContent = tool ? tool.name : page === "about" ? "About" : "PDF Tools";
+  back.hidden = !tool && page !== "about";
   document.getElementById("bar-logo").hidden = Boolean(tool);
-  main.dataset.view = tool ? "tool" : "home";
+  main.dataset.view = tool ? "tool" : page;
   document.body.classList.remove("has-actions");
   setMenu(false);
   renderNav();
@@ -80,6 +157,7 @@ function setRoute(tool, push) {
 window.addEventListener("popstate", () => {
   const tool = TOOLS.find((t) => t.id === location.hash.slice(1));
   if (tool) openTool(tool, { push: false });
+  else if (location.hash === "#about") showAbout({ push: false });
   else showHome(undefined, { push: false });
 });
 
@@ -111,7 +189,7 @@ document.addEventListener("keydown", (event) => {
 let nextImage = 0;
 
 function openTool(tool, { push = true } = {}) {
-  const state = { tool, pdf: null, files: [], items: [], opts: {}, result: null, error: null, busy: false };
+  const state = { tool, pdf: null, files: [], items: [], opts: {}, result: null, error: null, busy: false, editedFields: new Set() };
   const pagesBox = h("div", { className: "workspace" });
   const optionsBox = h("div", { className: "options" });
   // Collapsible on small screens, where the options sit above the pages.
@@ -148,6 +226,7 @@ function openTool(tool, { push = true } = {}) {
   };
   if (tool.kind) state.opts = tool.defaults(state);
   current = ctx;
+  currentPage = "tool";
   setRoute(tool, push);
   main.replaceChildren(
     h(
@@ -171,6 +250,7 @@ function usePdf(ctx, pdf) {
   sharedPdf = pdf;
   state.pdf = pdf;
   state.result = state.error = null;
+  state.editedFields.clear();
   state.items = [];
   // Before the pages are drawn: drawing checks the options.
   state.opts = !pdf.locked || tool.allowLocked ? tool.defaults(state) : {};
@@ -340,6 +420,12 @@ function pdfCard(ctx, item, index) {
   }
   if (tool.kind === "merge") label.push(h("span", { className: "swatch", style: { width: "9px", height: "9px", borderRadius: "2px", background: fileColor(state.files.indexOf(item.pdf)) } }));
   label.push(`Page ${item.n}`);
+  if (tool.id === "split") {
+    try {
+      const output = tool.parts(ctx).findIndex((pages) => pages.includes(item.n));
+      if (output >= 0) label.push(` · File ${output + 1}`);
+    } catch { /* The range field is incomplete; the preview has no output group yet. */ }
+  }
   return pageCard({
     picture: item.pdf.thumbs.get(item.n),
     rotation: item.rotation,
@@ -397,9 +483,23 @@ function drawFooter(ctx, hasInput) {
   document.body.classList.toggle("has-actions", !ctx.footer.hidden);
   if (ctx.footer.hidden) return;
   const problem = state.busy ? null : tool.problem(ctx);
-  const button = h("button", { type: "button", className: "primary", disabled: Boolean(problem) || state.busy, onClick: () => runTool(ctx) }, state.busy ? "Working…" : `Run ${tool.name}`);
+  const isFieldError = (tool.id === "split" && (state.editedFields.has("ranges") || state.editedFields.has("extract") || state.editedFields.has("base")))
+    || (tool.id === "protect" && (state.editedFields.has("password") || state.editedFields.has("confirm")));
+  const summary = tool.id === "split" && !problem
+      ? (() => {
+          const parts = tool.parts(ctx);
+          const included = new Set(parts.flat()).size;
+          const omitted = Math.max(0, (state.pdf?.pageCount ?? 0) - included);
+          const result = `${parts.length} output files · ${parts.reduce((n, pages) => n + pages.length, 0)} pages`;
+          return omitted ? `${result} · ${omitted} ${omitted === 1 ? "page" : "pages"} left out` : result;
+        })()
+      : tool.id === "protect" && state.pdf
+        ? `${state.pdf.pageCount} pages · Password to open`
+        : null;
+  const actionLabel = { numbers: "Add page numbers", images: "Create PDF", metadata: "Save metadata", signature: "Sign", grayscale: "Convert to grayscale" }[tool.id] ?? tool.name;
+  const button = h("button", { type: "button", className: "primary", disabled: Boolean(problem) || state.busy, onClick: () => runTool(ctx) }, state.busy ? `${actionLabel} in progress…` : actionLabel);
   fill(ctx.footer, 
-    h("div", { className: "field" }, problem ? h("p", { className: "problem" }, problem) : null, button),
+    h("div", { className: "field" }, summary ? h("p", { className: "status" }, summary) : null, problem ? h("p", { className: isFieldError ? "problem is-error" : "problem" }, problem) : null, button),
     state.result ? results(ctx) : null,
     state.runError ? h("p", { className: "error" }, state.runError) : null,
   );
@@ -544,6 +644,7 @@ ready.then(
   () => {
     const tool = TOOLS.find((t) => t.id === location.hash.slice(1));
     if (tool) openTool(tool);
+    else if (location.hash === "#about") showAbout({ push: false });
     else showHome();
   },
   (error) => main.replaceChildren(h("p", { className: "error" }, `The PDF engine couldn’t start: ${error.message}`)),

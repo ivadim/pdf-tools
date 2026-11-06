@@ -189,7 +189,7 @@ impl ToolOptions for Signature {
                 let name = self.upload.as_ref().map(|(p, _, _)| file_name(p));
                 column![
                     action(
-                        name.unwrap_or_else(|| "Choose image…".into()),
+                        name.unwrap_or_else(|| "Choose image".into()),
                         Some(icons::image()),
                         false,
                         Some(Message::Option(T, "choose-image", String::new()))
@@ -399,7 +399,7 @@ impl ToolOptions for Signature {
     }
 
     fn run_label(&self) -> &'static str {
-        "Sign PDF…"
+        "Sign PDF"
     }
 
     fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {

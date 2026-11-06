@@ -10,7 +10,7 @@ struct HomeView: View {
                     Text("Everything runs on this device. Your files never leave it.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 12)], spacing: 12) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 10)], spacing: 10) {
                         ForEach(Tool.allCases) { tool in
                             NavigationLink(value: tool) { ToolTile(tool: tool) }
                                 .buttonStyle(.plain)
@@ -49,20 +49,21 @@ private struct ToolTile: View {
     let tool: Tool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        HStack(alignment: .top, spacing: 12) {
             Image(systemName: tool.symbol)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.white)
-                .frame(width: 40, height: 40)
-                .background(tool.tint.gradient, in: RoundedRectangle(cornerRadius: 10))
-            Text(tool.name).font(.headline)
-            Text(tool.summary)
-                .font(.caption)
+                .font(.body.weight(.medium))
                 .foregroundStyle(.secondary)
-                .lineLimit(3, reservesSpace: true)
+                .frame(width: 24, height: 24)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(tool.name).font(.headline)
+                Text(tool.homeSummary)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
+        .padding(12)
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
         .contentShape(RoundedRectangle(cornerRadius: 14))
     }

@@ -46,7 +46,7 @@ struct CardDecor {
 
 // MARK: Shared pieces
 
-let partColors: [Color] = [0x2f6fed, 0xe0752d, 0x1f9d6a, 0xb8459e, 0xc9a227, 0x3aa7c9, 0xd24b4b, 0x7a5cd6].map { Color(hex: $0) }
+let partColors: [Color] = [0x0d8c9c, 0xe0752d, 0x1f9d6a, 0xb8459e, 0xc9a227, 0xa85d37, 0xd24b4b, 0x806c9d].map { Color(hex: $0) }
 
 func fileColor(_ index: Int) -> Color { partColors[index % partColors.count] }
 

@@ -9,7 +9,7 @@ Each theme includes the home screen and, when the app provides it, About. Every 
 | App | Home | About | Tool screens per theme | Total per theme |
 | --- | --- | --- | ---: | ---: |
 | Desktop | Yes | Yes | 13 tools × 2 states | 28 |
-| Web | Yes | Not provided | 13 tools × 2 states | 27 |
+| Web | Yes | Yes | 13 tools × 2 states | 28 |
 | iOS | Yes | Yes | 13 tools × 2 states | 28 |
 | Android | Yes | Yes | 13 tools × 2 states | 28 |
 

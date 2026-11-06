@@ -259,11 +259,31 @@ private struct EmptyToolView: View {
 private struct RunBar: View {
     let session: ToolSession
 
+    private var summary: String? {
+        switch session.tool {
+        case .merge:
+            return "\(plural(session.files.count, "file")) · \(plural(session.kept.count, "page"))"
+        case .split:
+            guard let options = session.options as? SplitOptions,
+                  let parts = try? options.parts(session), !parts.isEmpty else { return nil }
+            let included = Set(parts.flatMap { $0 }).count
+            let omitted = max(0, (session.pdf?.pageCount ?? 0) - included)
+            let result = "\(plural(parts.count, "output file")) · \(plural(parts.reduce(0) { $0 + $1.count }, "page"))"
+            return omitted == 0 ? result : "\(result) · \(plural(omitted, "page")) left out"
+        case .protect:
+            guard let pdf = session.pdf else { return nil }
+            return "\(plural(pdf.pageCount, "page")) · Password to open"
+        default:
+            return nil
+        }
+    }
+
     var body: some View {
         let problem = session.problem
         HStack(spacing: 12) {
-            if let problem {
-                Text(problem).font(.footnote).foregroundStyle(.secondary).lineLimit(2).accessibilityIdentifier("problem")
+            if let status = problem ?? summary {
+                Text(status).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                    .accessibilityIdentifier(problem == nil ? "summary" : "problem")
             }
             Spacer(minLength: 0)
             Button {
@@ -282,6 +302,6 @@ private struct RunBar: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 10)
-        .background(.bar)
+        .background(Color(.systemGroupedBackground))
     }
 }

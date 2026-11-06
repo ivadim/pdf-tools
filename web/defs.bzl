@@ -22,6 +22,9 @@ def _web_site_impl(ctx):
     for src in ctx.files.icons:
         add(src, "icons/" + src.basename)
     add(ctx.file.favicon, "icon.png")
+    version = ctx.actions.declare_file(ctx.label.name + "/version.js")
+    ctx.actions.write(version, 'export const VERSION = "{}";\n'.format(ctx.attr.version))
+    outputs.append(version)
     # A symlink to a built WASM output dangles when Bazel downloads only
     # declared outputs from the remote cache. Copy it into the site so the
     # static server always has the module it advertises.
@@ -44,6 +47,7 @@ web_site = rule(
         "icons": attr.label_list(allow_files = [".svg"]),
         "favicon": attr.label(allow_single_file = True),
         "wasm": attr.label(cfg = _wasm_transition),
+        "version": attr.string(mandatory = True),
     },
 )
 

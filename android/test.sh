@@ -84,6 +84,18 @@ tap() {
     echo "  no “$1” on screen"
     return 1
 }
+wait_for() {
+    for _ in $(seq 60); do
+        dump
+        point=$(locate "$1")
+        if [ -n "$point" ]; then
+            return 0
+        fi
+        sleep 0.5
+    done
+    echo "  no “$1” on screen"
+    return 1
+}
 type_text() { "$adb" shell input text "$(echo "$1" | sed 's/ /%s/g')"; }
 hide_keyboard() {
     if "$adb" shell dumpsys input_method | grep -q "mInputShown=true"; then
@@ -133,6 +145,7 @@ merge() {
 split() {
     open_tool split "$dir/tracemonkey.pdf"
     tap split.ranges && type_text "1-3,4-8" && hide_keyboard
+    capture "tools/split-configured"
     tap run && expect "Created 2 files."
 }
 compress() {
@@ -140,8 +153,9 @@ compress() {
     tap run && expect "1.0 MB →"
 }
 protect() {
-    open_tool protect "$dir/rotation.pdf"
+    open_tool protect "$dir/tracemonkey.pdf"
     tap password && type_text secret && tap confirm && type_text secret && hide_keyboard
+    capture "tools/protect-configured"
     tap run && expect "Protected with a password."
 }
 unlock() {
@@ -197,7 +211,7 @@ if [ -n "$capture_dir" ]; then
     fi
     "$adb" shell am force-stop $pkg
     "$adb" shell am start -n $pkg/.MainActivity >/dev/null
-    sleep 1
+    wait_for "Everything runs on this device*"
     capture home
     tap About
     capture about
@@ -208,7 +222,7 @@ for tool in $tools; do
     if [ -n "$capture_dir" ]; then
         "$adb" shell am force-stop $pkg
         "$adb" shell am start -n $pkg/.MainActivity --es tool "$tool" >/dev/null
-        sleep 1
+        wait_for "Choose*"
         capture "tools/$tool-empty"
     fi
     if ! $tool; then

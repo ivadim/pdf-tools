@@ -89,7 +89,7 @@ class ProtectOptions : ToolOptions {
     override fun Panel(session: ToolSession) {
         PasswordInput("Password to open", password, { password = it }, tag = "password")
         PasswordInput("Repeat the password", confirm, { confirm = it }, tag = "confirm")
-        SectionTitle("Allow")
+        SectionTitle("Allowed after opening")
         SwitchRow("Printing", print) { print = it }
         SwitchRow("Copying text and images", copy) { copy = it }
         SwitchRow("Editing", modify) { modify = it }

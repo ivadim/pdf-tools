@@ -77,6 +77,11 @@ pub enum Overlay {
 pub trait ToolOptions {
     fn id(&self) -> ToolId;
 
+    /// A concise proposed-output summary for the primary action area.
+    fn summary(&self) -> Option<String> {
+        None
+    }
+
     /// The options panel; changes come back through [`ToolOptions::set`].
     /// `closeup` is the page asked for by [`ToolOptions::closeup`], rendered
     /// [`CLOSEUP_WIDTH`] wide.
@@ -234,7 +239,7 @@ impl Single {
                 Some("Every page is left out — tick at least one to keep it.".into())
             }
             FileState::Ready(_) => None,
-            FileState::Failed { locked: true, .. } => Some("Unlock the file first — use “Unlock…” above.".into()),
+            FileState::Failed { locked: true, .. } => Some("Unlock the file first — use “Unlock file” above.".into()),
             FileState::Failed { .. } => Some("This file can’t be opened. Choose another one.".into()),
             FileState::Loading(_) => Some("Reading the file…".into()),
             FileState::Empty => Some("Choose a PDF to get started.".into()),

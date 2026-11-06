@@ -5,7 +5,7 @@ import SwiftUI
 @Observable
 final class MergeOptions: ToolOptions {
     func panel(_ session: ToolSession) -> AnyView {
-        AnyView(Note("\(plural(session.files.count, "file")), \(plural(session.kept.count, "page")) in the result. Drag a page by its ≡ handle to move it."))
+        AnyView(Note("Drag a page by its ≡ handle to move it."))
     }
 
     func gridActions(_ session: ToolSession) -> [CardControl] {
@@ -22,8 +22,7 @@ final class MergeOptions: ToolOptions {
     }
 
     func card(_ session: ToolSession, item: PageItem, index: Int) -> CardDecor {
-        let file = session.files.firstIndex { $0 === item.file } ?? 0
-        return CardDecor(controls: moveControls(session, index) + rotateControls(session, index), partColor: fileColor(file))
+        return CardDecor(controls: moveControls(session, index) + rotateControls(session, index))
     }
 
     func problem(_ session: ToolSession) -> String? {

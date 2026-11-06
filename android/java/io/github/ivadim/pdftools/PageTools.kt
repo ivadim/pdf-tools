@@ -20,7 +20,7 @@ import java.io.File
 class MergeOptions : ToolOptions {
     @Composable
     override fun Panel(session: ToolSession) {
-        Note("${plural(session.files.size, "file")}, ${plural(session.kept.size, "page")} in the result. Drag a page by its ≡ handle to move it.")
+        Note("Drag a page by its ≡ handle to move it.")
     }
 
     override fun gridActions(session: ToolSession) = listOf(
@@ -32,8 +32,7 @@ class MergeOptions : ToolOptions {
     )
 
     override fun card(session: ToolSession, item: PageItem, index: Int): CardDecor {
-        val file = session.files.indexOfFirst { it === item.file }.coerceAtLeast(0)
-        return CardDecor(controls = moveControls(session, index) + rotateControls(session, index), partColor = fileColor(file))
+        return CardDecor(controls = moveControls(session, index) + rotateControls(session, index))
     }
 
     override fun problem(session: ToolSession) = if (session.files.size < 2) "Add at least two PDFs." else session.keepProblem
@@ -71,7 +70,7 @@ class SplitOptions : ToolOptions {
 
     @Composable
     override fun Panel(session: ToolSession) {
-        Segmented(Mode.entries.map { it to it.label }, mode) { mode = it }
+        DropdownField("Split method", Mode.entries.map { it to it.label }, mode, { mode = it })
         when (mode) {
             Mode.Ranges -> TextInput("One file per range", ranges, { ranges = it }, placeholder = "1-3, 4-6, 7-", keyboard = KeyboardType.Uri, tag = "split.ranges")
             Mode.Every -> StepperRow("Pages per file: $every", every, 1..999) { every = it }

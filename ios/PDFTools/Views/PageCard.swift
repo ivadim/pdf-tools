@@ -25,7 +25,7 @@ struct PageCard: View {
                             GeometryReader { geometry in
                                 Color.clear.contentShape(Rectangle())
                                     .accessibilityElement()
-                                    .accessibilityLabel(decor.onTap == nil ? "View page \(item.page)" : "Page \(item.page)")
+                                    .accessibilityLabel(decor.onTap == nil ? "View page \(item.page) of \(item.file.name)" : "Page \(item.page) of \(item.file.name)")
                                     .accessibilityAddTraits(.isButton)
                                     .accessibilityIdentifier("page.\(index + 1)")
                                     .onTapGesture { location in
@@ -44,7 +44,7 @@ struct PageCard: View {
                     .opacity(dimmed ? 0.35 : 1)
                 }
                 .overlay(alignment: .topLeading) {
-                    if session.tool.leavesOutPages { keepButton }
+                    if session.tool.leavesOutPages && (session.tool != .merge || !item.keep) { keepButton }
                 }
             HStack(spacing: 2) {
                 if reorderable { grip }
@@ -53,20 +53,45 @@ struct PageCard: View {
                     Circle().fill(fileColor(file)).frame(width: 7, height: 7)
                 }
                 Spacer(minLength: 0)
-                ForEach(decor.controls) { control in
-                    Button(action: control.action) {
-                        Image(systemName: control.symbol).frame(width: 26, height: 26)
+                if session.tool == .merge {
+                    Menu {
+                        menu
+                    } label: {
+                        Image(systemName: "ellipsis.circle").frame(width: 30, height: 30)
                     }
-                    .disabled(control.disabled)
-                    .accessibilityLabel(control.label)
+                    .accessibilityLabel("Actions for page \(item.page)")
+                } else {
+                    ForEach(decor.controls) { control in
+                        Button(action: control.action) {
+                            Image(systemName: control.symbol).frame(width: 26, height: 26)
+                        }
+                        .disabled(control.disabled)
+                        .accessibilityLabel(control.label)
+                    }
                 }
             }
             .buttonStyle(.borderless)
+            if session.tool == .merge {
+                Text(item.file.name)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else if session.tool == .split,
+                      let options = session.options as? SplitOptions,
+                      let parts = try? options.parts(session),
+                      let output = parts.firstIndex(where: { $0.contains(item.page) }) {
+                Text("File \(output + 1)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .contextMenu { menu }
         .modifier(Reorder(enabled: reorderable, session: session, item: item))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Page \(item.page)")
+        .accessibilityLabel("Page \(item.page) of \(item.file.name)")
     }
 
     /// Drag this onto another page to move the page there. Only the handle

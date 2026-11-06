@@ -1,8 +1,10 @@
 load(":defs.bzl", "web_server", "web_site")
+load("//:version.bzl", "VERSION")
 
 # bazel build --config=release //web:site    → bazel-bin/web/site/
 web_site(
     name = "site",
+    version = VERSION,
     srcs = [
         "app.js",
         "engine.js",

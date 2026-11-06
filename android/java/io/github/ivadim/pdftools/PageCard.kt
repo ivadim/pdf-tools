@@ -99,7 +99,7 @@ fun PageCard(
                 }
             }
             .onGloballyPositioned { reorder.bounds[item.id] = it.boundsInWindow() }
-            .semantics(mergeDescendants = false) { contentDescription = "Page ${item.page}" },
+            .semantics(mergeDescendants = false) { contentDescription = "Page ${item.page} of ${item.file.name}" },
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Box(Modifier.fillMaxWidth().aspectRatio(5f / 6f)) {
@@ -185,6 +185,19 @@ fun PageCard(
                     Icon(control.icon, control.label, Modifier.size(20.dp))
                 }
             }
+        }
+        if (session.tool == Tool.Merge) {
+            Text(
+                item.file.name,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            )
+        } else if (session.tool == Tool.Split) {
+            val options = session.options as? SplitOptions
+            val output = options?.let { runCatching { it.parts(session).indexOfFirst { pages -> item.page in pages } }.getOrNull() } ?: -1
+            if (output >= 0) Text("File ${output + 1}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

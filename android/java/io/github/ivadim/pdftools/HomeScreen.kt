@@ -4,11 +4,11 @@ package io.github.ivadim.pdftools
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -41,9 +41,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -67,7 +64,7 @@ fun HomeScreen(onOpen: (Tool) -> Unit) {
         },
     ) { padding ->
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(160.dp),
+            columns = GridCells.Adaptive(280.dp),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding() + 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -93,31 +90,30 @@ private fun ToolTile(tool: Tool, onClick: () -> Unit) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.card),
         modifier = Modifier.fillMaxWidth().testTag("tool.${tool.name.lowercase()}"),
     ) {
-        Column(Modifier.padding(14.dp)) {
-            ToolIcon(tool, 40)
-            Text(tool.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 10.dp, bottom = 4.dp))
-            Text(
-                tool.summary,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                minLines = 3,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-            )
+        Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ToolIcon(tool, 24)
+            Column {
+                Text(tool.title, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    tool.homeSummary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
 
-/** The tool's symbol, white on its colour. */
+/** A quiet tool symbol; the document and the action carry the accent. */
 @Composable
 fun ToolIcon(tool: Tool, size: Int) {
     Box(
-        Modifier
-            .size(size.dp)
-            .background(Brush.verticalGradient(listOf(lerp(tool.tint, Color.White, 0.15f), tool.tint)), RoundedCornerShape((size / 4).dp)),
+        Modifier.size(size.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(tool.icon, null, tint = Color.White, modifier = Modifier.size((size * 0.55).dp))
+        Icon(tool.icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size((size * 0.85).dp))
     }
 }
 

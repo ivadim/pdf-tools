@@ -144,9 +144,9 @@ pub fn card_options<'a, M: Clone + 'a>(
     column(cards).spacing(6).into()
 }
 
-/// A tool's coloured icon on a tinted square.
+/// A quiet tool symbol; the document and action carry the accent.
 pub fn chip<'a, M: 'a>(info: &ToolInfo, size: f32) -> Element<'a, M> {
-    container(icon((info.icon)(), size * 0.55, info.tint)).width(size).height(size).center(size).style(theme::chip(info.tint)).into()
+    container(icon((info.icon)(), size * 0.55, theme::c().muted)).width(size).height(size).center(size).into()
 }
 
 pub fn tool_header<'a, M: 'a>(info: &ToolInfo) -> Element<'a, M> {
@@ -215,6 +215,19 @@ pub fn run_bar<'a, M: Clone + 'a>(
     on_run: M,
     on_reveal: M,
 ) -> Element<'a, M> {
+    run_bar_with_summary(run, hint, None, label, handle, on_run, on_reveal)
+}
+
+/// Like `run_bar`, with the proposed result beside the primary action.
+pub fn run_bar_with_summary<'a, M: Clone + 'a>(
+    run: &'a Run,
+    hint: Option<String>,
+    idle_summary: Option<String>,
+    label: &'a str,
+    handle: Handle,
+    on_run: M,
+    on_reveal: M,
+) -> Element<'a, M> {
     let status: Element<'a, M> = match run {
         Run::Running(message) => text(message.clone()).color(theme::c().muted).into(),
         Run::Done { message, output } => {
@@ -228,7 +241,7 @@ pub fn run_bar<'a, M: Clone + 'a>(
             done.into()
         }
         Run::Failed(message) => text(message.clone()).color(theme::c().error).into(),
-        Run::Idle => text(hint.clone().unwrap_or_else(|| "Ready.".into())).color(theme::c().muted).into(),
+        Run::Idle => text(hint.clone().or(idle_summary).unwrap_or_else(|| "Ready.".into())).color(theme::c().muted).into(),
     };
     let enabled = !run.busy() && (hint.is_none() || matches!(run, Run::Done { .. } | Run::Failed(_)));
     let ready = hint.is_none() && !run.busy() && enabled;
@@ -477,11 +490,23 @@ pub fn page_grid<'a, M: Clone + 'a>(
     empty: &'a str,
     on: impl Fn(usize, TileEvent) -> M + 'a,
 ) -> Element<'a, M> {
+    page_grid_sized(tiles, caps, busy, empty, 170.0, on)
+}
+
+/// A page grid with larger previews when the document order is the work surface.
+pub fn page_grid_sized<'a, M: Clone + 'a>(
+    tiles: Vec<Tile>,
+    caps: Caps,
+    busy: bool,
+    empty: &'a str,
+    minimum_width: f32,
+    on: impl Fn(usize, TileEvent) -> M + 'a,
+) -> Element<'a, M> {
     if tiles.is_empty() {
         return container(center(muted(empty))).style(theme::grid_bg).into();
     }
     let count = tiles.len();
     let cells = tiles.into_iter().enumerate().map(|(i, tile)| tile_view(i, count, tile, caps, busy, &on));
-    let grid = grid(cells).fluid(170).spacing(14).height(Sizing::AspectRatio(0.62));
+    let grid = grid(cells).fluid(minimum_width).spacing(14).height(Sizing::AspectRatio(0.62));
     container(scrollable(container(grid).padding(14)).height(Length::Fill)).style(theme::grid_bg).into()
 }

@@ -26,7 +26,7 @@ import {
   field,
 } from "./ui.js";
 
-const PART_COLORS = ["#2f6fed", "#e0752d", "#1f9d6a", "#b8459e", "#c9a227", "#3aa7c9", "#d24b4b", "#7a5cd6"];
+const PART_COLORS = ["#0d8c9c", "#e0752d", "#1f9d6a", "#b8459e", "#c9a227", "#a85d37", "#d24b4b", "#806c9d"];
 export const fileColor = (i) => PART_COLORS[i % PART_COLORS.length];
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -247,9 +247,9 @@ const split = {
   },
   panel(ctx) {
     const { opts } = ctx.state;
-    const set = (key) => (v) => ((opts[key] = v), ctx.refresh());
+    const set = (key) => (v) => ((opts[key] = v), ctx.state.editedFields.add(key), ctx.refresh());
     return [
-      segmented(
+      h("div", { className: "split-modes" }, segmented(
         [
           ["ranges", "Ranges"],
           ["every", "Every N"],
@@ -258,7 +258,7 @@ const split = {
         ],
         opts.mode,
         (v) => ((opts.mode = v), ctx.rebuild()),
-      ),
+      )),
       opts.mode === "ranges" ? textField("One file per range", opts.ranges, set("ranges"), { placeholder: "1-3, 4-6, 7-" }) : null,
       opts.mode === "every" ? numberField("Pages per file", opts.every, set("every"), { min: 1 }) : null,
       opts.mode === "extract" ? textField("Pages to extract into one file", opts.extract, set("extract"), { placeholder: "1, 3-5" }) : null,
@@ -352,16 +352,17 @@ const protect = {
   defaults: () => ({ password: "", confirm: "", owner: "", print: true, copy: true, modify: true, annotate: true }),
   panel(ctx) {
     const { opts } = ctx.state;
-    const set = (key) => (v) => ((opts[key] = v), ctx.refresh());
+    const set = (key) => (v) => ((opts[key] = v), ctx.state.editedFields.add(key), ctx.refresh());
     return [
       textField("Password to open", opts.password, set("password"), { type: "password" }),
       textField("Repeat the password", opts.confirm, set("confirm"), { type: "password" }),
-      h("h2", {}, "Allow"),
+      h("h2", {}, "Allowed after opening"),
       checkField("Printing", opts.print, set("print")),
       checkField("Copying text and images", opts.copy, set("copy")),
       checkField("Editing", opts.modify, set("modify")),
       checkField("Comments and forms", opts.annotate, set("annotate")),
-      textField("Owner password (optional)", opts.owner, set("owner"), { type: "password", placeholder: "Lifts the restrictions" }),
+      textField("Owner password (optional)", opts.owner, set("owner"), { type: "password" }),
+      h("p", { className: "status" }, "An owner password can lift these restrictions."),
     ];
   },
   problem(ctx) {

@@ -12,6 +12,7 @@ macro_rules! icons {
 
 icons! {
     check => "check",
+    coffee => "coffee",
     chevron_left => "chevron-left",
     chevron_right => "chevron-right",
     chevron_up => "chevron-up",

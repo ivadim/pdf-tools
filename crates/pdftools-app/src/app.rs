@@ -18,7 +18,7 @@ use crate::settings::{Settings, ThemeChoice};
 use crate::single::{file_name, plural, FileState, Loaded, Single, TileSpec, ToolOptions};
 use crate::theme;
 use crate::tools;
-use crate::widgets::{self, action, icon, icon_button, muted, run_bar, section_title, Run, Tile, TileEvent, BOLD};
+use crate::widgets::{self, action, icon, icon_button, muted, Run, Tile, TileEvent, BOLD};
 
 /// Thumbnails are rendered this wide (sharp on high-DPI screens).
 pub const THUMB_WIDTH: u32 = 300;
@@ -708,8 +708,8 @@ impl App {
     }
 
     fn home(&self) -> Element<'_, Message> {
-        // Tall enough for four lines of description, so none is cut off.
-        const CARD_HEIGHT: f32 = 112.0;
+        // The home catalog is a compact list of tasks; previews lead inside tools.
+        const CARD_HEIGHT: f32 = 120.0;
         let card = |info: &'static catalog::ToolInfo| -> Element<'static, Message> {
             button(
                 row![widgets::chip(info, 40.0), column![text(info.name).size(15).font(BOLD), muted(info.description)].spacing(3)]
@@ -725,7 +725,7 @@ impl App {
         // As many columns of at least 215 px as fit.
         let cards = move |featured: bool| {
             iced::widget::responsive(move |size| {
-                let columns = (((size.width + 12.0) / (215.0 + 12.0)).floor() as usize).max(1);
+                let columns = (((size.width + 12.0) / (215.0 + 12.0)).floor() as usize).clamp(1, if featured { 4 } else { 3 });
                 let tools: Vec<_> = TOOLS.iter().filter(|t| t.featured == featured).collect();
                 let rows = tools.chunks(columns).map(|chunk| {
                     let mut cells: Vec<Element<'_, Message>> = chunk.iter().map(|info| card(info)).collect();
@@ -738,13 +738,13 @@ impl App {
         };
         let content = column![
             column![
-                text("What would you like to do?").size(28).font(BOLD),
+                text("Choose a tool").size(24).font(BOLD),
                 text("Everything runs on your computer — your files never leave it.").color(theme::c().muted),
             ]
             .spacing(6),
-            section_title("Most used"),
+            text("Common tools").size(13).font(BOLD).color(theme::c().muted),
             cards(true),
-            section_title("More tools"),
+            text("More tools").size(13).font(BOLD).color(theme::c().muted),
             cards(false),
         ]
         .spacing(14)
@@ -786,7 +786,7 @@ impl App {
         let right: Element<'_, Message> = match (tool.stage_page(), single.path()) {
             // Before there's a file, the big area is where to put one.
             _ if matches!(single.state, FileState::Empty) => {
-                drop_zone("Drop a PDF here", "or anywhere on the window", "Choose a PDF…", (!busy).then_some(Message::PickFile(id)))
+                drop_zone("Drop a PDF here", "or anywhere on the window", "Choose PDF", (!busy).then_some(Message::PickFile(id)))
             }
             (Some(page), Some(path)) => {
                 let request = PreviewRequest { path: path.to_path_buf(), page, width: crate::tools::STAGE_WIDTH, rotation: 0, gray: false };
@@ -800,13 +800,22 @@ impl App {
         let right = container(right).width(Length::Fill).height(Length::Fill).style(theme::panel);
 
         let hint = single.hint(caps).or_else(|| tool.validate(single));
-        column![
+        let mut page = column![
             container(widgets::tool_header(info)).padding(Padding { top: 20.0, right: 24.0, bottom: 0.0, left: 24.0 }),
             row![left, right].spacing(16).padding(Padding { top: 0.0, right: 24.0, bottom: 0.0, left: 24.0 }).height(Length::Fill),
-            run_bar(&single.run, hint, tool.run_label(), (info.icon)(), Message::Run(id), Message::Reveal(id)),
-        ]
-        .spacing(16)
-        .into()
+        ];
+        if !matches!(single.state, FileState::Empty) {
+            page = page.push(widgets::run_bar_with_summary(
+                &single.run,
+                hint,
+                tool.summary(),
+                tool.run_label(),
+                (info.icon)(),
+                Message::Run(id),
+                Message::Reveal(id),
+            ));
+        }
+        page.spacing(16).into()
     }
 
     /// Whether the viewed page is left out (`None` if the tool can't).
@@ -931,7 +940,7 @@ fn not_ported<'a>(id: ToolId) -> Element<'a, Message> {
 pub fn drop_zone<'a>(heading: &'a str, hint: &'a str, button: &'a str, on_choose: Option<Message>) -> Element<'a, Message> {
     container(
         column![
-            icon(icons::upload(), 40.0, theme::c().accent),
+            icon(icons::upload(), 40.0, theme::c().muted),
             text(heading).size(18).font(BOLD),
             muted(hint),
             action(button, Some(icons::plus()), true, on_choose),
@@ -948,13 +957,9 @@ pub fn drop_zone<'a>(heading: &'a str, hint: &'a str, button: &'a str, on_choose
 fn file_card<'a>(id: ToolId, single: &'a Single, previews: &'a Previews, busy: bool) -> Element<'a, Message> {
     match &single.state {
         FileState::Empty => container(
-            row![
-                icon(icons::file(), 22.0, theme::c().muted),
-                text("No PDF chosen").color(theme::c().muted).width(Length::Fill),
-                action("Choose…", None, false, (!busy).then_some(Message::PickFile(id))),
-            ]
-            .spacing(10)
-            .align_y(Alignment::Center),
+            row![icon(icons::file(), 22.0, theme::c().muted), text("No PDF chosen").color(theme::c().muted).width(Length::Fill),]
+                .spacing(10)
+                .align_y(Alignment::Center),
         )
         .padding(10)
         .style(|_| container::Style {
@@ -967,7 +972,7 @@ fn file_card<'a>(id: ToolId, single: &'a Single, previews: &'a Previews, busy: b
         FileState::Failed { path, message, locked } => {
             let mut problem = column![text(message.clone()).size(13).color(theme::c().error)].spacing(8);
             if *locked && id != ToolId::Unlock {
-                problem = problem.push(action("Unlock…", Some(icons::unlock()), false, Some(Message::OpenInUnlock(id))));
+                problem = problem.push(action("Unlock file", Some(icons::unlock()), false, Some(Message::OpenInUnlock(id))));
             }
             card(text(file_name(path)).font(BOLD).into(), muted("Can’t be used"), None, Some(problem.into()), id, busy)
         }

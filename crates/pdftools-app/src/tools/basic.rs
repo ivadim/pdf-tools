@@ -72,7 +72,7 @@ impl ToolOptions for Compress {
     }
 
     fn run_label(&self) -> &'static str {
-        "Compress PDF…"
+        "Compress PDF"
     }
 
     fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {
@@ -165,7 +165,7 @@ impl ToolOptions for Grayscale {
     }
 
     fn run_label(&self) -> &'static str {
-        "Convert to grayscale…"
+        "Convert to grayscale"
     }
 
     fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {
@@ -251,7 +251,7 @@ impl ToolOptions for Rotate {
     }
 
     fn run_label(&self) -> &'static str {
-        "Save rotated PDF…"
+        "Save rotated PDF"
     }
 
     fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {
@@ -319,13 +319,14 @@ impl ToolOptions for Protect {
         column![
             section("Password", [field("Password to open the file", password), field("Repeat the password", confirm)]),
             section(
-                "Permissions",
+                "Allowed after opening",
                 [
                     checkbox(self.allow[0]).label("Allow printing").on_toggle(toggle(t, "print")).into(),
                     checkbox(self.allow[1]).label("Allow copying text and images").on_toggle(toggle(t, "copy")).into(),
                     checkbox(self.allow[2]).label("Allow changes").on_toggle(toggle(t, "modify")).into(),
                     checkbox(self.allow[3]).label("Allow comments and form filling").on_toggle(toggle(t, "annotate")).into(),
-                    field("Owner password (optional)", secret("Lifts the restrictions", &self.owner, "owner")),
+                    field("Owner password (optional)", secret("Owner password", &self.owner, "owner")),
+                    muted("An owner password can lift these restrictions."),
                     muted("Encrypted with AES-256. Restrictions are honoured by most viewers, but can't be enforced."),
                 ]
             ),
@@ -360,7 +361,7 @@ impl ToolOptions for Protect {
     }
 
     fn run_label(&self) -> &'static str {
-        "Protect PDF…"
+        "Protect PDF"
     }
 
     fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {
@@ -465,7 +466,7 @@ impl ToolOptions for Unlock {
     fn empty_text(&self, file: &Single) -> Option<&'static str> {
         let info = &file.loaded()?.info;
         Some(if info.needs_password {
-            "This file needs its password to open. Enter it on the left and choose “Unlock PDF…” to save an unlocked copy."
+            "This file needs its password to open. Enter it on the left and choose “Unlock PDF” to save an unlocked copy."
         } else if info.encrypted {
             "This file opens without a password but restricts printing, copying or editing."
         } else {
@@ -485,7 +486,7 @@ impl ToolOptions for Unlock {
     }
 
     fn run_label(&self) -> &'static str {
-        "Unlock PDF…"
+        "Unlock PDF"
     }
 
     fn start(&mut self, file: &Single, dialogs: &dyn Dialogs) -> Option<Job> {
