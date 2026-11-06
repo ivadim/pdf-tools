@@ -64,24 +64,66 @@ function showAbout({ push = true } = {}) {
   current = null;
   currentPage = "about";
   setRoute(null, push, "about");
+  const copyText = `PDF Tools ${VERSION} (Web)`;
+  const copyStatus = h("span", { className: "about-copy-status", role: "status", "aria-live": "polite" });
+  const copyButton = h("button", {
+    type: "button",
+    className: "about-copy",
+    onClick: async () => {
+      try {
+        await navigator.clipboard.writeText(copyText);
+        copyButton.textContent = "Copied";
+        copyStatus.textContent = "Version copied to clipboard.";
+      } catch {
+        copyStatus.textContent = "Clipboard access isn't available in this browser.";
+      }
+    },
+  }, "Copy");
+  const externalLink = (label, url, iconName = "external") =>
+    h("a", { href: url, target: "_blank", rel: "noopener noreferrer" }, icon(iconName), label);
+  const credits = [
+    ["lopdf", "Reading, editing and writing PDF files", "https://crates.io/crates/lopdf"],
+    ["hayro", "Rendering page previews", "https://crates.io/crates/hayro"],
+    ["image", "Reading and writing JPEG and PNG images", "https://crates.io/crates/image"],
+    ["Parley", "Text layout for watermarks and signatures", "https://crates.io/crates/parley"],
+    ["tiny-skia", "Drawing and transforming document content", "https://crates.io/crates/tiny-skia"],
+  ];
   main.replaceChildren(
     h("article", { className: "about" },
-      h("header", { className: "page-head" },
-        h("h1", {}, "About PDF Tools"),
-        h("p", { className: "subtitle" }, "A clear workbench for documents."),
+      h("header", { className: "about-header" },
+        h("img", { className: "about-logo", src: "icon.png", alt: "" }),
+        h("div", { className: "about-identity" },
+          h("h1", {}, "PDF Tools"),
+          h("div", { className: "about-version" }, `Version ${VERSION} · Web`, copyButton, copyStatus),
+          h("p", {}, "Merge, split, protect and edit PDFs — on your computer."),
+        ),
+      ),
+      h("div", { className: "about-actions" },
+        h("a", { className: "primary", href: "https://github.com/ivadim/pdf-tools", target: "_blank", rel: "noopener noreferrer" }, icon("github"), "GitHub"),
+        h("a", { className: "secondary", href: "https://github.com/ivadim/pdf-tools/releases", target: "_blank", rel: "noopener noreferrer" }, icon("external"), "Releases and updates"),
+        h("a", { className: "secondary", href: "https://github.com/ivadim/pdf-tools/issues/new", target: "_blank", rel: "noopener noreferrer" }, icon("external"), "Report a problem"),
       ),
       h("section", { className: "about-section" },
-        h("h2", {}, "Your files stay on your device"),
-        h("p", {}, "PDF Tools runs in your browser using WebAssembly. Your documents are processed on this device; they aren't uploaded."),
+        h("h2", {}, "Privacy"),
+        h("p", {}, "Everything runs on your computer. PDF Tools never uploads your files. The Web version uses WebAssembly to process documents in your browser; your browser connects to this site to load and update the app."),
       ),
       h("section", { className: "about-section" },
-        h("h2", {}, "Tools for everyday PDFs"),
-        h("p", {}, "Merge, split, compress, protect, unlock, rotate, rearrange, add page numbers or watermarks, edit metadata, add a signature, convert to grayscale, or turn images into a PDF."),
+        h("h2", {}, "Licence"),
+        h("p", {}, "PDF Tools is free and open-source software, released under the MIT licence. Copyright © 2026 Dmitry Ivanov."),
+        h("div", { className: "about-links" },
+          externalLink("MIT licence", "https://github.com/ivadim/pdf-tools/blob/main/LICENSE"),
+          externalLink("Source code", "https://github.com/ivadim/pdf-tools", "github"),
+        ),
       ),
-      h("section", { className: "about-section about-project" },
-        h("h2", {}, "Project"),
-        h("p", {}, `PDF Tools · Version ${VERSION} · Free and open source under the MIT License.`),
-        h("a", { href: "https://github.com/ivadim/pdf-tools", target: "_blank", rel: "noopener noreferrer" }, "Source code, releases, and support on GitHub"),
+      h("section", { className: "about-section" },
+        h("h2", {}, "Built with"),
+        h("p", {}, "PDF Tools stands on these open-source projects, among others:"),
+        h("dl", { className: "about-credits" }, credits.map(([name, purpose, url]) =>
+          h("div", { className: "about-credit" },
+            h("dt", {}, externalLink(name, url)),
+            h("dd", {}, purpose),
+          ),
+        )),
       ),
     ),
   );
