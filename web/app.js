@@ -4,6 +4,7 @@
 import { ready, Pdf, put } from "./engine.js";
 import { TOOLS, fileColor } from "./tools.js";
 import { h, icon, pageCard, sheetStyle, zoom, pickFiles, download } from "./ui.js";
+import { VERSION } from "./version.js";
 
 const main = document.getElementById("main");
 const nav = document.getElementById("nav");
@@ -12,6 +13,7 @@ const nav = document.getElementById("nav");
 let sharedPdf = null;
 /** The open tool's ctx, or null on the home screen. */
 let current = null;
+let currentPage = "home";
 
 /** replaceChildren, skipping the nulls left by conditional parts. */
 const fill = (el, ...children) => el.replaceChildren(...children.flat().filter((c) => c !== null && c !== undefined && c !== false));
@@ -21,8 +23,9 @@ const isImage = (file) => /^image\/(png|jpeg)$/.test(file.type) || /\.(png|jpe?g
 
 function renderNav() {
   nav.replaceChildren(
-    navButton("home", "Home", !current, showHome),
+    navButton("home", "Home", currentPage === "home", showHome),
     ...TOOLS.map((tool) => navButton(tool.icon, tool.name, current?.tool === tool, () => openTool(tool))),
+    navButton("info", "About", currentPage === "about", showAbout),
   );
 }
 
@@ -32,7 +35,8 @@ function navButton(iconName, label, active, onClick) {
 
 function showHome(message, { push = true } = {}) {
   current = null;
-  setRoute(null, push);
+  currentPage = "home";
+  setRoute(null, push, "home");
   const toolButton = (tool) => h(
     "button",
     { type: "button", onClick: () => openTool(tool) },
@@ -56,6 +60,33 @@ function showHome(message, { push = true } = {}) {
   );
 }
 
+function showAbout({ push = true } = {}) {
+  current = null;
+  currentPage = "about";
+  setRoute(null, push, "about");
+  main.replaceChildren(
+    h("article", { className: "about" },
+      h("header", { className: "page-head" },
+        h("h1", {}, "About PDF Tools"),
+        h("p", { className: "subtitle" }, "A clear workbench for documents."),
+      ),
+      h("section", { className: "about-section" },
+        h("h2", {}, "Your files stay on your device"),
+        h("p", {}, "PDF Tools runs in your browser using WebAssembly. Your documents are processed on this device; they aren't uploaded."),
+      ),
+      h("section", { className: "about-section" },
+        h("h2", {}, "Tools for everyday PDFs"),
+        h("p", {}, "Merge, split, compress, protect, unlock, rotate, rearrange, add page numbers or watermarks, edit metadata, add a signature, convert to grayscale, or turn images into a PDF."),
+      ),
+      h("section", { className: "about-section about-project" },
+        h("h2", {}, "Project"),
+        h("p", {}, `PDF Tools · Version ${VERSION} · Free and open source under the MIT License.`),
+        h("a", { href: "https://github.com/ivadim/pdf-tools", target: "_blank", rel: "noopener noreferrer" }, "Source code, releases, and support on GitHub"),
+      ),
+    ),
+  );
+}
+
 // ── Navigation ─────────────────────────────────────────────────────────
 
 const back = document.getElementById("back");
@@ -64,15 +95,16 @@ const menuButton = document.getElementById("menu");
 const scrim = document.getElementById("scrim");
 
 /** Each tool gets a history entry, so Back (browser, phone gesture or app bar) returns home. */
-function setRoute(tool, push) {
-  const url = tool ? `#${tool.id}` : location.pathname + location.search;
-  if (push && location.hash !== (tool ? `#${tool.id}` : "")) history.pushState({ fromHome: main.dataset.view === "home" }, "", url);
+function setRoute(tool, push, page = "tool") {
+  const hash = tool ? `#${tool.id}` : page === "about" ? "#about" : "";
+  const url = hash || location.pathname + location.search;
+  if (push && location.hash !== hash) history.pushState({ fromHome: main.dataset.view === "home" }, "", url);
   else history.replaceState(history.state, "", url);
-  document.title = tool ? `${tool.name} · PDF Tools` : "PDF Tools";
-  barTitle.textContent = tool ? tool.name : "PDF Tools";
-  back.hidden = !tool;
+  document.title = tool ? `${tool.name} · PDF Tools` : page === "about" ? "About · PDF Tools" : "PDF Tools";
+  barTitle.textContent = tool ? tool.name : page === "about" ? "About" : "PDF Tools";
+  back.hidden = !tool && page !== "about";
   document.getElementById("bar-logo").hidden = Boolean(tool);
-  main.dataset.view = tool ? "tool" : "home";
+  main.dataset.view = tool ? "tool" : page;
   document.body.classList.remove("has-actions");
   setMenu(false);
   renderNav();
@@ -82,6 +114,7 @@ function setRoute(tool, push) {
 window.addEventListener("popstate", () => {
   const tool = TOOLS.find((t) => t.id === location.hash.slice(1));
   if (tool) openTool(tool, { push: false });
+  else if (location.hash === "#about") showAbout({ push: false });
   else showHome(undefined, { push: false });
 });
 
@@ -150,6 +183,7 @@ function openTool(tool, { push = true } = {}) {
   };
   if (tool.kind) state.opts = tool.defaults(state);
   current = ctx;
+  currentPage = "tool";
   setRoute(tool, push);
   main.replaceChildren(
     h(
@@ -567,6 +601,7 @@ ready.then(
   () => {
     const tool = TOOLS.find((t) => t.id === location.hash.slice(1));
     if (tool) openTool(tool);
+    else if (location.hash === "#about") showAbout({ push: false });
     else showHome();
   },
   (error) => main.replaceChildren(h("p", { className: "error" }, `The PDF engine couldn’t start: ${error.message}`)),

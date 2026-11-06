@@ -231,6 +231,11 @@ button {
   margin-inline: auto;
 }
 
+#main[data-view="about"] > * {
+  max-width: 760px;
+  margin-inline: auto;
+}
+
 .page-head {
   margin-bottom: 22px;
 }
@@ -317,6 +322,34 @@ h1 {
 
 .desc {
   color: var(--muted);
+}
+
+/* About: a plain reading column using the same restrained app surfaces. */
+.about-section {
+  padding-block: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.about-section h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.about-section p {
+  max-width: 68ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.about-project a {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--install-text);
+  font-weight: 600;
+  text-underline-offset: 3px;
 }
 
 /* ── Tool layout ─────────────────────────────────────────────────────── */

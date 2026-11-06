@@ -30,6 +30,10 @@ try {
     await page.getByRole("heading", { name: "Choose a tool" }).waitFor();
     await page.screenshot({ path: resolve(dir, "home.png") });
 
+    await page.goto(new URL("/#about", baseURL).href);
+    await page.getByRole("heading", { name: "About PDF Tools" }).waitFor();
+    await page.screenshot({ path: resolve(dir, "about.png") });
+
     for (const [id, title] of tools) {
       await page.goto(new URL(`/#${id}`, baseURL).href);
       await page.getByRole("heading", { name: title }).waitFor();
@@ -59,9 +63,25 @@ try {
       if (id === "unlock") {
         await page.locator('.options input[type="password"]').waitFor();
       } else {
-        await page.waitForFunction(() => {
-          const cards = [...document.querySelectorAll(".pages .card")].slice(0, 12);
-          return cards.length > 0 && cards.every((card) => card.querySelector(".thumb .sheet"));
+        await page.waitForFunction((tool) => {
+          const cards = [...document.querySelectorAll(".pages .card")];
+          if (!cards.length) return false;
+          if (tool === "images") return cards.every((card) => {
+            const image = card.querySelector(".thumb img");
+            return image?.complete && image.naturalWidth > 0;
+          });
+          return cards.every((card) => {
+            const canvas = card.querySelector(".thumb canvas");
+            return canvas && canvas.width > 0 && canvas.height > 0;
+          });
+        }, id);
+        if (id === "watermark") await page.waitForFunction(() => {
+          const action = document.querySelector(".actions .primary");
+          return Boolean(action && !action.disabled);
+        });
+        if (id === "watermark") await page.waitForFunction(() => {
+          const stamps = [...document.querySelectorAll(".pages .stamp")];
+          return stamps.length > 0 && stamps.every((stamp) => stamp.complete && stamp.naturalWidth > 0);
         });
       }
       await page.screenshot({ path: resolve(dir, "tools", `${id}-configured.png`) });
