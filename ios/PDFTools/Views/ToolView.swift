@@ -266,7 +266,10 @@ private struct RunBar: View {
         case .split:
             guard let options = session.options as? SplitOptions,
                   let parts = try? options.parts(session), !parts.isEmpty else { return nil }
-            return "\(plural(parts.count, "output file")) · \(plural(parts.reduce(0) { $0 + $1.count }, "page"))"
+            let included = Set(parts.flatMap { $0 }).count
+            let omitted = max(0, (session.pdf?.pageCount ?? 0) - included)
+            let result = "\(plural(parts.count, "output file")) · \(plural(parts.reduce(0) { $0 + $1.count }, "page"))"
+            return omitted == 0 ? result : "\(result) · \(plural(omitted, "page")) left out"
         case .protect:
             guard let pdf = session.pdf else { return nil }
             return "\(plural(pdf.pageCount, "page")) · Password to open"

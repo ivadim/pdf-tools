@@ -16,7 +16,7 @@ use crate::previews::{self, Previews};
 use crate::single::{file_name, plural};
 use crate::theme;
 use crate::tools::move_item;
-use crate::widgets::{self, action, icon_button, muted, run_bar, section_title, Caps, Run, Tile, TileEvent, BOLD};
+use crate::widgets::{self, action, icon_button, muted, section_title, Caps, Run, Tile, TileEvent, BOLD};
 
 const SOURCE_COLORS: [Color; 8] = [
     color!(0x0d8c9c),
@@ -484,11 +484,12 @@ impl Merge {
         right = right.push(widgets::page_grid_sized(tiles, caps, busy, empty, 230.0, move |i, e| wrap(Msg::Tile(i, e))));
         let right = container(right).width(Length::Fill).height(Length::Fill).style(theme::panel);
 
-        let label = "Merge PDFs";
+        let output_summary = format!("{} · {}", plural(self.entries.len(), "file"), plural(kept, "page"));
+        let label = "Merge";
         column![
             container(header).padding(Padding { top: 20.0, right: 24.0, bottom: 0.0, left: 24.0 }),
             row![left, right].spacing(16).padding(Padding { top: 0.0, right: 24.0, bottom: 0.0, left: 24.0 }).height(Length::Fill),
-            run_bar(&self.run, self.validate(), label, icons::merge(), wrap(Msg::Run), wrap(Msg::Reveal)),
+            widgets::run_bar_with_summary(&self.run, self.validate(), Some(output_summary), label, icons::merge(), wrap(Msg::Run), wrap(Msg::Reveal)),
         ]
         .spacing(16)
         .into()

@@ -18,7 +18,7 @@ use crate::settings::{Settings, ThemeChoice};
 use crate::single::{file_name, plural, FileState, Loaded, Single, TileSpec, ToolOptions};
 use crate::theme;
 use crate::tools;
-use crate::widgets::{self, action, icon, icon_button, muted, run_bar, section_title, Run, Tile, TileEvent, BOLD};
+use crate::widgets::{self, action, icon, icon_button, muted, Run, Tile, TileEvent, BOLD};
 
 /// Thumbnails are rendered this wide (sharp on high-DPI screens).
 pub const THUMB_WIDTH: u32 = 300;
@@ -709,7 +709,7 @@ impl App {
 
     fn home(&self) -> Element<'_, Message> {
         // The home catalog is a compact list of tasks; previews lead inside tools.
-        const CARD_HEIGHT: f32 = 100.0;
+        const CARD_HEIGHT: f32 = 120.0;
         let card = |info: &'static catalog::ToolInfo| -> Element<'static, Message> {
             button(
                 row![widgets::chip(info, 40.0), column![text(info.name).size(15).font(BOLD), muted(info.description)].spacing(3)]
@@ -725,7 +725,7 @@ impl App {
         // As many columns of at least 215 px as fit.
         let cards = move |featured: bool| {
             iced::widget::responsive(move |size| {
-                let columns = (((size.width + 12.0) / (215.0 + 12.0)).floor() as usize).max(1);
+                let columns = (((size.width + 12.0) / (215.0 + 12.0)).floor() as usize).clamp(1, if featured { 4 } else { 3 });
                 let tools: Vec<_> = TOOLS.iter().filter(|t| t.featured == featured).collect();
                 let rows = tools.chunks(columns).map(|chunk| {
                     let mut cells: Vec<Element<'_, Message>> = chunk.iter().map(|info| card(info)).collect();
@@ -742,9 +742,9 @@ impl App {
                 text("Everything runs on your computer — your files never leave it.").color(theme::c().muted),
             ]
             .spacing(6),
-            section_title("Most used"),
+            text("Common tools").size(13).font(BOLD).color(theme::c().muted),
             cards(true),
-            section_title("More tools"),
+            text("More tools").size(13).font(BOLD).color(theme::c().muted),
             cards(false),
         ]
         .spacing(14)
@@ -786,7 +786,7 @@ impl App {
         let right: Element<'_, Message> = match (tool.stage_page(), single.path()) {
             // Before there's a file, the big area is where to put one.
             _ if matches!(single.state, FileState::Empty) => {
-                drop_zone("Drop a PDF here", "or anywhere on the window", "Choose a PDF", (!busy).then_some(Message::PickFile(id)))
+                drop_zone("Drop a PDF here", "or anywhere on the window", "Choose PDF", (!busy).then_some(Message::PickFile(id)))
             }
             (Some(page), Some(path)) => {
                 let request = PreviewRequest { path: path.to_path_buf(), page, width: crate::tools::STAGE_WIDTH, rotation: 0, gray: false };
@@ -805,7 +805,15 @@ impl App {
             row![left, right].spacing(16).padding(Padding { top: 0.0, right: 24.0, bottom: 0.0, left: 24.0 }).height(Length::Fill),
         ];
         if !matches!(single.state, FileState::Empty) {
-            page = page.push(run_bar(&single.run, hint, tool.run_label(), (info.icon)(), Message::Run(id), Message::Reveal(id)));
+            page = page.push(widgets::run_bar_with_summary(
+                &single.run,
+                hint,
+                tool.summary(),
+                tool.run_label(),
+                (info.icon)(),
+                Message::Run(id),
+                Message::Reveal(id),
+            ));
         }
         page.spacing(16).into()
     }

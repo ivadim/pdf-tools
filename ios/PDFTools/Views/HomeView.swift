@@ -56,7 +56,7 @@ private struct ToolTile: View {
                 .frame(width: 24, height: 24)
             VStack(alignment: .leading, spacing: 3) {
                 Text(tool.name).font(.headline)
-                Text(tool.summary)
+                Text(tool.homeSummary)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)

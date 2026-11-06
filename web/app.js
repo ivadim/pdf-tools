@@ -33,22 +33,24 @@ function navButton(iconName, label, active, onClick) {
 function showHome(message, { push = true } = {}) {
   current = null;
   setRoute(null, push);
+  const toolButton = (tool) => h(
+    "button",
+    { type: "button", onClick: () => openTool(tool) },
+    h("span", { className: "tile-icon" }, icon(tool.icon)),
+    h("span", { className: "tile-text" }, h("strong", {}, tool.name), h("span", { className: "desc" }, tool.desc)),
+  );
   main.replaceChildren(
     ...[
     h("header", { className: "page-head" }, h("h1", {}, "Choose a tool"), h("p", { className: "subtitle" }, "Everything runs on this device; nothing is uploaded.")),
     sharedPdf ? h("div", { className: "notice" }, `${sharedPdf.name} is open. Choose what to do with it.`) : null,
     typeof message === "string" ? h("div", { className: "notice" }, message) : null,
-    h(
-      "div",
-      { className: "home" },
-      TOOLS.map((tool) =>
-        h(
-          "button",
-          { type: "button", onClick: () => openTool(tool) },
-          h("span", { className: "tile-icon" }, icon(tool.icon)),
-          h("span", { className: "tile-text" }, h("strong", {}, tool.name), h("span", { className: "desc" }, tool.desc)),
-        ),
-      ),
+    h("section", { className: "home-section" },
+      h("h2", {}, "Common tools"),
+      h("div", { className: "home" }, TOOLS.slice(0, 4).map(toolButton)),
+    ),
+    h("section", { className: "home-section" },
+      h("h2", {}, "More tools"),
+      h("div", { className: "home home-more" }, TOOLS.slice(4).map(toolButton)),
     ),
     ].filter(Boolean),
   );
@@ -407,7 +409,13 @@ function drawFooter(ctx, hasInput) {
   const isFieldError = (tool.id === "split" && (state.editedFields.has("ranges") || state.editedFields.has("extract") || state.editedFields.has("base")))
     || (tool.id === "protect" && (state.editedFields.has("password") || state.editedFields.has("confirm")));
   const summary = tool.id === "split" && !problem
-      ? (() => { const parts = tool.parts(ctx); return `${parts.length} output files · ${parts.reduce((n, pages) => n + pages.length, 0)} pages`; })()
+      ? (() => {
+          const parts = tool.parts(ctx);
+          const included = new Set(parts.flat()).size;
+          const omitted = Math.max(0, (state.pdf?.pageCount ?? 0) - included);
+          const result = `${parts.length} output files · ${parts.reduce((n, pages) => n + pages.length, 0)} pages`;
+          return omitted ? `${result} · ${omitted} ${omitted === 1 ? "page" : "pages"} left out` : result;
+        })()
       : tool.id === "protect" && state.pdf
         ? `${state.pdf.pageCount} pages · Password to open`
         : null;

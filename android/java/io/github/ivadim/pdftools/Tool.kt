@@ -41,6 +41,24 @@ enum class Tool(
 
     enum class Kind { Single, Merge, Images }
 
+    /** Short catalog copy; the tool screen keeps the fuller explanation. */
+    val homeSummary: String
+        get() = when (this) {
+            Merge -> "Combine PDFs and rearrange pages."
+            Split -> "Create separate PDFs from selected pages."
+            Compress -> "Make a PDF smaller."
+            Protect -> "Add a password and permissions."
+            Unlock -> "Remove a password you know."
+            Rotate -> "Turn pages upright."
+            Rearrange -> "Move, copy or remove pages."
+            Numbers -> "Add numbers to pages."
+            Watermark -> "Stamp text or an image on pages."
+            Metadata -> "Edit document details."
+            Signature -> "Sign a PDF page."
+            Grayscale -> "Prepare pages for black-and-white printing."
+            Images -> "Make a PDF from photos or images."
+        }
+
     val kind: Kind
         get() = when (this) {
             Merge -> Kind.Merge

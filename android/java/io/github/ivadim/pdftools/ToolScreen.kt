@@ -378,7 +378,10 @@ private fun RunBar(session: ToolSession, scope: CoroutineScope) {
         Tool.Merge -> "${plural(session.files.size, "file")} · ${plural(session.kept.size, "page")}"
         Tool.Split -> (session.options as? SplitOptions)?.let { options ->
             runCatching { options.parts(session) }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { parts ->
-                "${plural(parts.size, "output file")} · ${plural(parts.sumOf { it.size }, "page")}"
+                val included = parts.flatten().toSet().size
+                val omitted = ((session.pdf?.pageCount ?: 0) - included).coerceAtLeast(0)
+                val result = "${plural(parts.size, "output file")} · ${plural(parts.sumOf { it.size }, "page")}"
+                if (omitted == 0) result else "$result · ${plural(omitted, "page")} left out"
             }
         }
         Tool.Protect -> session.pdf?.let { "${plural(it.pageCount, "page")} · Password to open" }

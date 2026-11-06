@@ -44,7 +44,7 @@ struct PageCard: View {
                     .opacity(dimmed ? 0.35 : 1)
                 }
                 .overlay(alignment: .topLeading) {
-                    if session.tool.leavesOutPages { keepButton }
+                    if session.tool.leavesOutPages && (session.tool != .merge || !item.keep) { keepButton }
                 }
             HStack(spacing: 2) {
                 if reorderable { grip }
@@ -53,12 +53,21 @@ struct PageCard: View {
                     Circle().fill(fileColor(file)).frame(width: 7, height: 7)
                 }
                 Spacer(minLength: 0)
-                ForEach(decor.controls) { control in
-                    Button(action: control.action) {
-                        Image(systemName: control.symbol).frame(width: 26, height: 26)
+                if session.tool == .merge {
+                    Menu {
+                        menu
+                    } label: {
+                        Image(systemName: "ellipsis.circle").frame(width: 30, height: 30)
                     }
-                    .disabled(control.disabled)
-                    .accessibilityLabel(control.label)
+                    .accessibilityLabel("Actions for page \(item.page)")
+                } else {
+                    ForEach(decor.controls) { control in
+                        Button(action: control.action) {
+                            Image(systemName: control.symbol).frame(width: 26, height: 26)
+                        }
+                        .disabled(control.disabled)
+                        .accessibilityLabel(control.label)
+                    }
                 }
             }
             .buttonStyle(.borderless)

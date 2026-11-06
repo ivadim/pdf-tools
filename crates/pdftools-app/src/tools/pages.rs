@@ -86,22 +86,29 @@ impl Split {
 }
 
 impl Split {
-    /// "2 files: 7 + 7 pages", or what's selected.
+    /// A count of output pages, plus any source pages left out.
     fn summary(&self) -> Option<String> {
         let parts = self.parts().ok().filter(|p| !p.is_empty())?;
         let sizes: Vec<usize> = parts.iter().map(Vec::len).collect();
-        Some(if sizes.iter().all(|s| *s == sizes[0]) && sizes.len() > 3 {
+        let result = if sizes.iter().all(|s| *s == sizes[0]) && sizes.len() > 3 {
             format!("{} files of {} each", sizes.len(), plural(sizes[0], "page"))
         } else {
             let list: Vec<String> = sizes.iter().map(usize::to_string).collect();
             format!("{}: {} pages", plural(sizes.len(), "file"), list.join(" + "))
-        })
+        };
+        let included: std::collections::HashSet<_> = parts.iter().flatten().copied().collect();
+        let omitted = self.total.saturating_sub(included.len());
+        Some(if omitted == 0 { result } else { format!("{result} · {} left out", plural(omitted, "page")) })
     }
 }
 
 impl ToolOptions for Split {
     fn id(&self) -> ToolId {
         ToolId::Split
+    }
+
+    fn summary(&self) -> Option<String> {
+        Split::summary(self)
     }
 
     fn view<'a>(&'a self, _file: &'a Single, _closeup: Option<&'a Thumb>) -> Element<'a, Message> {
@@ -142,9 +149,6 @@ impl ToolOptions for Split {
                     content.push(muted("Click pages in the preview to select them. Shift-click selects a range, Ctrl-click toggles."));
             }
             Mode::Each => {}
-        }
-        if let (Some(summary), true) = (self.summary(), self.mode != Mode::Extract) {
-            content = content.push(text(summary).size(13).color(theme::c().accent));
         }
         if self.mode != Mode::Extract {
             content = content.push(

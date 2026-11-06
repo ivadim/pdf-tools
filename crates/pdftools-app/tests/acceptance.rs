@@ -151,7 +151,7 @@ fn merge() {
     assert_eq!(h.app.merge.entries.len(), 3);
     assert!(h.shows("19 pages"));
     let out = s.dir.join("MRG-1 three files.pdf");
-    ok(&h.run("Merge PDFs", Some(&out)), "Saved 19 pages from 3 files");
+    ok(&h.run("Merge", Some(&out)), "Saved 19 pages from 3 files");
     assert_eq!(page_count(&out), 19);
     s.expect(&out, "pages 19");
     s.expect(&out, "text 1 Trace-based Just-in-Time");
@@ -164,7 +164,7 @@ fn merge() {
     h.send(Message::Merge(merge::Msg::Tile(0, TileEvent::RotateRight)));
     h.send(Message::Merge(merge::Msg::Tile(1, TileEvent::ToggleInclude)));
     let out = s.dir.join("MRG-2 reordered.pdf");
-    ok(&h.run("Merge PDFs", Some(&out)), "Saved 18 pages from 3 files (1 page left out)");
+    ok(&h.run("Merge", Some(&out)), "Saved 18 pages from 3 files (1 page left out)");
     assert_eq!(rotations(&out)[0], 90);
     s.expect(&out, "pages 18");
     s.expect(&out, "text 1 Normal");
@@ -180,7 +180,7 @@ fn merge() {
     assert!(matches!(h.app.merge.entries[1].state, merge::EntryState::Failed { locked: true, .. }));
     assert!(h.shows("Unlock file"));
     let blocked = s.dir.join("MRG-3 blocked.pdf");
-    let status = h.run("Merge PDFs", Some(&blocked));
+    let status = h.run("Merge", Some(&blocked));
     assert!(!blocked.exists(), "merged despite a locked file: {status}");
     h.click("Unlock file");
     assert_eq!(h.app.screen, Screen::Tool(ToolId::Unlock));
@@ -192,7 +192,7 @@ fn merge() {
     h.dialogs.open(&[&encrypted("aes256-restrictions-only.pdf"), &fixture("rotation.pdf")]);
     h.send(Message::Merge(merge::Msg::Add));
     let out = s.dir.join("MRG-4 restricted input.pdf");
-    ok(&h.run("Merge PDFs", Some(&out)), "Saved 5 pages from 2 files");
+    ok(&h.run("Merge", Some(&out)), "Saved 5 pages from 2 files");
     assert!(!is_encrypted(&out));
     s.expect(&out, "pages 5");
     s.finish();
@@ -798,7 +798,7 @@ fn large_document() {
         h.click("Merge");
         h.dialogs.open(&[&big, &fixture("tracemonkey.pdf")]);
         h.send(Message::Merge(merge::Msg::Add));
-        ok(&h.run("Merge PDFs", Some(&out4)), "Saved 518 pages");
+        ok(&h.run("Merge", Some(&out4)), "Saved 518 pages");
     });
     s.expect(&out, "text 504 504");
     s.expect(&out4, "pages 518");

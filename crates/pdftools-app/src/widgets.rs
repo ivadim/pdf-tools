@@ -215,6 +215,19 @@ pub fn run_bar<'a, M: Clone + 'a>(
     on_run: M,
     on_reveal: M,
 ) -> Element<'a, M> {
+    run_bar_with_summary(run, hint, None, label, handle, on_run, on_reveal)
+}
+
+/// Like `run_bar`, with the proposed result beside the primary action.
+pub fn run_bar_with_summary<'a, M: Clone + 'a>(
+    run: &'a Run,
+    hint: Option<String>,
+    idle_summary: Option<String>,
+    label: &'a str,
+    handle: Handle,
+    on_run: M,
+    on_reveal: M,
+) -> Element<'a, M> {
     let status: Element<'a, M> = match run {
         Run::Running(message) => text(message.clone()).color(theme::c().muted).into(),
         Run::Done { message, output } => {
@@ -228,7 +241,7 @@ pub fn run_bar<'a, M: Clone + 'a>(
             done.into()
         }
         Run::Failed(message) => text(message.clone()).color(theme::c().error).into(),
-        Run::Idle => text(hint.clone().unwrap_or_else(|| "Ready.".into())).color(theme::c().muted).into(),
+        Run::Idle => text(hint.clone().or(idle_summary).unwrap_or_else(|| "Ready.".into())).color(theme::c().muted).into(),
     };
     let enabled = !run.busy() && (hint.is_none() || matches!(run, Run::Done { .. } | Run::Failed(_)));
     let ready = hint.is_none() && !run.busy() && enabled;

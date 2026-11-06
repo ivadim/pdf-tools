@@ -77,6 +77,11 @@ pub enum Overlay {
 pub trait ToolOptions {
     fn id(&self) -> ToolId;
 
+    /// A concise proposed-output summary for the primary action area.
+    fn summary(&self) -> Option<String> {
+        None
+    }
+
     /// The options panel; changes come back through [`ToolOptions::set`].
     /// `closeup` is the page asked for by [`ToolOptions::closeup`], rendered
     /// [`CLOSEUP_WIDTH`] wide.

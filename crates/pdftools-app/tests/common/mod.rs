@@ -154,7 +154,12 @@ impl Harness {
         if let Some(path) = save_as {
             self.dialogs.save(Some(path));
         }
-        self.click(label);
+        if label == "Merge" {
+            // The sidebar and the primary action share this product name.
+            self.send(Message::Merge(pdftools_app::merge::Msg::Run));
+        } else {
+            self.click(label);
+        }
         // A blocked run leaves its scripted answers unused; drop them so they
         // don't answer the next dialog.
         self.dialogs.saves.borrow_mut().clear();

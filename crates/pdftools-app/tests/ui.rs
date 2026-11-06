@@ -17,7 +17,7 @@ use pdftools_app::{images, merge};
 fn screens_render() {
     let mut h = Harness::new("screens");
     h.screenshot("home");
-    assert!(h.shows("MORE TOOLS") && h.shows("Choose a tool"));
+    assert!(h.shows("More tools") && h.shows("Choose a tool"));
 
     h.click("About");
     assert_eq!(h.app.screen, Screen::About);
@@ -30,7 +30,7 @@ fn screens_render() {
     h.click("Compress");
     h.screenshot("compress-empty");
     h.dialogs.open(&[&fixture("tracemonkey.pdf")]);
-    h.click("Choose a PDF");
+    h.click("Choose PDF");
     h.render_pages(ToolId::Compress, 14);
     h.screenshot("compress");
     assert!(h.shows("Images are only 98 KB of this file (10%), so even Strong won’t shrink it much."));
@@ -161,7 +161,7 @@ fn merge_and_images() {
     h.send(Message::Merge(merge::Msg::Tile(0, TileEvent::RotateRight)));
     h.send(Message::Merge(merge::Msg::Tile(1, TileEvent::ToggleInclude)));
     let out = h.out("merged.pdf");
-    assert!(h.run("Merge PDFs", Some(&out)).contains("Saved 4 pages from 2 files (1 page left out)"));
+    assert!(h.run("Merge", Some(&out)).contains("Saved 4 pages from 2 files (1 page left out)"));
     assert_eq!(page_count(&out), 4);
 
     h.click("Images to PDF");

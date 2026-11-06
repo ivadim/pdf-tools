@@ -53,6 +53,25 @@ enum Tool: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
+    /// Short catalog copy; the tool screen keeps the fuller explanation.
+    var homeSummary: String {
+        switch self {
+        case .merge: "Combine PDFs and rearrange pages."
+        case .split: "Create separate PDFs from selected pages."
+        case .compress: "Make a PDF smaller."
+        case .protect: "Add a password and permissions."
+        case .unlock: "Remove a password you know."
+        case .rotate: "Turn pages upright."
+        case .rearrange: "Move, copy or remove pages."
+        case .numbers: "Add numbers to pages."
+        case .watermark: "Stamp text or an image on pages."
+        case .metadata: "Edit document details."
+        case .signature: "Sign a PDF page."
+        case .grayscale: "Prepare pages for black-and-white printing."
+        case .images: "Make a PDF from photos or images."
+        }
+    }
+
     var symbol: String {
         switch self {
         case .merge: "arrow.triangle.merge"

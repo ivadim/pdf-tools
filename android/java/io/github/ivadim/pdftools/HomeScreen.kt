@@ -95,7 +95,7 @@ private fun ToolTile(tool: Tool, onClick: () -> Unit) {
             Column {
                 Text(tool.title, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    tool.summary,
+                    tool.homeSummary,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
