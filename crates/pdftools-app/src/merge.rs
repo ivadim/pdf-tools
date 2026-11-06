@@ -489,7 +489,15 @@ impl Merge {
         column![
             container(header).padding(Padding { top: 20.0, right: 24.0, bottom: 0.0, left: 24.0 }),
             row![left, right].spacing(16).padding(Padding { top: 0.0, right: 24.0, bottom: 0.0, left: 24.0 }).height(Length::Fill),
-            widgets::run_bar_with_summary(&self.run, self.validate(), Some(output_summary), label, icons::merge(), wrap(Msg::Run), wrap(Msg::Reveal)),
+            widgets::run_bar_with_summary(
+                &self.run,
+                self.validate(),
+                Some(output_summary),
+                label,
+                icons::merge(),
+                wrap(Msg::Run),
+                wrap(Msg::Reveal),
+            ),
         ]
         .spacing(16)
         .into()
