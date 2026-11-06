@@ -32,7 +32,7 @@ final class PDFToolsUITests: XCTestCase {
                 ("protect", "Protect", "single"), ("unlock", "Unlock", "single"), ("rotate", "Rotate", "single"),
                 ("rearrange", "Rearrange", "single"), ("numbers", "Page numbers", "single"),
                 ("watermark", "Watermark", "single"), ("metadata", "Metadata", "single"),
-                ("signature", "Signature", "single"), ("grayscale", "Grayscale", "single"), ("images", "Images to PDF", "images"),
+                ("signature", "Signature", "single"), ("redact", "Redact", "single"), ("grayscale", "Grayscale", "single"), ("images", "Images to PDF", "images"),
             ]
             for tool in tools {
                 app.terminate()
@@ -71,8 +71,42 @@ final class PDFToolsUITests: XCTestCase {
                     repeatedPassword.tap()
                     repeatedPassword.typeText("review-password\n")
                 }
+                if tool.id == "redact" {
+                    let page = app.buttons["page.1"]
+                    scrollTo(page)
+                    tapWhenReady(page)
+                    let stage = app.otherElements["redact.stage"]
+                    XCTAssertTrue(stage.waitForExistence(timeout: 15))
+                    stage.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.2)).press(forDuration: 0.1,
+                        thenDragTo: stage.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.3)))
+                    tapWhenReady(app.buttons["Done"])
+                }
                 capture("\(appearance.lowercased())-tools-\(tool.id)-configured")
             }
+            app.terminate()
+        }
+    }
+
+    /// Refresh only the Redact screens when its options change.
+    @MainActor func testCaptureRedactReviewScreenshots() {
+        for appearance in ["Light", "Dark"] {
+            let toolApp = XCUIApplication()
+            toolApp.launchArguments += ["-uiUserInterfaceStyle", appearance]
+            toolApp.launchEnvironment["PDFTOOLS_TEST_FILES"] = pdf("tracemonkey").path
+            toolApp.launch()
+            app = toolApp
+            openTool("redact")
+            capture("\(appearance.lowercased())-tools-redact-empty")
+            tapWhenReady(app.buttons["Choose a PDF"])
+            let page = app.buttons["page.1"]
+            scrollTo(page)
+            tapWhenReady(page)
+            let stage = app.otherElements["redact.stage"]
+            XCTAssertTrue(stage.waitForExistence(timeout: 15))
+            stage.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.2)).press(forDuration: 0.1,
+                thenDragTo: stage.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.3)))
+            tapWhenReady(app.buttons["Done"])
+            capture("\(appearance.lowercased())-tools-redact-configured")
             app.terminate()
         }
     }
@@ -133,6 +167,23 @@ final class PDFToolsUITests: XCTestCase {
         scrollTo(page)
         tap(page, until: app.buttons["Remove signature"], matches: "exists == true")
         runTool(expecting: "Signed 1 page.")
+    }
+
+    @MainActor func testRedact() {
+        launch(with: [pdf("rotation")])
+        openTool("redact")
+        tapWhenReady(app.buttons["Choose a PDF"])
+        XCTAssertTrue(app.staticTexts["The exported PDF converts every page to an image. Text will not be selectable; links, forms and document details are removed."].waitForExistence(timeout: 10))
+        tapWhenReady(app.switches["Smaller file"])
+        let page = app.buttons["page.1"]
+        scrollTo(page)
+        tapWhenReady(page)
+        let stage = app.otherElements["redact.stage"]
+        XCTAssertTrue(stage.waitForExistence(timeout: 15))
+        stage.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.2)).press(forDuration: 0.1,
+            thenDragTo: stage.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.3)))
+        tapWhenReady(app.buttons["Done"])
+        runTool(expecting: "Created a redacted copy of 2 pages.")
     }
 
     @MainActor func testLockedFileGoesToUnlock() {

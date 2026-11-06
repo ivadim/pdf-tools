@@ -1,4 +1,4 @@
-// The thirteen tools, in the desktop app's order.
+// The fourteen tools, in the desktop app's order.
 
 package io.github.ivadim.pdftools
 
@@ -36,6 +36,7 @@ enum class Tool(
     Watermark("Watermark", "Stamp text or a logo across your pages", Icons.Rounded.WaterDrop, Color(0xffc084fc)),
     Metadata("Metadata", "View and edit the title, author, keywords and other properties", Icons.Rounded.Info, Color(0xff22d3ee)),
     Signature("Signature", "Draw, type or upload your signature and place it on the page", Icons.Rounded.Draw, Color(0xffec4899)),
+    Redact("Redact", "Permanently remove marked areas from a copy of a PDF", Icons.Rounded.Draw, Color(0xff2f5bd3)),
     Grayscale("Grayscale", "Convert colours to shades of grey; text stays sharp and selectable", Icons.Rounded.Contrast, Color(0xffa1a1aa)),
     Images("Images to PDF", "Turn photos and images into a PDF, one image per page", Icons.Rounded.Collections, Color(0xff14b8a6));
 
@@ -55,6 +56,7 @@ enum class Tool(
             Watermark -> "Stamp text or an image on pages."
             Metadata -> "Edit document details."
             Signature -> "Sign a PDF page."
+            Redact -> "Remove sensitive areas from a PDF."
             Grayscale -> "Prepare pages for black-and-white printing."
             Images -> "Make a PDF from photos or images."
         }
@@ -92,6 +94,7 @@ enum class Tool(
         Watermark -> WatermarkOptions()
         Metadata -> MetadataOptions()
         Signature -> SignatureOptions()
+        Redact -> RedactOptions()
         Grayscale -> GrayscaleOptions()
         Images -> ImagesOptions()
     }

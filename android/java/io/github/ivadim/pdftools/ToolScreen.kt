@@ -195,7 +195,7 @@ private fun rememberPickers(session: ToolSession, scope: CoroutineScope): Picker
 @Composable
 private fun AddButton(session: ToolSession, pickers: Pickers) {
     when (session.tool.kind) {
-        Tool.Kind.Single -> IconButton(pickers.files, Modifier.testTag("add")) { Icon(Icons.AutoMirrored.Rounded.NoteAdd, "Other PDF") }
+        Tool.Kind.Single -> IconButton(pickers.files, Modifier.testTag("add"), enabled = session.tool != Tool.Redact || !session.running) { Icon(Icons.AutoMirrored.Rounded.NoteAdd, "Other PDF") }
         Tool.Kind.Merge -> IconButton(pickers.files, Modifier.testTag("add")) { Icon(Icons.Rounded.Add, "Add PDFs") }
         Tool.Kind.Images -> {
             var open by remember { mutableStateOf(false) }

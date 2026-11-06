@@ -18,6 +18,7 @@ pub enum ToolId {
     Watermark,
     Metadata,
     Signature,
+    Redact,
     Grayscale,
     Images,
 }
@@ -32,7 +33,7 @@ pub struct ToolInfo {
     pub featured: bool,
 }
 
-pub const TOOLS: [ToolInfo; 13] = [
+pub const TOOLS: [ToolInfo; 14] = [
     ToolInfo {
         id: ToolId::Merge,
         name: "Merge",
@@ -119,6 +120,14 @@ pub const TOOLS: [ToolInfo; 13] = [
         description: "Draw, type or upload your signature and place it on the page",
         icon: icons::signature,
         tint: color!(0xec4899),
+        featured: false,
+    },
+    ToolInfo {
+        id: ToolId::Redact,
+        name: "Redact",
+        description: "Permanently remove marked areas from a copy of a PDF",
+        icon: icons::pen,
+        tint: color!(0x2f5bd3),
         featured: false,
     },
     ToolInfo {

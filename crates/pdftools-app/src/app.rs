@@ -112,6 +112,7 @@ impl App {
             Box::new(tools::Watermark::default()),
             Box::new(tools::Metadata::default()),
             Box::new(tools::Signature::default()),
+            Box::new(tools::Redact::default()),
             Box::new(tools::Grayscale::default()),
         ];
         Self {
@@ -529,6 +530,9 @@ impl App {
             Message::Option(id, key, value) => {
                 let dialogs = self.dialogs.clone();
                 if let Some((single, tool)) = self.single_mut(id) {
+                    if id == ToolId::Redact && single.run.busy() {
+                        return Task::none();
+                    }
                     tool.set(key, value, single, &*dialogs);
                     // The last result described other settings.
                     if matches!(single.run, Run::Done { .. } | Run::Failed(_)) {
@@ -761,7 +765,7 @@ impl App {
 
         let closeup = self.closeup_request(id).and_then(|r| self.previews.get(&r));
         let left = column![file_card(id, single, &self.previews, busy), tool.view(single, closeup)].spacing(18).padding(14);
-        let left = container(scrollable(left)).width(340).height(Length::Fill).style(theme::panel);
+        let left = container(scrollable(left)).width(if id == ToolId::Redact { 250 } else { 340 }).height(Length::Fill).style(theme::panel);
 
         let kept = tiles.iter().filter(|t| !t.excluded).count();
         let summary = match tiles.len() {

@@ -6,3 +6,4 @@ pub mod info;
 pub mod pages;
 pub mod ranges;
 pub mod raster;
+pub mod redact;

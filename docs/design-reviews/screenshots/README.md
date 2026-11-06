@@ -8,12 +8,12 @@ Each theme includes the home screen and, when the app provides it, About. Every 
 
 | App | Home | About | Tool screens per theme | Total per theme |
 | --- | --- | --- | ---: | ---: |
-| Desktop | Yes | Yes | 13 tools × 2 states | 28 |
-| Web | Yes | Yes | 13 tools × 2 states | 28 |
-| iOS | Yes | Yes | 13 tools × 2 states | 28 |
-| Android | Yes | Yes | 13 tools × 2 states | 28 |
+| Desktop | Yes | Yes | 14 tools × 2 states | 30 |
+| Web | Yes | Yes | 14 tools × 2 states | 30 |
+| iOS | Yes | Yes | 14 tools × 2 states | 30 |
+| Android | Yes | Yes | 14 tools × 2 states | 30 |
 
-Tool IDs in screenshot filenames are `merge`, `split`, `compress`, `protect`, `unlock`, `rotate`, `rearrange`, `numbers`, `watermark`, `metadata`, `signature`, `grayscale`, and `images`. For example, `ios/dark/tools/merge-empty.png` and `ios/dark/tools/merge-configured.png`.
+Tool IDs in screenshot filenames are `merge`, `split`, `compress`, `protect`, `unlock`, `rotate`, `rearrange`, `numbers`, `watermark`, `metadata`, `signature`, `redact`, `grayscale`, and `images`. For example, `ios/dark/tools/merge-empty.png` and `ios/dark/tools/merge-configured.png`.
 
 ## Refresh captures
 
@@ -25,3 +25,5 @@ Refresh both themes for any changed screen and all related tool states. The tool
 - **Android:** run `android/test.sh` on an emulator once with `PDFTOOLS_THEME=light` and once with `PDFTOOLS_THEME=dark`, setting `PDFTOOLS_SCREENSHOT_DIR` to the corresponding `android/<theme>` folder.
 
 Keep image files under theme folders only. Update this index if the tool catalog or a platform's available screens changes.
+
+For a Redact-only refresh, set `PDFTOOLS_SCREENSHOT_TOOL=redact` for the web capture, or run the iOS `PDFToolsUITests/testCaptureRedactReviewScreenshots` test. Android accepts `android/test.sh redact`.

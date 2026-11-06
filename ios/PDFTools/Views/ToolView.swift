@@ -45,7 +45,7 @@ struct ToolView: View {
             if !isEmpty { RunBar(session: session) }
         }
         .toolbar {
-            if !isEmpty { ToolbarItem(placement: .topBarTrailing) { addButton } }
+            if !isEmpty { ToolbarItem(placement: .topBarTrailing) { addButton.disabled(session.tool == .redact && session.running) } }
         }
         .overlay {
             if session.loading { ProgressView("Opening…").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) }

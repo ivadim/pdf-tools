@@ -750,7 +750,7 @@ body.dragging .drop {
 
 .drop strong {
   display: block;
-  color: var(--accent);
+  color: var(--install-text);
   font-size: 17px;
   margin-bottom: 4px;
 }
@@ -1292,3 +1292,15 @@ body.dragging .drop {
     animation: none !important;
   }
 }
+
+/* Redaction marks are pixels to remove, not annotations in the output. */
+.redact-preview { position: absolute; background: #000; pointer-events: none; }
+.redact-dialog { max-width: min(96vw, 1100px); max-height: 95vh; overflow: auto; }
+.redact-dialog::backdrop { background: rgb(0 0 0 / 65%); }
+.redact-toolbar { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.redact-toolbar strong { margin-right: auto; }
+.redact-stage { position: relative; width: min(75vw, 800px); margin: auto; touch-action: none; cursor: crosshair; }
+.redact-stage canvas { display: block; width: 100%; height: auto; }
+.redact-draft { opacity: .65; outline: 2px solid #fff; }
+.redact-coordinates { display: flex; gap: .75rem; flex-wrap: wrap; margin: .75rem 0; }
+.redact-coordinates input { max-width: 6rem; }

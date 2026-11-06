@@ -33,7 +33,7 @@ Source: [the screenshot collection](design-reviews/screenshots/), as it appeared
 
 ### Names and voice
 
-- Product name: **PDF Tools**. Tool titles use the same short verb or noun on all platforms: Merge, Split, Compress, Protect, Unlock, Rotate, Rearrange, Page numbers, Watermark, Metadata, Signature, Grayscale, Images to PDF.
+- Product name: **PDF Tools**. Tool titles use the same short verb or noun on all platforms: Merge, Split, Compress, Protect, Unlock, Rotate, Rearrange, Page numbers, Watermark, Metadata, Signature, Redact, Grayscale, Images to PDF.
 - Describe an operation in one concrete sentence. Prefer “Combine PDFs into one” to marketing language. Use “on this device” where true; do not imply upload. Keep the privacy message visible on the home/about surface, not repeated as permanent tool chrome.
 - The primary button is the operation verb: **Merge**, **Split**, **Protect**. When a result exists, the next action is **Save** or **Share** according to platform. Loading states say what is happening (“Merging 5 pages…”). Success states say what happened (“Merged 2 files into 16 pages.”). Errors name the failed input and a next step.
 - Preserve meaningful nouns and units in summaries: “2 files · 16 pages,” “3 output files · 14 pages,” “Password required.” Keep page counts and generated names consistent with the preview.

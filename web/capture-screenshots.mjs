@@ -1,22 +1,18 @@
 import { chromium } from "@playwright/test";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { env } from "node:process";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(fileURLToPath(new URL("../docs/design-reviews/screenshots/web/", import.meta.url)));
 const baseURL = env.PDFTOOLS_WEB_URL ?? "http://127.0.0.1:4173";
+const selectedTool = env.PDFTOOLS_SCREENSHOT_TOOL;
 const fixture = (path) => fileURLToPath(new URL(`../${path}`, import.meta.url));
-const asDropFile = async (path) => ({
-  name: path.split("/").at(-1),
-  type: path.endsWith(".pdf") ? "application/pdf" : "image/png",
-  base64: (await readFile(path)).toString("base64"),
-});
 const tools = [
   ["merge", "Merge"], ["split", "Split"], ["compress", "Compress"], ["protect", "Protect"],
   ["unlock", "Unlock"], ["rotate", "Rotate"], ["rearrange", "Rearrange"], ["numbers", "Page numbers"],
   ["watermark", "Watermark"], ["metadata", "Metadata"], ["signature", "Signature"],
-  ["grayscale", "Grayscale"], ["images", "Images to PDF"],
+  ["redact", "Redact"], ["grayscale", "Grayscale"], ["images", "Images to PDF"],
 ];
 
 const browser = await chromium.launch({ headless: true });
@@ -28,15 +24,20 @@ try {
     await mkdir(resolve(dir, "tools"), { recursive: true });
     await page.goto(baseURL);
     await page.getByRole("heading", { name: "Choose a tool" }).waitFor();
-    await page.screenshot({ path: resolve(dir, "home.png") });
+    if (!selectedTool) await page.screenshot({ path: resolve(dir, "home.png") });
 
     await page.goto(new URL("/#about", baseURL).href);
-    await page.getByRole("heading", { name: "About PDF Tools" }).waitFor();
-    await page.screenshot({ path: resolve(dir, "about.png") });
+    await page.getByRole("heading", { name: "PDF Tools", exact: true }).waitFor();
+    if (!selectedTool) await page.screenshot({ path: resolve(dir, "about.png") });
 
-    for (const [id, title] of tools) {
+    for (const [id, title] of tools.filter(([toolId]) => !selectedTool || selectedTool === toolId)) {
+      // A hash-only navigation keeps the previously opened PDF in memory.
+      // Reload so each empty capture really starts with no input.
+      await page.goto(baseURL);
+      await page.reload();
       await page.goto(new URL(`/#${id}`, baseURL).href);
       await page.getByRole("heading", { name: title }).waitFor();
+      await page.locator(".drop").waitFor();
       await page.screenshot({ path: resolve(dir, "tools", `${id}-empty.png`) });
 
       const files = id === "merge"
@@ -46,15 +47,9 @@ try {
           : id === "unlock"
             ? [fixture("tests/fixtures/encrypted/aes256-password-test.pdf")]
             : [fixture("tests/fixtures/pdfjs/tracemonkey.pdf")];
-      const dropped = await Promise.all(files.map(asDropFile));
-      await page.evaluate((items) => {
-        const transfer = new DataTransfer();
-        for (const item of items) {
-          const bytes = Uint8Array.from(atob(item.base64), (character) => character.charCodeAt(0));
-          transfer.items.add(new File([bytes], item.name, { type: item.type }));
-        }
-        document.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: transfer }));
-      }, dropped);
+      const chooser = page.waitForEvent("filechooser");
+      await page.locator(".drop").click();
+      await (await chooser).setFiles(files);
       if (id === "split") await page.getByPlaceholder("1-3, 4-6, 7-").fill("1-7, 8-14");
       if (id === "protect") {
         await page.locator('input[type="password"]').first().fill("review-password");
@@ -83,6 +78,17 @@ try {
           const stamps = [...document.querySelectorAll(".pages .stamp")];
           return stamps.length > 0 && stamps.every((stamp) => stamp.complete && stamp.naturalWidth > 0);
         });
+      }
+      if (id === "redact") {
+        await page.locator(".pages .sheet").first().click();
+        const dialog = page.getByRole("dialog", { name: "Mark areas on page 1" });
+        await dialog.locator("canvas").waitFor();
+        const box = await dialog.locator("canvas").boundingBox();
+        await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.2);
+        await page.mouse.down();
+        await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.3);
+        await page.mouse.up();
+        await dialog.getByRole("button", { name: "Done" }).click();
       }
       await page.screenshot({ path: resolve(dir, "tools", `${id}-configured.png`) });
     }
