@@ -67,6 +67,12 @@ pub fn view<'a>(copied: bool) -> Element<'a, Message> {
             action("GitHub", Some(icons::github()), true, Some(Message::OpenUrl(REPOSITORY.into()))),
             action("Releases and updates", Some(icons::external()), false, Some(Message::OpenUrl(format!("{REPOSITORY}/releases")))),
             action("Report a problem", Some(icons::external()), false, Some(Message::OpenUrl(format!("{REPOSITORY}/issues/new")))),
+            action(
+                "Buy me a coffee",
+                Some(icons::coffee()),
+                false,
+                Some(Message::OpenUrl("https://buymeacoffee.com/ivadim".into())),
+            ),
         ]
         .spacing(8),
         panel(

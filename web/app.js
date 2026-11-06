@@ -102,6 +102,7 @@ function showAbout({ push = true } = {}) {
         h("a", { className: "primary", href: "https://github.com/ivadim/pdf-tools", target: "_blank", rel: "noopener noreferrer" }, icon("github"), "GitHub"),
         h("a", { className: "secondary", href: "https://github.com/ivadim/pdf-tools/releases", target: "_blank", rel: "noopener noreferrer" }, icon("external"), "Releases and updates"),
         h("a", { className: "secondary", href: "https://github.com/ivadim/pdf-tools/issues/new", target: "_blank", rel: "noopener noreferrer" }, icon("external"), "Report a problem"),
+        h("a", { className: "secondary", href: "https://buymeacoffee.com/ivadim", target: "_blank", rel: "noopener noreferrer" }, icon("coffee"), "Buy me a coffee"),
       ),
       h("section", { className: "about-section" },
         h("h2", {}, "Privacy"),
