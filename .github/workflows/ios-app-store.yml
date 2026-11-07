@@ -23,7 +23,6 @@ jobs:
     name: Verify release tag and CI
     runs-on: ubuntu-latest
     outputs:
-      commit: ${{ steps.tag.outputs.commit }}
       version: ${{ steps.tag.outputs.version }}
     steps:
       - id: tag
@@ -31,6 +30,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
           WORKFLOW_REF: ${{ github.ref }}
+          WORKFLOW_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           [[ "$WORKFLOW_REF" == refs/heads/main ]] || { echo 'Run this workflow from main.'; exit 1; }
@@ -42,17 +42,17 @@ jobs:
                  (.deployment_branch_policy.protected_branches == true or .deployment_branch_policy.custom_branch_policies == true)' <<< "$environment" > /dev/null || {
             echo 'Configure ios-app-store with required reviewers and a branch policy first.'; exit 1;
           }
-          # The tagged commit must be in main's history, and its tag-push CI
-          # must have completed successfully. A branch or dispatch run is not
-          # evidence that the release tag passed the uncached CI run.
+          # Require this run's source to be the exact tag target. This lets
+          # checkout use the immutable workflow ref instead of a user-derived
+          # ref, and ensures the tag-push CI completed successfully.
           status=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$TAG" --jq .status)
           [[ "$status" == behind || "$status" == identical ]]
           commit=$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq .sha)
+          [[ "$commit" == "$WORKFLOW_SHA" ]] || { echo 'Run this workflow from main at the exact commit tagged for delivery.'; exit 1; }
           runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch "$TAG" --event push --limit 100 --json headSha,status,conclusion)
           jq -e --arg sha "$commit" 'any(.[]; .headSha == $sha and .status == "completed" and .conclusion == "success")' <<< "$runs" > /dev/null || {
             echo 'No successful tag-push CI run found for this commit.'; exit 1;
           }
-          echo "commit=$commit" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
   prepare:
@@ -63,7 +63,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.verify.outputs.commit }}
           persist-credentials: false
       - uses: bazel-contrib/setup-bazel@104e3eea9447cdaa4b00d0fb46191a3985d26ab3 # 0.19.1
         with:
@@ -89,7 +88,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.verify.outputs.commit }}
           persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:

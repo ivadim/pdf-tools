@@ -36,7 +36,7 @@ or share the result.
 
 merge,split,compress,sign,redact,rotate,watermark,encrypt,pages,photos
 
-## Before submission
+## Before the TestFlight upload
 
 - Confirm the app record, bundle ID, team, rights, age rating, category, review
   contact, export compliance and App Store privacy answers in App Store Connect.
@@ -45,17 +45,18 @@ merge,split,compress,sign,redact,rotate,watermark,encrypt,pages,photos
   (`C617.1`), used to obtain document sizes. Review the app and its dependencies
   for any additional required-reason APIs and validate the manifest with the
   distribution archive.
-- The existing [medium iPhone home capture](design-reviews/screenshots/ios/light/home.png)
-  is 1206 × 2622 pixels; the additional [large iPhone home capture](app-store/ios/iphone-home.jpg)
-  is 1320 × 2868 pixels. Capture a 13-inch iPad screenshot for the listing too;
-  the current simulator shows a date in its status bar, so the trial capture
-  was not retained. Consider additional tool and result screens.
+- The [regular iPhone 17 home capture](app-store/ios/iphone-home.jpg) is
+  1206 × 2622 pixels. The [13-inch iPad Pro home capture](app-store/ios/ipad-home.jpg)
+  is 2064 × 2752 pixels and includes the simulator's real date in its status
+  bar. Both are genuine simulator captures. Consider additional tool and result
+  screens before a future App Store submission.
 - Run `ios/test.sh` and confirm the tag's GitHub CI run passes. Configure and
   use the GitHub workflow below for all release signing and uploads; do not
   sign or upload a release build locally. Wait for Apple's processing and test
   the uploaded build with TestFlight.
-- Review the final product page and submit for App Review when ready. Choose
-  the release method in App Store Connect before submitting.
+- The current release goal stops after the build is uploaded for TestFlight.
+  App Review submission and public App Store availability are separate future
+  actions.
 
 Apple's current instructions: [app privacy](https://developer.apple.com/help/app-store-connect/manage-app-information/manage-app-privacy/),
 [required-reason APIs](https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api),
@@ -66,8 +67,8 @@ and [uploading builds](https://developer.apple.com/help/app-store-connect/manage
 
 The [iOS App Store delivery workflow](../.github/workflows/ios-app-store.yml)
 is manually started and does not run when a tag is pushed. It checks that it
-was started from `main`, that the supplied `vX.Y.Z` tag points into main's
-history, and that CI passed on that exact tag. It builds the release engine on
+was started from `main` at the exact commit targeted by the supplied `vX.Y.Z`
+tag, and that CI passed on that tag. It builds the release engine on
 a separate runner without the remote cache, then waits for the `ios-app-store`
 environment approval before signing, validating, and uploading a build to App
 Store Connect. Uploading a build does not submit it to App Review or publish it.
@@ -86,9 +87,9 @@ Before using it:
 3. Ensure the existing repository `APPLE_TEAM_ID` secret identifies the same
    team, and create an App Store Connect team API key with access to upload
    builds. Keep the private key and distribution certificate secure.
-4. Once a release is authorized, select **Actions → iOS App Store delivery →
-   Run workflow**, choose `main`, and enter the previously CI-tested tag. Approve
-   the protected environment only after reviewing the run. Its build number is
+4. Select **Actions → iOS App Store delivery → Run workflow**, choose `main` at
+   the tagged commit, and enter the previously CI-tested tag. Approve the
+   protected environment only after reviewing the run. Its build number is
    the workflow run number followed by the run attempt (for example `12.1`);
    check App Store Connect for conflicts if builds have already been uploaded.
 
@@ -103,7 +104,8 @@ Before using it:
 
 For example, copy a certificate or profile's encoded contents using
 `base64 -i path/to/file | pbcopy`; paste the value directly into the matching
-GitHub environment secret. The signing job checks out the CI-tested tag and
+GitHub environment secret. The signing job checks out the workflow's exact
+main commit (verified against the CI-tested tag) and
 uses Xcode to build the signed archive after importing the certificate. Unlike
 the macOS signing job, this executes project build steps on the signing runner;
 review project build phases and dependencies before approving it. The

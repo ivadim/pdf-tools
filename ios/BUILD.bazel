@@ -22,7 +22,10 @@ ios_application(
     app_icons = glob(["PDFTools/Assets.xcassets/AppIcon.appiconset/**"]),
     bundle_id = "io.github.ivadim.pdftools",
     families = ["iphone", "ipad"],
-    infoplists = ["Info.plist"],
+    # rules_apple's plisttool does not expand Xcode build-setting references.
+    # Keep this static plist aligned with Info.plist, which Xcode uses for CI
+    # distribution version/build-number substitution.
+    infoplists = ["BazelInfo.plist"],
     minimum_os_version = "18.0",
     resources = glob(["PDFTools/Assets.xcassets/AccentColor.colorset/**"]) + ["PDFTools/PrivacyInfo.xcprivacy"],
     tags = ["manual"],
