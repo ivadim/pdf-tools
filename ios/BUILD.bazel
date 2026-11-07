@@ -24,7 +24,7 @@ ios_application(
     families = ["iphone", "ipad"],
     infoplists = ["Info.plist"],
     minimum_os_version = "18.0",
-    resources = glob(["PDFTools/Assets.xcassets/AccentColor.colorset/**"]),
+    resources = glob(["PDFTools/Assets.xcassets/AccentColor.colorset/**"]) + ["PDFTools/PrivacyInfo.xcprivacy"],
     tags = ["manual"],
     deps = [":app_sources"],
 )

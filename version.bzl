@@ -1,6 +1,6 @@
 """The version and repository every crate is built with (keep in step with Cargo.toml)."""
 
-VERSION = "0.5.0"
+VERSION = "0.5.1"
 REPOSITORY = "https://github.com/ivadim/pdf-tools"
 
 # What env!("CARGO_PKG_...") reads in the crates.

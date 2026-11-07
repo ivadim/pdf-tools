@@ -12,6 +12,7 @@ web_site(
         "icon-512.png",
         "index.html",
         "manifest.webmanifest",
+        "privacy.html",
         "style.css",
         "sw.js",
         "tools.js",

@@ -31,6 +31,9 @@ struct HomeView: View {
                         Link(destination: URL(string: "https://github.com/ivadim/pdf-tools")!) {
                             Label("Source code", systemImage: "chevron.left.forwardslash.chevron.right")
                         }
+                        Link(destination: URL(string: "https://ivadim.github.io/pdf-tools/privacy.html")!) {
+                            Label("Privacy Policy", systemImage: "hand.raised")
+                        }
                         Link(destination: URL(string: "https://buymeacoffee.com/ivadim")!) {
                             Label("Buy me a coffee", systemImage: "cup.and.saucer")
                         }
