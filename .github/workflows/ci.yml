@@ -3,7 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ["v*"]
+    # `ios-v*` runs full CI for App Store uploads but intentionally skips the
+    # desktop signing and public GitHub Release jobs below.
+    tags: ["v*", "ios-v*"]
   pull_request:
   # Weekly, for advisories and fresh simulator runs.
   schedule:
@@ -260,6 +262,8 @@ jobs:
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             version="${GITHUB_REF_NAME#v}"
+          elif [[ "$GITHUB_REF" == refs/tags/ios-v* ]]; then
+            version="${GITHUB_REF_NAME#ios-v}"
           else
             version="$(sed -n 's/^VERSION = "\(.*\)"/\1/p' version.bzl)-${GITHUB_SHA::7}"
           fi

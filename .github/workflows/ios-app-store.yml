@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag whose CI run passed (for example v0.5.1)
+        description: Existing iOS release tag whose CI run passed (for example ios-v0.5.1)
         type: string
         required: true
 
@@ -34,7 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$WORKFLOW_REF" == refs/heads/main ]] || { echo 'Run this workflow from main.'; exit 1; }
-          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Use a version tag such as v0.5.1.'; exit 1; }
+          [[ "$TAG" =~ ^ios-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Use an iOS version tag such as ios-v0.5.1.'; exit 1; }
           # GitHub otherwise silently creates a missing, unprotected
           # environment. Refuse to proceed unless approval is configured.
           environment=$(gh api "repos/$GITHUB_REPOSITORY/environments/ios-app-store")
@@ -53,7 +53,7 @@ jobs:
           jq -e --arg sha "$commit" 'any(.[]; .headSha == $sha and .status == "completed" and .conclusion == "success")' <<< "$runs" > /dev/null || {
             echo 'No successful tag-push CI run found for this commit.'; exit 1;
           }
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#ios-v}" >> "$GITHUB_OUTPUT"
 
   prepare:
     name: Build release engine
