@@ -271,6 +271,19 @@ The signing job runs in the `macos-signing` environment. It waits for the reposi
 | `APPLE_API_KEY_ID` | That key's ID. |
 | `APPLE_API_ISSUER_ID` | The issuer ID shown above the list of keys. |
 
+### iOS App Store delivery
+
+The separately started [iOS App Store delivery workflow](.github/workflows/ios-app-store.yml)
+prepares a signed iOS build and uploads it to App Store Connect. It does not
+submit the app for review or release it. A tag push alone does not start this
+workflow. Before its first use, configure the protected `ios-app-store` GitHub
+environment and Apple account as described in the [iOS release checklist](docs/ios-app-store-release.md).
+The workflow requires a version tag on `main` with a successful tag-push CI
+run, checks that the protected environment has reviewers and a branch policy,
+and waits for its approval before accessing signing credentials.
+For iOS-only TestFlight uploads, use an `ios-v` tag; that tag runs CI without
+starting desktop package builds, signing, or GitHub Release publication.
+
 ## Notes
 
 - Outputs go through a temporary `.part` file and are then renamed, so overwriting an input is safe.

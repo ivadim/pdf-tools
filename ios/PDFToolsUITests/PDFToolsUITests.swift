@@ -9,6 +9,20 @@ final class PDFToolsUITests: XCTestCase {
 
     // MARK: Flows
 
+    /// A focused capture and regression check for the in-app privacy link.
+    @MainActor func testPrivacyPolicyLinkIsVisibleInAbout() {
+        for appearance in ["Light", "Dark"] {
+            let screenshotApp = XCUIApplication()
+            screenshotApp.launchArguments += ["-uiUserInterfaceStyle", appearance]
+            screenshotApp.launch()
+            app = screenshotApp
+            tapWhenReady(app.buttons["About"])
+            XCTAssertTrue(app.buttons["Privacy Policy"].waitForExistence(timeout: 5))
+            capture("\(appearance.lowercased())-about")
+            app.terminate()
+        }
+    }
+
     /// Capture the review matrix used to keep the iOS screenshot set current.
     /// Export the named attachments from the xcresult bundle after this test.
     @MainActor func testCaptureReviewScreenshots() throws {
