@@ -1,11 +1,11 @@
-# iOS App Store release preparation
+# iOS TestFlight delivery preparation
 
-## Product information draft
+## App Store listing draft for a future submission
 
-- Name: PDF Tools
+- App Store name: PDF Tools: Free & Private
+- Device display name: PDF Tools
 - Platform: iOS and iPadOS, iOS 18 or later
-- Version: 0.5.1; the existing `v0.5.0` tag predates this iOS release
-  preparation and must not be reused.
+- Version: 1.0, matching the new App Store Connect version record.
 - Bundle ID: `io.github.ivadim.pdftools`
 - Price and availability: free, worldwide
 - Suggested primary category: Productivity
@@ -36,11 +36,12 @@ or share the result.
 
 merge,split,compress,sign,redact,rotate,watermark,encrypt,pages,photos
 
-## Before the TestFlight upload
+## Before the first TestFlight upload
 
-- Confirm the app record, bundle ID, team, rights, age rating, category, review
-  contact, export compliance and App Store privacy answers in App Store Connect.
-- Publish the privacy policy and verify the support and policy URLs are public.
+- Confirm the App Store Connect app record exists for this bundle ID and is
+  associated with the intended developer team.
+- Publish the privacy policy and verify the in-app policy link and support URL
+  are public.
 - The privacy manifest declares file metadata access in the app container
   (`C617.1`), used to obtain document sizes. Review the app and its dependencies
   for any additional required-reason APIs and validate the manifest with the
@@ -49,7 +50,8 @@ merge,split,compress,sign,redact,rotate,watermark,encrypt,pages,photos
   1206 × 2622 pixels. The [13-inch iPad Pro home capture](app-store/ios/ipad-home.jpg)
   is 2064 × 2752 pixels and includes the simulator's real date in its status
   bar. Both are genuine simulator captures. Consider additional tool and result
-  screens before a future App Store submission.
+  screens for a future App Store listing; screenshots are not needed for this
+  TestFlight-only delivery.
 - Run `ios/test.sh` and confirm the tag's GitHub CI run passes. Configure and
   use the GitHub workflow below for all release signing and uploads; do not
   sign or upload a release build locally. Wait for Apple's processing and test
@@ -68,8 +70,8 @@ and [uploading builds](https://developer.apple.com/help/app-store-connect/manage
 The [iOS App Store delivery workflow](../.github/workflows/ios-app-store.yml)
 is manually started and does not run when a tag is pushed. It checks that it
 was started from `main` at the exact commit targeted by the supplied
-`ios-vX.Y.Z` tag, and that CI passed on that tag. Using the iOS-specific tag
-keeps the existing desktop signing and public GitHub Release jobs from running.
+`ios-v1.0` tag, and that CI passed on that tag. Using the iOS-specific tag
+skips desktop package builds, signing, and public GitHub Release jobs.
 It builds the release engine on
 a separate runner without the remote cache, then waits for the `ios-app-store`
 environment approval before signing, validating, and uploading a build to App
@@ -89,7 +91,7 @@ Before using it:
 3. Ensure the existing repository `APPLE_TEAM_ID` secret identifies the same
    team, and create an App Store Connect team API key with access to upload
    builds. Keep the private key and distribution certificate secure.
-4. Create the `ios-vX.Y.Z` tag on the release commit. Wait for tag-push CI to
+4. Create the `ios-v1.0` tag on the release commit. Wait for tag-push CI to
    pass, then select **Actions → iOS App Store delivery → Run workflow**, choose
    `main` at that tagged commit, and enter the tag. Approve the
    protected environment only after reviewing the run. Its build number is

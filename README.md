@@ -281,6 +281,8 @@ environment and Apple account as described in the [iOS release checklist](docs/i
 The workflow requires a version tag on `main` with a successful tag-push CI
 run, checks that the protected environment has reviewers and a branch policy,
 and waits for its approval before accessing signing credentials.
+For iOS-only TestFlight uploads, use an `ios-v` tag; that tag runs CI without
+starting desktop package builds, signing, or GitHub Release publication.
 
 ## Notes
 
