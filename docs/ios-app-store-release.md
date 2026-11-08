@@ -46,12 +46,13 @@ merge,split,compress,sign,redact,rotate,watermark,encrypt,pages,photos
   (`C617.1`), used to obtain document sizes. Review the app and its dependencies
   for any additional required-reason APIs and validate the manifest with the
   distribution archive.
-- The [regular iPhone 17 home capture](app-store/ios/iphone-home.jpg) is
-  1206 × 2622 pixels. The [13-inch iPad Pro home capture](app-store/ios/ipad-home.jpg)
-  is 2064 × 2752 pixels and includes the simulator's real date in its status
-  bar. Both are genuine simulator captures. Consider additional tool and result
-  screens for a future App Store listing; screenshots are not needed for this
-  TestFlight-only delivery.
+- The [five-image iPhone App Store set](app-store/ios/listing/) uses genuine
+  iOS captures with short explanatory headings and is sized at 1206 × 2622
+  pixels. The [13-inch iPad Pro home capture](app-store/ios/ipad-home.jpg) is
+  2064 × 2752 pixels and includes the simulator's real date in its status bar;
+  the user approved that capture. Screenshots are not needed for the
+  TestFlight-only upload, but are required before submitting an App Store
+  version.
 - Run `ios/test.sh` and confirm the tag's GitHub CI run passes. Configure and
   use the GitHub workflow below for all release signing and uploads; do not
   sign or upload a release build locally. Wait for Apple's processing and test
