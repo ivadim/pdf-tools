@@ -72,12 +72,13 @@ and [uploading builds](https://developer.apple.com/help/app-store-connect/manage
 
 ## GitHub delivery setup
 
-The [iOS App Store delivery workflow](../.github/workflows/ios-app-store.yml)
+The [Apple TestFlight delivery workflow](../.github/workflows/ios-app-store.yml)
 is manually started and does not run when a tag is pushed. It checks that it
 was started from `main` at the exact commit targeted by the supplied
 `ios-v1.0` tag, and that CI passed on that tag. Using the iOS-specific tag
-skips desktop package builds, signing, and public GitHub Release jobs.
-It builds the release engine on
+includes desktop package builds but skips desktop signing and public GitHub
+Release jobs. It defaults to iOS only; macOS can also be selected once its
+release validation is complete. It builds the release engine on
 a separate runner without the remote cache, then waits for the `ios-app-store`
 environment approval before signing, validating, and uploading a build to App
 Store Connect. Uploading a build does not submit it to App Review or publish it.
@@ -97,7 +98,7 @@ Before using it:
    team, and create an App Store Connect team API key with access to upload
    builds. Keep the private key and distribution certificate secure.
 4. Create the `ios-v1.0` tag on the release commit. Wait for tag-push CI to
-   pass, then select **Actions → iOS App Store delivery → Run workflow**, choose
+   pass, then select **Actions → Apple TestFlight delivery → Run workflow**, choose
    `main` at that tagged commit, and enter the tag. Approve the
    protected environment only after reviewing the run. Its build number is
    the workflow run number followed by the run attempt (for example `12.1`);

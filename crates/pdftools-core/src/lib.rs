@@ -8,6 +8,8 @@ mod error;
 pub mod grayscale;
 mod image_data;
 pub mod images;
+#[cfg(target_os = "macos")]
+mod macos_save;
 pub mod merge;
 pub mod metadata;
 pub mod organize;
@@ -286,7 +288,12 @@ pub fn save(doc: &mut Document, output: &Path) -> Result<(), Error> {
     let mut temp_name = output.as_os_str().to_owned();
     temp_name.push(".part");
     let temp = PathBuf::from(temp_name);
-    let result = std::fs::File::create(&temp).map_err(io_error).and_then(|file| {
+    let file = std::fs::File::create(&temp);
+    #[cfg(target_os = "macos")]
+    if matches!(&file, Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied) {
+        return macos_save::save(doc, output).map_err(save_error);
+    }
+    let result = file.map_err(io_error).and_then(|file| {
         let mut writer = std::io::BufWriter::with_capacity(1 << 20, file);
         doc.save_to(&mut writer).map_err(io_error)?;
         // Flushed, not synced: some file systems (the web version's in-memory

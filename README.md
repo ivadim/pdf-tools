@@ -271,22 +271,24 @@ The signing job runs in the `macos-signing` environment. It waits for the reposi
 | `APPLE_API_KEY_ID` | That key's ID. |
 | `APPLE_API_ISSUER_ID` | The issuer ID shown above the list of keys. |
 
-### iOS App Store delivery
+### Apple TestFlight delivery
 
-The separately started [iOS App Store delivery workflow](.github/workflows/ios-app-store.yml)
-prepares a signed iOS build and uploads it to App Store Connect. It does not
+The manually started [Apple TestFlight delivery workflow](.github/workflows/ios-app-store.yml)
+can select iOS, macOS, or both for App Store Connect delivery. macOS delivery
+is blocked pending sandbox validation and signing setup. It does not
 submit the app for review or release it. A tag push alone does not start this
 workflow. Before its first use, configure the protected `ios-app-store` GitHub
 environment and Apple account as described in the [iOS release checklist](docs/ios-app-store-release.md).
 The workflow requires a version tag on `main` with a successful tag-push CI
 run, checks that the protected environment has reviewers and a branch policy,
 and waits for its approval before accessing signing credentials.
-For iOS-only TestFlight uploads, use an `ios-v` tag; that tag runs CI without
-starting desktop package builds, signing, or GitHub Release publication.
+Use an `ios-v` tag to run CI, including desktop builds, without starting
+Developer ID signing or GitHub Release publication. See the [macOS release
+checklist](docs/macos-app-store-release.md) for the additional setup.
 
 ## Notes
 
-- Outputs go through a temporary `.part` file and are then renamed, so overwriting an input is safe.
+- Outputs are staged before replacing the destination, so overwriting an input is safe. In the macOS sandbox, the app uses a system-provided replacement directory when it cannot create a sibling `.part` file.
 - Merge and Split rebuild the page tree. Merge drops document-level extras (outlines, forms). Rotate, Rearrange and the other single-file tools keep them.
 - Damaged files, such as ones cut short by an interrupted download, open with the pages that can be recovered; the app says so, and outputs contain only those pages.
 - Files that only restrict permissions open without a password, and outputs from any tool are saved without those restrictions.
