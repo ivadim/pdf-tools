@@ -36,6 +36,10 @@ or share the result.
 
 merge,split,compress,sign,redact,rotate,watermark,encrypt,pages,photos
 
+The [marketing package](app-store/ios/marketing/) also includes a five-feature
+light and dark series for iPhone, the iPhone Duo outer display, and 13-inch
+iPad, with source captures and regeneration steps.
+
 ## Before the first TestFlight upload
 
 - Confirm the App Store Connect app record exists for this bundle ID and is
