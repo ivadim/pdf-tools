@@ -26,8 +26,8 @@ final class PDFToolsUITests: XCTestCase {
     /// Capture the review matrix used to keep the iOS screenshot set current.
     /// Export the named attachments from the xcresult bundle after this test.
     @MainActor func testCaptureReviewScreenshots() throws {
-        let imageA = try image(width: 800, height: 600, name: "review-landscape.png")
-        let imageB = try image(width: 600, height: 900, name: "review-portrait.png")
+        let imageA = TestFiles.fixtures.appendingPathComponent("review-images/coastal-trail.jpg")
+        let imageB = TestFiles.fixtures.appendingPathComponent("review-images/coastal-flowers.jpg")
 
         for appearance in ["Light", "Dark"] {
             let screenshotApp = XCUIApplication()
@@ -56,6 +56,7 @@ final class PDFToolsUITests: XCTestCase {
                 switch tool.id {
                 case "merge": files = [pdf("tracemonkey"), pdf("rotation")]
                 case "images": files = [imageA, imageB]
+                case "redact": files = [TestFiles.fixtures.appendingPathComponent("review-documents/membership-summary.pdf")]
                 case "unlock": files = [TestFiles.locked]
                 default: files = [pdf("tracemonkey")]
                 }
@@ -70,7 +71,9 @@ final class PDFToolsUITests: XCTestCase {
                 default: "Choose a PDF"
                 }
                 tapWhenReady(app.buttons[chooser])
-                if tool.id == "split" {
+                if tool.id == "images" {
+                    tapWhenReady(app.buttons["Image size"])
+                } else if tool.id == "split" {
                     let ranges = app.textFields["1-3, 4-6, 7-"]
                     XCTAssertTrue(ranges.waitForExistence(timeout: 10))
                     ranges.tap()
@@ -91,12 +94,91 @@ final class PDFToolsUITests: XCTestCase {
                     tapWhenReady(page)
                     let stage = app.otherElements["redact.stage"]
                     XCTAssertTrue(stage.waitForExistence(timeout: 15))
-                    stage.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.2)).press(forDuration: 0.1,
-                        thenDragTo: stage.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.3)))
+                    markSampleDetails(stage)
                     tapWhenReady(app.buttons["Done"])
                 }
                 capture("\(appearance.lowercased())-tools-\(tool.id)-configured")
             }
+            app.terminate()
+        }
+    }
+
+    /// Five genuine screens for each App Store device and appearance.
+    @MainActor func testCaptureMarketingScreenshots() {
+        let imageFiles = ["coastal-trail.jpg", "coastal-flowers.jpg"].map {
+            TestFiles.fixtures.appendingPathComponent("review-images/\($0)")
+        }
+        for appearance in ["Light", "Dark"] {
+            for feature in ["home", "merge", "compress", "redact", "images"] {
+                let toolApp = XCUIApplication()
+                toolApp.launchArguments += ["-uiUserInterfaceStyle", appearance]
+                let files: [URL] = feature == "images" ? imageFiles :
+                    feature == "merge" ? [pdf("tracemonkey"), pdf("rotation")] :
+                    feature == "redact" ? [TestFiles.fixtures.appendingPathComponent("review-documents/membership-summary.pdf")] : [pdf("tracemonkey")]
+                toolApp.launchEnvironment["PDFTOOLS_TEST_FILES"] = files.map(\.path).joined(separator: "\n")
+                toolApp.launch()
+                app = toolApp
+                if feature != "home" {
+                    openTool(feature)
+                    tapWhenReady(app.buttons[feature == "merge" ? "Choose PDFs" : feature == "images" ? "Choose image files" : "Choose a PDF"])
+                    if feature == "images" { tapWhenReady(app.buttons["Image size"]) }
+                    if feature == "redact" {
+                        let page = app.buttons["page.1"]
+                        scrollTo(page)
+                        tapWhenReady(page)
+                        let stage = app.otherElements["redact.stage"]
+                        XCTAssertTrue(stage.waitForExistence(timeout: 15))
+                        markSampleDetails(stage)
+                        tapWhenReady(app.buttons["Done"])
+                        app.swipeDown()
+                        sleep(2) // Let the scroll indicator fade before capture.
+                    }
+                }
+                capture("marketing-\(appearance.lowercased())-\(feature)")
+                app.terminate()
+            }
+        }
+    }
+
+    /// Refresh the marketing Redact capture after reviewing its visible state.
+    @MainActor func testCaptureMarketingRedactScreenshots() {
+        for appearance in ["Light", "Dark"] {
+            let toolApp = XCUIApplication()
+            toolApp.launchArguments += ["-uiUserInterfaceStyle", appearance]
+            toolApp.launchEnvironment["PDFTOOLS_TEST_FILES"] = TestFiles.fixtures.appendingPathComponent("review-documents/membership-summary.pdf").path
+            toolApp.launch()
+            app = toolApp
+            openTool("redact")
+            tapWhenReady(app.buttons["Choose a PDF"])
+            let page = app.buttons["page.1"]
+            scrollTo(page)
+            tapWhenReady(page)
+            let stage = app.otherElements["redact.stage"]
+            XCTAssertTrue(stage.waitForExistence(timeout: 15))
+            markSampleDetails(stage)
+            tapWhenReady(app.buttons["Done"])
+            app.swipeDown()
+            sleep(2) // Let the scroll indicator fade before capture.
+            capture("marketing-\(appearance.lowercased())-redact")
+            app.terminate()
+        }
+    }
+
+    /// Capture the image conversion screen with the same photos as the review matrix.
+    @MainActor func testCaptureImagesReviewScreenshots() {
+        let files = ["coastal-trail.jpg", "coastal-flowers.jpg"].map {
+            TestFiles.fixtures.appendingPathComponent("review-images/\($0)").path
+        }
+        for appearance in ["Light", "Dark"] {
+            let toolApp = XCUIApplication()
+            toolApp.launchArguments += ["-uiUserInterfaceStyle", appearance]
+            toolApp.launchEnvironment["PDFTOOLS_TEST_FILES"] = files.joined(separator: "\n")
+            toolApp.launch()
+            app = toolApp
+            openTool("images")
+            tapWhenReady(app.buttons["Choose image files"])
+            tapWhenReady(app.buttons["Image size"])
+            capture("\(appearance.lowercased())-tools-images-configured")
             app.terminate()
         }
     }
@@ -106,7 +188,7 @@ final class PDFToolsUITests: XCTestCase {
         for appearance in ["Light", "Dark"] {
             let toolApp = XCUIApplication()
             toolApp.launchArguments += ["-uiUserInterfaceStyle", appearance]
-            toolApp.launchEnvironment["PDFTOOLS_TEST_FILES"] = pdf("tracemonkey").path
+            toolApp.launchEnvironment["PDFTOOLS_TEST_FILES"] = TestFiles.fixtures.appendingPathComponent("review-documents/membership-summary.pdf").path
             toolApp.launch()
             app = toolApp
             openTool("redact")
@@ -117,8 +199,7 @@ final class PDFToolsUITests: XCTestCase {
             tapWhenReady(page)
             let stage = app.otherElements["redact.stage"]
             XCTAssertTrue(stage.waitForExistence(timeout: 15))
-            stage.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.2)).press(forDuration: 0.1,
-                thenDragTo: stage.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.3)))
+            markSampleDetails(stage)
             tapWhenReady(app.buttons["Done"])
             capture("\(appearance.lowercased())-tools-redact-configured")
             app.terminate()
@@ -261,6 +342,14 @@ final class PDFToolsUITests: XCTestCase {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
         try TestFiles.image(width: width, height: height).write(to: url)
         return url
+    }
+
+    /// Mark the two fictional values without covering their labels.
+    @MainActor private func markSampleDetails(_ stage: XCUIElement) {
+        for top in [0.225, 0.302] {
+            stage.coordinate(withNormalizedOffset: CGVector(dx: 0.38, dy: top)).press(forDuration: 0.1,
+                thenDragTo: stage.coordinate(withNormalizedOffset: CGVector(dx: 0.72, dy: top + 0.045)))
+        }
     }
 
     @MainActor private func openTool(_ id: String) {

@@ -42,7 +42,7 @@ let shots = [
         source: "tools/images-configured.png",
         output: "05-images-to-pdf.jpg",
         title: ["Turn photos into", "a ready-to-share PDF."],
-        subtitle: "Choose page size, orientation, and margins."
+        subtitle: "Choose page size and margins."
     ),
 ]
 
