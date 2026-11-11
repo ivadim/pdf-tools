@@ -5,6 +5,9 @@ iOS. App Review submission and public availability are separate future
 decisions. The separate GitHub desktop release retains the shared engine's
 version.
 
+The Apple-silicon-only Mac App Store build and GitHub DMG require macOS 12 or
+later, as required by App Store Connect for Apple-silicon-only apps.
+
 The existing macOS release is a Developer ID signed and notarized disk image;
 it is not a Mac App Store build. TestFlight delivery uses a separate signing
 and upload job and does not change the existing distribution channel.
@@ -59,7 +62,8 @@ sandbox access. Review sandbox denial logs when a workflow fails. The app uses
   the final build. With Xcode 27.2, the default Bazel build on the development
   machine produced a macOS 27.2 binary while the bundle declared macOS 11.0.
   Both the sandbox build and the desktop distribution build now explicitly set
-  `--macos_minimum_os=11.0`. Confirm compatibility on the oldest supported OS.
+  `--macos_minimum_os=12.0` for Mac builds. Confirm compatibility on the
+  oldest supported OS.
 - Audit the app and bundled dependencies for privacy-manifest required-reason
   APIs, encryption declarations, and App Store policy requirements.
 - Prepare genuine macOS App Store screenshots and listing text; verify public

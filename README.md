@@ -31,7 +31,7 @@ It is a single native executable, about 10 MB, with no web view and no runtime t
 | --- | --- | --- |
 | Windows 10/11 (x64) | `pdftools-…-windows-x86_64-setup.exe` | Run the installer. It installs for your account without administrator rights (or for all users, if you choose), and adds PDF Tools to the Start menu and to *Settings → Apps* for uninstalling. It isn't code-signed, so SmartScreen may ask you to confirm: choose *More info* → *Run anyway*. |
 | Windows, portable | `pdftools-…-windows-x86_64.zip` | Unzip and run `pdftools.exe`; nothing is installed. |
-| macOS 11+ (Apple silicon) | `pdftools-…-macos-arm64.dmg` | Open the disk image and drag *PDF Tools* onto *Applications*. It's signed with a Developer ID and notarized by Apple (releases up to 0.3.0 aren't: see below). |
+| macOS 12+ (Apple silicon) | `pdftools-…-macos-arm64.dmg` | Open the disk image and drag *PDF Tools* onto *Applications*. It's signed with a Developer ID and notarized by Apple (releases up to 0.3.0 aren't: see below). |
 | Linux (x86_64, glibc 2.35+) | `pdftools-…-linux-x86_64.tar.gz` | Extract and run `./pdftools`. Works on X11 and Wayland. File dialogs use the XDG desktop portal, which most desktops provide. |
 
 **First launch on macOS, releases up to 0.3.0.** These aren't notarized, so macOS says *"PDF Tools.app" Not Opened*. To allow it once:
