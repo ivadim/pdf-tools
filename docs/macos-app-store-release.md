@@ -88,13 +88,13 @@ The macOS preparation job deliberately fails after producing a sandboxed
 candidate. Remove that gate only after completing the sandbox and regression
 tests and reviewing the signing pipeline.
 The signing and upload steps are untested with distribution credentials and
-must be reviewed and exercised before relying on them. They use a separate
-`macos-app-store` environment; configure required reviewers and a deployment
-branch policy allowing main before use. Both the iOS and macOS environment
+must be reviewed and exercised before relying on them. The macOS job reuses
+the protected `macos-signing` environment used by DMG signing; verify its
+required reviewers and deployment branch policy allow main before use. Both the iOS and macOS environment
 checks run for a combined or macOS-only selection. Signing runs on a separate
 runner without checking out or building project code.
 
-Add these secrets to the `macos-app-store` environment:
+Add these secrets to the `macos-signing` environment:
 
 | Secret | Value |
 | --- | --- |
@@ -103,13 +103,13 @@ Add these secrets to the `macos-app-store` environment:
 | `MAC_INSTALLER_CERTIFICATE` | Base64-encoded Mac Installer Distribution `.p12`, with private key. |
 | `MAC_INSTALLER_CERTIFICATE_PASSWORD` | Password for that `.p12`. |
 | `MAC_APP_STORE_PROFILE` | Base64-encoded Mac App Store Connect provisioning profile for the bundle ID. |
-| `APPLE_TEAM_ID` | The signing team ID. |
-| `APP_STORE_CONNECT_API_KEY` | Base64-encoded App Store Connect API key. |
-| `APP_STORE_CONNECT_API_KEY_ID` | API key ID. |
-| `APP_STORE_CONNECT_ISSUER_ID` | API issuer ID. |
 
-The Apple Distribution certificate and App Store Connect API credentials may
-be reusable from iOS if they match the Mac profile and have upload access;
-the installer identity and macOS profile are distinct. Confirm the macOS
+The workflow also uses the repository's existing `APPLE_TEAM_ID` and the
+`APPLE_API_KEY`, `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER_ID` already in
+`macos-signing`. The key is stored as raw `.p8` contents for notarization;
+confirm that it can also upload to App Store Connect. The Apple Distribution
+certificate may be reused from iOS if it matches the Mac profile; the installer
+identity and macOS profile are distinct. Sharing the environment means its
+approved jobs can access the same set of environment secrets. Confirm the macOS
 platform exists in the same App Store Connect app record before uploading.
 A successful upload does not submit the app for review or publish it.

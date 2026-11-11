@@ -59,10 +59,10 @@ jobs:
             echo 'Configure ios-app-store with required reviewers and a branch policy first.'; exit 1;
           }
           if [[ "$PLATFORM" != ios ]]; then
-            environment=$(gh api "repos/$GITHUB_REPOSITORY/environments/macos-app-store")
+            environment=$(gh api "repos/$GITHUB_REPOSITORY/environments/macos-signing")
             jq -e 'any(.protection_rules[]?; .type == "required_reviewers" and (.reviewers | length) > 0) and
                    (.deployment_branch_policy.protected_branches == true or .deployment_branch_policy.custom_branch_policies == true)' <<< "$environment" > /dev/null || {
-              echo 'Configure macos-app-store with required reviewers and a branch policy first.'; exit 1;
+              echo 'Configure macos-signing with required reviewers and a branch policy first.'; exit 1;
             }
           fi
           # Require this run's source to be the exact tag target. This lets
@@ -273,7 +273,7 @@ jobs:
     needs: [verify, mac-prepare]
     runs-on: macos-latest
     timeout-minutes: 45
-    environment: macos-app-store
+    environment: macos-signing
     steps:
       # No checkout or build runs on the credentialed runner.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -356,14 +356,14 @@ jobs:
           pkgutil --check-signature "$RUNNER_TEMP/PDFTools.pkg"
       - name: Validate and upload
         env:
-          API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
-          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          API_KEY: ${{ secrets.APPLE_API_KEY }}
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
         run: |
           set -euo pipefail
           [[ -n "$API_KEY" && "$API_KEY_ID" =~ ^[A-Za-z0-9]+$ && -n "$API_ISSUER_ID" ]] || { echo 'Missing App Store Connect API secrets.'; exit 1; }
           mkdir -p "$RUNNER_TEMP/private_keys"
-          python3 -c 'import base64,sys; sys.stdout.buffer.write(base64.b64decode(sys.stdin.buffer.read().strip(), validate=True))' <<< "$API_KEY" > "$RUNNER_TEMP/private_keys/AuthKey_$API_KEY_ID.p8"
+          printf '%s\n' "$API_KEY" > "$RUNNER_TEMP/private_keys/AuthKey_$API_KEY_ID.p8"
           chmod 600 "$RUNNER_TEMP/private_keys/AuthKey_$API_KEY_ID.p8"
           export API_PRIVATE_KEYS_DIR="$RUNNER_TEMP/private_keys"
           xcrun altool --validate-app -f "$RUNNER_TEMP/PDFTools.pkg" -t macos --api-key "$API_KEY_ID" --api-issuer "$API_ISSUER_ID"
