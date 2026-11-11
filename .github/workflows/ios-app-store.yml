@@ -1,4 +1,4 @@
-name: iOS App Store delivery
+name: Apple TestFlight delivery
 
 # This workflow never runs on a tag push. Start it deliberately from main and
 # approve the protected environment only when the build should be uploaded.
@@ -6,9 +6,20 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing iOS release tag whose CI run passed (for example ios-v1.0)
+        description: Existing Apple release tag whose CI passed (for example macos-v1.0)
         type: string
         required: true
+
+      platform:
+        description: Platforms to deliver
+        type: choice
+        options: [ios, macos, both]
+        default: ios
+        required: true
+      mac_version:
+        description: macOS marketing version (required for macOS; e.g. 1.0)
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -31,10 +42,23 @@ jobs:
           TAG: ${{ inputs.tag }}
           WORKFLOW_REF: ${{ github.ref }}
           WORKFLOW_SHA: ${{ github.sha }}
+          PLATFORM: ${{ inputs.platform }}
+          MAC_VERSION: ${{ inputs.mac_version }}
         run: |
           set -euo pipefail
           [[ "$WORKFLOW_REF" == refs/heads/main ]] || { echo 'Run this workflow from main.'; exit 1; }
-          [[ "$TAG" =~ ^ios-v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || { echo 'Use an iOS version tag such as ios-v1.0.'; exit 1; }
+          [[ "$TAG" =~ ^ios-v[0-9]+\.[0-9]+(\.[0-9]+)?$ || "$TAG" =~ ^macos-v[0-9]+\.[0-9]+(\.[0-9]+)?(-[0-9]+)?$ ]] || { echo 'Use an iOS or macOS version tag such as macos-v1.0.'; exit 1; }
+          if [[ "$PLATFORM" != macos && "$TAG" != ios-v* ]]; then
+            echo 'iOS delivery requires an ios-v tag.'; exit 1
+          fi
+          if [[ "$PLATFORM" != ios ]]; then
+            [[ "$MAC_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || { echo 'Enter a numeric macOS version.'; exit 1; }
+            mac_tag_version=${TAG#macos-v}
+            mac_tag_version=${mac_tag_version%%-*}
+            if [[ "$TAG" == macos-v* && "$mac_tag_version" != "$MAC_VERSION" ]]; then
+              echo 'Mac version must match the macOS release tag.'; exit 1
+            fi
+          fi
           # GitHub otherwise silently creates a missing, unprotected
           # environment. Refuse to proceed unless approval is configured.
           environment=$(gh api "repos/$GITHUB_REPOSITORY/environments/ios-app-store")
@@ -42,6 +66,13 @@ jobs:
                  (.deployment_branch_policy.protected_branches == true or .deployment_branch_policy.custom_branch_policies == true)' <<< "$environment" > /dev/null || {
             echo 'Configure ios-app-store with required reviewers and a branch policy first.'; exit 1;
           }
+          if [[ "$PLATFORM" != ios ]]; then
+            environment=$(gh api "repos/$GITHUB_REPOSITORY/environments/macos-signing")
+            jq -e 'any(.protection_rules[]?; .type == "required_reviewers" and (.reviewers | length) > 0) and
+                   (.deployment_branch_policy.protected_branches == true or .deployment_branch_policy.custom_branch_policies == true)' <<< "$environment" > /dev/null || {
+              echo 'Configure macos-signing with required reviewers and a branch policy first.'; exit 1;
+            }
+          fi
           # Require this run's source to be the exact tag target. This lets
           # checkout use the immutable workflow ref instead of a user-derived
           # ref, and ensures the tag-push CI completed successfully.
@@ -53,9 +84,10 @@ jobs:
           jq -e --arg sha "$commit" 'any(.[]; .headSha == $sha and .status == "completed" and .conclusion == "success")' <<< "$runs" > /dev/null || {
             echo 'No successful tag-push CI run found for this commit.'; exit 1;
           }
-          echo "version=${TAG#ios-v}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#*-v}" >> "$GITHUB_OUTPUT"
 
   prepare:
+    if: inputs.platform != 'macos'
     name: Build release engine
     needs: verify
     runs-on: macos-latest
@@ -79,7 +111,8 @@ jobs:
           retention-days: 1
 
   deliver:
-    name: Sign and upload to App Store Connect
+    if: inputs.platform != 'macos'
+    name: Sign and upload iOS to App Store Connect
     needs: [verify, prepare]
     runs-on: macos-latest
     timeout-minutes: 45
@@ -207,3 +240,140 @@ jobs:
           rm -f "$RUNNER_TEMP/ios-certificate.p12" "$RUNNER_TEMP/ios.mobileprovision" "$RUNNER_TEMP/profile.plist"
           rm -rf "$RUNNER_TEMP/private_keys"
           if [[ -n "${PROFILE_UUID:-}" ]]; then rm -f "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/$PROFILE_UUID.mobileprovision"; fi
+
+  mac-prepare:
+    name: Build macOS TestFlight candidate
+    if: inputs.platform != 'ios'
+    needs: verify
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: bazel-contrib/setup-bazel@104e3eea9447cdaa4b00d0fb46191a3985d26ab3 # 0.19.1
+        with:
+          bazelisk-cache: false
+      - name: Build sandboxed candidate
+        env:
+          VERSION: ${{ inputs.mac_version }}
+        run: |
+          set -euo pipefail
+          source_version=$(sed -n 's/^MACOS_APP_STORE_VERSION = "\([0-9.]*\)"$/\1/p' version.bzl)
+          [[ "$VERSION" == "$source_version" ]] || { echo 'Mac version must match MACOS_APP_STORE_VERSION in version.bzl.'; exit 1; }
+          packaging/macos/sandbox-build.sh "$RUNNER_TEMP/PDF Tools.app"
+          cp packaging/macos/AppStore.entitlements "$RUNNER_TEMP/AppStore.entitlements"
+          tar -C "$RUNNER_TEMP" -czf "$RUNNER_TEMP/mac-candidate.tar.gz" 'PDF Tools.app' AppStore.entitlements
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mac-testflight-candidate
+          path: ${{ runner.temp }}/mac-candidate.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+  mac-deliver:
+    name: Sign and upload macOS to App Store Connect
+    if: inputs.platform != 'ios'
+    needs: [verify, mac-prepare]
+    runs-on: macos-latest
+    timeout-minutes: 45
+    environment: macos-signing
+    steps:
+      # No checkout or build runs on the credentialed runner.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: mac-testflight-candidate
+          path: ${{ runner.temp }}
+      - name: Check candidate and prepare build number
+        env:
+          VERSION: ${{ inputs.mac_version }}
+        run: |
+          set -euo pipefail
+          tar -C "$RUNNER_TEMP" -xzf "$RUNNER_TEMP/mac-candidate.tar.gz"
+          app="$RUNNER_TEMP/PDF Tools.app"
+          test -f "$app/Contents/MacOS/pdftools"
+          plutil -lint "$app/Contents/Info.plist" "$RUNNER_TEMP/AppStore.entitlements"
+          [[ $(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Contents/Info.plist") == io.github.ivadim.pdftools ]]
+          [[ $(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Contents/Info.plist") == "$VERSION" ]]
+          (( GITHUB_RUN_NUMBER <= 9999 && GITHUB_RUN_ATTEMPT <= 99 )) || { echo 'Build number limit reached.'; exit 1; }
+          /usr/libexec/PlistBuddy -c "Set CFBundleVersion $GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT" "$app/Contents/Info.plist"
+      - name: Install distribution identities and profile
+        env:
+          APP_CERT: ${{ secrets.MAC_APP_DISTRIBUTION_CERTIFICATE }}
+          APP_PASSWORD: ${{ secrets.MAC_APP_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+          INSTALLER_CERT: ${{ secrets.MAC_INSTALLER_CERTIFICATE }}
+          INSTALLER_PASSWORD: ${{ secrets.MAC_INSTALLER_CERTIFICATE_PASSWORD }}
+          PROFILE: ${{ secrets.MAC_APP_STORE_PROFILE }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          [[ -n "$APP_CERT" && -n "$APP_PASSWORD" && -n "$INSTALLER_CERT" && -n "$INSTALLER_PASSWORD" && -n "$PROFILE" && "$TEAM_ID" =~ ^[A-Z0-9]{10}$ ]] || { echo 'Missing or invalid macOS signing secrets.'; exit 1; }
+          keychain="$RUNNER_TEMP/mac-store.keychain-db"
+          password=$(openssl rand -base64 24)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          python3 -c 'import base64,sys; sys.stdout.buffer.write(base64.b64decode(sys.stdin.buffer.read().strip(), validate=True))' <<< "$APP_CERT" > "$RUNNER_TEMP/app.p12"
+          python3 -c 'import base64,sys; sys.stdout.buffer.write(base64.b64decode(sys.stdin.buffer.read().strip(), validate=True))' <<< "$INSTALLER_CERT" > "$RUNNER_TEMP/installer.p12"
+          security import "$RUNNER_TEMP/app.p12" -k "$keychain" -P "$APP_PASSWORD" -T /usr/bin/codesign
+          security import "$RUNNER_TEMP/installer.p12" -k "$keychain" -P "$INSTALLER_PASSWORD" -T /usr/bin/productbuild
+          rm -f "$RUNNER_TEMP/app.p12" "$RUNNER_TEMP/installer.p12"
+          security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain" > /dev/null
+          read -ra keychains <<< "$(security list-keychains -d user | tr -d '\"')"
+          security list-keychains -d user -s "$keychain" "${keychains[@]}"
+          app_identity=$(security find-identity -v -p codesigning "$keychain" | awk -v team="($TEAM_ID)" '/"Apple Distribution: / && index($0, team) {print $2; exit}')
+          installer_identity=$(security find-identity -v "$keychain" | awk -v team="($TEAM_ID)" '/"3rd Party Mac Developer Installer: / && index($0, team) {print $2; exit}')
+          [[ -n "$app_identity" && -n "$installer_identity" ]] || { echo 'Missing matching Mac App Store signing identities.'; exit 1; }
+          echo "APP_IDENTITY=$app_identity" >> "$GITHUB_ENV"
+          echo "INSTALLER_IDENTITY=$installer_identity" >> "$GITHUB_ENV"
+          python3 -c 'import base64,sys; sys.stdout.buffer.write(base64.b64decode(sys.stdin.buffer.read().strip(), validate=True))' <<< "$PROFILE" > "$RUNNER_TEMP/profile.provisionprofile"
+          security cms -D -i "$RUNNER_TEMP/profile.provisionprofile" > "$RUNNER_TEMP/profile.plist"
+          export app_identity
+          python3 - <<'PY'
+          import datetime, hashlib, os, plistlib, sys
+          with open(os.path.join(os.environ['RUNNER_TEMP'], 'profile.plist'), 'rb') as f:
+              profile = plistlib.load(f)
+          ent = profile.get('Entitlements', {})
+          expected = os.environ['TEAM_ID'] + '.io.github.ivadim.pdftools'
+          if (profile.get('ExpirationDate', datetime.datetime.min) <= datetime.datetime.utcnow()
+                  or profile.get('ProvisionedDevices') or profile.get('ProvisionsAllDevices')
+                  or ent.get('com.apple.security.get-task-allow', False) is not False
+                  or ent.get('get-task-allow', False) is not False
+                  or ent.get('com.apple.application-identifier') != expected
+                  or os.environ['app_identity'].upper() not in {
+                      hashlib.sha1(cert).hexdigest().upper() for cert in profile.get('DeveloperCertificates', [])
+                  }):
+              sys.exit('Profile is expired or does not match the macOS app, team, and signing certificate.')
+          PY
+          cp "$RUNNER_TEMP/profile.provisionprofile" "$RUNNER_TEMP/PDF Tools.app/Contents/embedded.provisionprofile"
+      - name: Sign and package
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          app="$RUNNER_TEMP/PDF Tools.app"
+          /usr/libexec/PlistBuddy -c "Add :com.apple.application-identifier string $TEAM_ID.io.github.ivadim.pdftools" "$RUNNER_TEMP/AppStore.entitlements"
+          /usr/libexec/PlistBuddy -c "Add :com.apple.developer.team-identifier string $TEAM_ID" "$RUNNER_TEMP/AppStore.entitlements"
+          codesign --force --sign "$APP_IDENTITY" --entitlements "$RUNNER_TEMP/AppStore.entitlements" "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          productbuild --component "$app" /Applications --sign "$INSTALLER_IDENTITY" "$RUNNER_TEMP/PDFTools.pkg"
+          pkgutil --check-signature "$RUNNER_TEMP/PDFTools.pkg"
+      - name: Validate and upload
+        env:
+          API_KEY: ${{ secrets.APPLE_API_KEY }}
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          [[ -n "$API_KEY" && "$API_KEY_ID" =~ ^[A-Za-z0-9]+$ && -n "$API_ISSUER_ID" ]] || { echo 'Missing App Store Connect API secrets.'; exit 1; }
+          mkdir -p "$RUNNER_TEMP/private_keys"
+          printf '%s\n' "$API_KEY" > "$RUNNER_TEMP/private_keys/AuthKey_$API_KEY_ID.p8"
+          chmod 600 "$RUNNER_TEMP/private_keys/AuthKey_$API_KEY_ID.p8"
+          export API_PRIVATE_KEYS_DIR="$RUNNER_TEMP/private_keys"
+          xcrun altool --validate-app -f "$RUNNER_TEMP/PDFTools.pkg" -t macos --api-key "$API_KEY_ID" --api-issuer "$API_ISSUER_ID"
+          xcrun altool --upload-app -f "$RUNNER_TEMP/PDFTools.pkg" -t macos --api-key "$API_KEY_ID" --api-issuer "$API_ISSUER_ID"
+      - name: Remove credentials
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/mac-store.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/app.p12" "$RUNNER_TEMP/installer.p12" "$RUNNER_TEMP/profile.provisionprofile" "$RUNNER_TEMP/profile.plist"
+          rm -rf "$RUNNER_TEMP/private_keys"

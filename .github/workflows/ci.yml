@@ -3,9 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
-    # `ios-v*` runs full CI for App Store uploads but intentionally skips the
-    # desktop signing and public GitHub Release jobs below.
-    tags: ["v*", "ios-v*"]
+    # Platform-specific tags run CI but skip Developer ID signing and
+    # public GitHub Release publication.
+    tags: ["v*", "ios-v*", "macos-v*"]
   pull_request:
   # Weekly, for advisories and fresh simulator runs.
   schedule:
@@ -227,7 +227,7 @@ jobs:
 
   build:
     name: Build (${{ matrix.name }})
-    if: ${{ github.event_name != 'schedule' && !startsWith(github.ref, 'refs/tags/ios-v') }}
+    if: ${{ github.event_name != 'schedule' }}
     strategy:
       fail-fast: false
       matrix:
@@ -271,7 +271,12 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          bazel build --config=ci --config=release //crates/pdftools-app:pdftools
+          if [[ "$RUNNER_OS" == macOS ]]; then
+            # Keep the executable's deployment target in step with Info.plist.
+            bazel build --config=ci --config=release --macos_minimum_os=11.0 //crates/pdftools-app:pdftools
+          else
+            bazel build --config=ci --config=release //crates/pdftools-app:pdftools
+          fi
           # Out of bazel-bin (read-only) for packaging.
           exe=pdftools; [[ "$RUNNER_OS" == Windows ]] && exe=pdftools.exe
           mkdir -p dist

@@ -434,7 +434,7 @@ impl App {
             }
             Message::CopyVersion => {
                 self.copied = true;
-                return iced::clipboard::write(format!("PDF Tools {} ({})", env!("CARGO_PKG_VERSION"), crate::about::platform()));
+                return iced::clipboard::write(format!("PDF Tools {} ({})", crate::about::version(), crate::about::platform()));
             }
             Message::PickFile(id) => {
                 if let Some(path) = self.dialogs.pick_pdf() {

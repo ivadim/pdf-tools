@@ -1,7 +1,17 @@
 load("@crates//:defs.bzl", "all_crate_deps")
 load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
-load("//:version.bzl", "RUSTC_ENV", "VERSION")
+load("//:version.bzl", "MACOS_APP_STORE_VERSION", "RUSTC_ENV", "VERSION")
+
+config_setting(
+    name = "macos_app_store",
+    define_values = {"macos_app_store": "true"},
+)
+
+APP_RUSTC_ENV = select({
+    ":macos_app_store": dict(RUSTC_ENV, PDFTOOLS_DISPLAY_VERSION = MACOS_APP_STORE_VERSION),
+    "//conditions:default": RUSTC_ENV,
+})
 
 APP_DEPS = [
     "//crates/pdftools-core:pdftools_core",
@@ -31,7 +41,7 @@ rust_library(
     ),
     compile_data = glob(["icons/*.svg"]) + ["//packaging:icon-256.png"],
     crate_root = "src/lib.rs",
-    rustc_env = RUSTC_ENV,
+    rustc_env = APP_RUSTC_ENV,
     version = VERSION,
     deps = APP_DEPS,
 )
