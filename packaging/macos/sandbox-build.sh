@@ -10,9 +10,9 @@ app="$1"
 [[ "$app" == /* && "$app" == *.app ]] || { echo 'Use an absolute .app path.' >&2; exit 1; }
 [[ $(uname -s) == Darwin ]] || { echo 'This script requires macOS.' >&2; exit 1; }
 cd "$root"
-bazel build --config=release --macos_minimum_os=11.0 //crates/pdftools-app:pdftools
-version=$(sed -n 's/^VERSION = "\([0-9.]*\)"$/\1/p' version.bzl)
-[[ -n "$version" ]] || { echo 'Invalid version.bzl.' >&2; exit 1; }
+bazel build --config=release --macos_minimum_os=11.0 --define=macos_app_store=true //crates/pdftools-app:pdftools
+version=$(sed -n 's/^MACOS_APP_STORE_VERSION = "\([0-9.]*\)"$/\1/p' version.bzl)
+[[ -n "$version" ]] || { echo 'Invalid Mac App Store version in version.bzl.' >&2; exit 1; }
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/pdftools-sandbox.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 bundle="$tmp/PDF Tools.app"

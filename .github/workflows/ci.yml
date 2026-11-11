@@ -3,9 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
-    # `ios-v*` runs CI including desktop builds, but skips desktop signing
-    # and public GitHub Release publication.
-    tags: ["v*", "ios-v*"]
+    # Platform-specific tags run CI but skip Developer ID signing and
+    # public GitHub Release publication.
+    tags: ["v*", "ios-v*", "macos-v*"]
   pull_request:
   # Weekly, for advisories and fresh simulator runs.
   schedule:

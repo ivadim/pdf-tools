@@ -19,6 +19,9 @@ Tool IDs in screenshot filenames are `merge`, `split`, `compress`, `protect`, `u
 
 Refresh both themes for any changed screen and all related tool states. The tools below generate screenshots from each app's own implementation; do not share UI code to make the screenshots match.
 
+The desktop About captures show the Mac App Store build's version; the separate
+GitHub desktop release may have a different version.
+
 - **Desktop:** `bazel test //crates/pdftools-app:acceptance --test_arg=--ignored --test_arg=screens`. Copy the `normal` size outputs from the acceptance test results into `desktop/<theme>/`, naming tool captures `tools/<tool>-empty.png` and `tools/<tool>-configured.png`.
 - **Web:** build `//web:site`, serve `bazel-bin/web/site` at `http://127.0.0.1:4173`, then run `node web/capture-screenshots.mjs`. It uses local PDF/image fixtures and captures both browser color schemes.
 - **iOS:** run the `PDFToolsUITests/testCaptureReviewScreenshots` UI test on an iPhone simulator in `ios/PDFTools.xcodeproj`, then export the test result attachments with `xcrun xcresulttool export attachments`. Sort the named captures into `ios/<theme>/`.

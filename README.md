@@ -274,16 +274,15 @@ The signing job runs in the `macos-signing` environment. It waits for the reposi
 ### Apple TestFlight delivery
 
 The manually started [Apple TestFlight delivery workflow](.github/workflows/ios-app-store.yml)
-can select iOS, macOS, or both for App Store Connect delivery. macOS delivery
-is blocked pending sandbox validation and signing setup. It does not
+can select iOS, macOS, or both for App Store Connect delivery. It does not
 submit the app for review or release it. A tag push alone does not start this
 workflow. Before its first use, configure the protected `ios-app-store` GitHub
 environment and Apple account as described in the [iOS release checklist](docs/ios-app-store-release.md).
 The workflow requires a version tag on `main` with a successful tag-push CI
 run, checks that the protected environment has reviewers and a branch policy,
 and waits for its approval before accessing signing credentials.
-Use an `ios-v` tag to run CI, including desktop builds, without starting
-Developer ID signing or GitHub Release publication. See the [macOS release
+Use an `ios-v` or `macos-v` tag to run CI, including desktop builds, without
+starting Developer ID signing or GitHub Release publication. See the [macOS release
 checklist](docs/macos-app-store-release.md) for the additional setup.
 
 ## Notes

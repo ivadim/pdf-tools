@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing iOS release tag whose CI run passed (for example ios-v1.0)
+        description: Existing Apple release tag whose CI passed (for example macos-v1.0)
         type: string
         required: true
 
@@ -17,7 +17,7 @@ on:
         default: ios
         required: true
       mac_version:
-        description: macOS marketing version (required for macOS; e.g. 0.5.1)
+        description: macOS marketing version (required for macOS; e.g. 1.0)
         type: string
         required: false
 
@@ -47,9 +47,17 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$WORKFLOW_REF" == refs/heads/main ]] || { echo 'Run this workflow from main.'; exit 1; }
-          [[ "$TAG" =~ ^ios-v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || { echo 'Use an iOS version tag such as ios-v1.0.'; exit 1; }
+          [[ "$TAG" =~ ^ios-v[0-9]+\.[0-9]+(\.[0-9]+)?$ || "$TAG" =~ ^macos-v[0-9]+\.[0-9]+(\.[0-9]+)?(-[0-9]+)?$ ]] || { echo 'Use an iOS or macOS version tag such as macos-v1.0.'; exit 1; }
+          if [[ "$PLATFORM" != macos && "$TAG" != ios-v* ]]; then
+            echo 'iOS delivery requires an ios-v tag.'; exit 1
+          fi
           if [[ "$PLATFORM" != ios ]]; then
             [[ "$MAC_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || { echo 'Enter a numeric macOS version.'; exit 1; }
+            mac_tag_version=${TAG#macos-v}
+            mac_tag_version=${mac_tag_version%%-*}
+            if [[ "$TAG" == macos-v* && "$mac_tag_version" != "$MAC_VERSION" ]]; then
+              echo 'Mac version must match the macOS release tag.'; exit 1
+            fi
           fi
           # GitHub otherwise silently creates a missing, unprotected
           # environment. Refuse to proceed unless approval is configured.
@@ -76,7 +84,7 @@ jobs:
           jq -e --arg sha "$commit" 'any(.[]; .headSha == $sha and .status == "completed" and .conclusion == "success")' <<< "$runs" > /dev/null || {
             echo 'No successful tag-push CI run found for this commit.'; exit 1;
           }
-          echo "version=${TAG#ios-v}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#*-v}" >> "$GITHUB_OUTPUT"
 
   prepare:
     if: inputs.platform != 'macos'
@@ -251,8 +259,8 @@ jobs:
           VERSION: ${{ inputs.mac_version }}
         run: |
           set -euo pipefail
-          source_version=$(sed -n 's/^VERSION = "\([0-9.]*\)"$/\1/p' version.bzl)
-          [[ "$VERSION" == "$source_version" ]] || { echo 'Mac version must match version.bzl.'; exit 1; }
+          source_version=$(sed -n 's/^MACOS_APP_STORE_VERSION = "\([0-9.]*\)"$/\1/p' version.bzl)
+          [[ "$VERSION" == "$source_version" ]] || { echo 'Mac version must match MACOS_APP_STORE_VERSION in version.bzl.'; exit 1; }
           packaging/macos/sandbox-build.sh "$RUNNER_TEMP/PDF Tools.app"
           cp packaging/macos/AppStore.entitlements "$RUNNER_TEMP/AppStore.entitlements"
           tar -C "$RUNNER_TEMP" -czf "$RUNNER_TEMP/mac-candidate.tar.gz" 'PDF Tools.app' AppStore.entitlements
@@ -262,11 +270,6 @@ jobs:
           path: ${{ runner.temp }}/mac-candidate.tar.gz
           if-no-files-found: error
           retention-days: 1
-      - name: Block delivery until Mac release validation is complete
-        run: |
-          echo '::error::Complete Mac sandbox export validation and review the untested signing workflow before enabling TestFlight delivery.'
-          exit 1
-
   mac-deliver:
     name: Sign and upload macOS to App Store Connect
     if: inputs.platform != 'ios'

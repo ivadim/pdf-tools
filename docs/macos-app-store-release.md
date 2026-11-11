@@ -1,11 +1,13 @@
 # macOS App Store preparation
 
-The first macOS delivery target is TestFlight only. App Review submission and
-public availability are separate future decisions.
+The first macOS delivery target is TestFlight only, at version 1.0 to match
+iOS. App Review submission and public availability are separate future
+decisions. The separate GitHub desktop release retains the shared engine's
+version.
 
 The existing macOS release is a Developer ID signed and notarized disk image;
-it is not a Mac App Store build. This preparation does not upload a build,
-submit an app for review, or change the existing distribution channel.
+it is not a Mac App Store build. TestFlight delivery uses a separate signing
+and upload job and does not change the existing distribution channel.
 
 ## Sandbox testing
 
@@ -76,17 +78,19 @@ and [provisioning profiles](https://developer.apple.com/documentation/technotes/
 ## Combined TestFlight workflow
 
 The manually started [Apple TestFlight delivery workflow](../.github/workflows/ios-app-store.yml)
-selects iOS, macOS, or both. It verifies an `ios-v` tag on the current main
-commit and successful tag-push CI. The macOS marketing version is supplied
-separately and must match `version.bzl`; iOS continues to use its tag version.
+selects iOS, macOS, or both. It verifies an `ios-v` or `macos-v` tag on the
+current main commit and successful tag-push CI. For a Mac-only delivery use
+`macos-v1.0` and enter `1.0` as the macOS version. That version must match
+`MACOS_APP_STORE_VERSION` in `version.bzl` and the macOS release tag. The
+app bundle and About screen both use that version; iOS and DMG releases retain
+their own versioning. iOS or combined delivery requires an `ios-v` tag.
+If release changes are needed after tagging, a new Mac-only tag such as
+`macos-v1.0-2` can identify the revised commit without changing version 1.0.
 With both selected, each platform proceeds independently: iOS can upload even
 if macOS fails, so the two uploads are not an atomic release.
-An `ios-v` tag now builds desktop packages in CI but does not sign a Developer
-ID release or publish a GitHub Release. The iOS choice remains the default.
+An `ios-v` or `macos-v` tag builds desktop packages in CI but does not sign a
+Developer ID release or publish a GitHub Release. The iOS choice remains the default.
 
-The macOS preparation job deliberately fails after producing a sandboxed
-candidate. Remove that gate only after completing the sandbox and regression
-tests and reviewing the signing pipeline.
 The signing and upload steps are untested with distribution credentials and
 must be reviewed and exercised before relying on them. The macOS job reuses
 the protected `macos-signing` environment used by DMG signing; verify its

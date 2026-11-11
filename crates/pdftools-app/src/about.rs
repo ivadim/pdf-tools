@@ -10,6 +10,11 @@ use crate::widgets::{action, icon, muted, section_title, BOLD};
 
 pub const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
 
+/// Store builds may have a different marketing version from the shared engine.
+pub fn version() -> &'static str {
+    option_env!("PDFTOOLS_DISPLAY_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"))
+}
+
 /// The system and processor, as people know them: "macOS arm64".
 pub fn platform() -> String {
     let os = match std::env::consts::OS {
@@ -49,7 +54,7 @@ pub fn view<'a>(copied: bool) -> Element<'a, Message> {
             column![
                 text("PDF Tools").size(28).font(BOLD),
                 row![
-                    text(format!("Version {} · {}", env!("CARGO_PKG_VERSION"), platform())).color(theme::c().muted),
+                    text(format!("Version {} · {}", version(), platform())).color(theme::c().muted),
                     button(text(if copied { "Copied" } else { "Copy" }).size(13))
                         .padding(0)
                         .style(theme::link)
