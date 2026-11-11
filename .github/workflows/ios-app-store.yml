@@ -295,7 +295,7 @@ jobs:
           [[ $(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Contents/Info.plist") == io.github.ivadim.pdftools ]]
           [[ $(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Contents/Info.plist") == "$VERSION" ]]
           [[ $(/usr/libexec/PlistBuddy -c 'Print LSMinimumSystemVersion' "$app/Contents/Info.plist") == 12.0 ]]
-          lipo -verify_arch arm64 "$app/Contents/MacOS/pdftools"
+          lipo "$app/Contents/MacOS/pdftools" -verify_arch arm64
           vtool -show-build "$app/Contents/MacOS/pdftools" | awk '$1 == "minos" && $2 == "12.0" { found = 1 } END { exit !found }'
           (( GITHUB_RUN_NUMBER <= 9999 && GITHUB_RUN_ATTEMPT <= 99 )) || { echo 'Build number limit reached.'; exit 1; }
           /usr/libexec/PlistBuddy -c "Set CFBundleVersion $GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT" "$app/Contents/Info.plist"

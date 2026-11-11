@@ -26,7 +26,7 @@ done
 iconutil -c icns "$tmp/AppIcon.iconset" -o "$bundle/Contents/Resources/AppIcon.icns"
 sed "s/@VERSION@/$version/g" packaging/macos/Info.plist > "$bundle/Contents/Info.plist"
 # Apple requires macOS 12 or later for an Apple-silicon-only App Store app.
-lipo -verify_arch arm64 "$bundle/Contents/MacOS/pdftools"
+lipo "$bundle/Contents/MacOS/pdftools" -verify_arch arm64
 vtool -show-build "$bundle/Contents/MacOS/pdftools" | awk '$1 == "minos" && $2 == "12.0" { found = 1 } END { exit !found }'
 codesign --force --sign - --entitlements packaging/macos/AppStore.entitlements "$bundle"
 codesign --verify --deep --strict --verbose=2 "$bundle"
