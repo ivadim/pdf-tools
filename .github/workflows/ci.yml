@@ -276,6 +276,7 @@ jobs:
             bazel build --config=ci --config=release --macos_minimum_os=12.0 //crates/pdftools-app:pdftools
             lipo bazel-bin/crates/pdftools-app/pdftools -verify_arch arm64
             vtool -show-build bazel-bin/crates/pdftools-app/pdftools | awk '$1 == "minos" && $2 == "12.0" { found = 1 } END { exit !found }'
+            [[ $(/usr/libexec/PlistBuddy -c 'Print LSApplicationCategoryType' packaging/macos/Info.plist) == public.app-category.utilities ]]
           else
             bazel build --config=ci --config=release //crates/pdftools-app:pdftools
           fi
