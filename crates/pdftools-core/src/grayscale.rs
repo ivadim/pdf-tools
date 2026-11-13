@@ -432,13 +432,13 @@ mod tests {
     #[test]
     fn converts_device_colours() {
         assert_eq!(ops("1 0 0 rg 0 0 1 RG", &[]), "0.299 g 0.114 G");
-        assert_eq!(ops("0 0 0 1 k", &[]), "0 g");
+        assert_eq!(ops("0 0 0 1 k", &[]), "0.0 g");
     }
 
     #[test]
     fn converts_colours_set_through_colour_spaces() {
         assert_eq!(ops("/DeviceRGB cs 0 1 0 sc", &[]), "/DeviceGray cs 0.587 sc");
-        assert_eq!(ops("/CS0 CS 1 1 1 SCN", &[("CS0", Space::Rgb)]), "/DeviceGray CS 1 SCN");
+        assert_eq!(ops("/CS0 CS 1 1 1 SCN", &[("CS0", Space::Rgb)]), "/DeviceGray CS 1.0 SCN");
         // Unknown spaces (spot colours, patterns) are left alone.
         assert_eq!(ops("/P0 cs /Pat1 scn", &[]), "/P0 cs /Pat1 scn");
     }
