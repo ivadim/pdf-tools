@@ -68,6 +68,7 @@ ACCEPTANCE_DATA = [
     "//crates/pdftools-core:sample_photos",
     "//tests/fixtures:encrypted",
     "//tests/fixtures:pdfjs",
+    "//tests/fixtures:review_assets",
 ]
 
 rust_test(
