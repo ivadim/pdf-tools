@@ -14,6 +14,12 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
+filegroup(
+    name = "review_assets",
+    srcs = glob(["review-documents/*.pdf", "review-images/*.jpg"]),
+    visibility = ["//visibility:public"],
+)
+
 # Inputs the fuzzers found crashes with, kept as regression tests.
 filegroup(
     name = "fuzz",

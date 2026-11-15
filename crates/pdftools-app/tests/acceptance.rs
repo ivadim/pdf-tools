@@ -807,6 +807,43 @@ fn large_document() {
 
 // ── Every screen, both themes, smallest and large windows ───────────────
 
+/// Store-sized captures from the desktop app with fictional sample content.
+#[test]
+#[ignore]
+fn macos_listing_screens() {
+    let sample = repo("tests/fixtures/review-documents/membership-summary.pdf");
+    let mut h = Harness::new("macos-listing");
+    let size = Size::new(1280.0, 800.0);
+    h.send(Message::Theme(ThemeChoice::Light));
+    h.screenshot_at("macos-listing", "01-home", size);
+    h.send(Message::Navigate(Screen::Tool(ToolId::Images)));
+    h.dialogs.open(&[
+        &repo("tests/fixtures/review-images/coastal-flowers.jpg"),
+        &repo("tests/fixtures/review-images/coastal-trail.jpg"),
+    ]);
+    h.click("Add images");
+    h.render_pages(ToolId::Images, 2);
+    h.send(Message::Theme(ThemeChoice::Dark));
+    h.screenshot_at("macos-listing", "04-images", size);
+    let photos_pdf = h.out("coastal-photos.pdf");
+    h.run("Create PDF", Some(&photos_pdf));
+    assert_eq!(page_count(&photos_pdf), 2);
+    h.send(Message::Theme(ThemeChoice::Light));
+    h.choose(ToolId::Compress, &photos_pdf);
+    h.render_pages(ToolId::Compress, 2);
+    h.screenshot_at("macos-listing", "02-compress", size);
+    h.send(Message::Navigate(Screen::Tool(ToolId::Merge)));
+    h.dialogs.open(&[&sample, &photos_pdf]);
+    h.send(Message::Merge(merge::Msg::Add));
+    h.render_pages(ToolId::Merge, 3);
+    h.screenshot_at("macos-listing", "05-merge", size);
+    h.send(Message::Theme(ThemeChoice::Dark));
+    h.choose(ToolId::Redact, &sample);
+    h.render_pages(ToolId::Redact, 1);
+    h.option(ToolId::Redact, "area", "0.38,0.23,0.28,0.04");
+    h.screenshot_at("macos-listing", "03-redact", size);
+}
+
 /// A screenshot's name and how to get to that screen.
 type Shot = (String, Box<dyn Fn(&mut Harness)>);
 
